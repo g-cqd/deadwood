@@ -335,7 +335,10 @@ final class DeclarationCollector: ScopeTrackingVisitor {
             modifiers: [],
             location: location(of: node),
             range: range(of: node),
-            scope: .global
+            scope: .global,
+            // @_exported (and access modifiers like `public import`) change
+            // whether "unused" is even a sensible question for the import.
+            attributes: extractAttributes(from: node.attributes)
         )
         imports.append(declaration)
 

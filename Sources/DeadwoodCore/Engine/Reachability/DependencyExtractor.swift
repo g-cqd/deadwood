@@ -363,7 +363,10 @@ struct ReachabilityBasedDetector: Sendable {
         self.extractionConfiguration = extractionConfiguration
     }
 
-    /// Detect unused code as the set of unreachable declarations.
+    /// Detect unused code as the set of unreachable declarations. In
+    /// production mode, reachability runs twice over the same graph — with
+    /// test roots and without — and declarations only tests can reach come
+    /// back as `.referencedOnlyByTests`.
     func detect(in result: AnalysisResult, context: CorpusContext) async -> [UnusedCode] {
         let extractor = DependencyExtractor(configuration: extractionConfiguration)
         let graph = await extractor.buildGraph(from: result, context: context)
@@ -373,35 +376,103 @@ struct ReachabilityBasedDetector: Sendable {
         let nodeCount = await graph.nodeCount
         let runParallel = configuration.useParallelBFS ?? (nodeCount >= configuration.parallelBFSThreshold)
 
-        let unreachable: [Int32]
+        let reachableWithTests: Set<Int>
         if runParallel {
-            unreachable = await graph.computeUnreachableParallel()
+            reachableWithTests = await graph.computeReachableParallel()
         } else {
-            unreachable = await graph.computeUnreachable()
+            reachableWithTests = await graph.computeReachable()
         }
 
         // Map indices back through the declaration array only here, at the
         // findings boundary — the graph never carries declarations.
         let declarations = result.declarations.declarations
-        return unreachable.compactMap { index -> UnusedCode? in
-            let declaration = declarations[Int(index)]
+        var results: [UnusedCode] = []
 
-            guard shouldReport(declaration) else {
-                return nil
+        // Genuinely unreachable (even with test roots): normal rules.
+        for index in 0..<declarations.count where !reachableWithTests.contains(index) {
+            let declaration = declarations[index]
+            guard let confidence = reportableConfidence(of: declaration, context: context) else {
+                continue
             }
-
-            let confidence = declaration.unusedConfidence(context: context)
-            if confidence < configuration.minimumConfidence {
-                return nil
-            }
-
-            return UnusedCode(
-                declaration: declaration,
-                reason: .neverReferenced,
-                confidence: confidence,
-                suggestion: "Unreachable from any entry point - consider removing '\(declaration.name)'"
-            )
+            results.append(
+                UnusedCode(
+                    declaration: declaration,
+                    reason: .neverReferenced,
+                    confidence: confidence,
+                    suggestion:
+                        "Unreachable from any entry point - consider removing '\(declaration.name)'"
+                ))
         }
+
+        if configuration.productionMode {
+            results.append(
+                contentsOf: await detectOnlyTestedDeclarations(
+                    declarations: declarations,
+                    reachableWithTests: reachableWithTests,
+                    graph: graph,
+                    context: context
+                ))
+        }
+
+        return results
+    }
+
+    /// Production-mode second pass: recompute the root set with test roots
+    /// dropped (no testMethod roots; no roots inside XCTestCase subclasses,
+    /// @Suite types, or tests-glob files), BFS the SAME edges again, and
+    /// report production declarations that only the test pass reaches.
+    private func detectOnlyTestedDeclarations(
+        declarations: [Declaration],
+        reachableWithTests: Set<Int>,
+        graph: ReachabilityGraph,
+        context: CorpusContext
+    ) async -> [UnusedCode] {
+        let classifier = TestScopeClassifier(testsGlob: configuration.testsGlob)
+        let testScoped = classifier.classify(declarations: declarations, context: context)
+
+        var rootConfiguration = extractionConfiguration.rootDetection
+        rootConfiguration.treatTestsAsRoot = false
+        let detector = RootDetector(configuration: rootConfiguration)
+
+        var productionRoots: Set<Int32> = []
+        for (index, declaration) in declarations.enumerated()
+        where !testScoped[index] && detector.rootReason(for: declaration, context: context) != nil {
+            productionRoots.insert(Int32(index))
+        }
+
+        let reachableInProduction = await graph.computeReachable(fromRoots: productionRoots)
+
+        var results: [UnusedCode] = []
+        for (index, declaration) in declarations.enumerated() {
+            guard reachableWithTests.contains(index),
+                !reachableInProduction.contains(index),
+                !testScoped[index]
+            else { continue }
+            guard let confidence = reportableConfidence(of: declaration, context: context) else {
+                continue
+            }
+            results.append(
+                UnusedCode(
+                    declaration: declaration,
+                    reason: .referencedOnlyByTests,
+                    confidence: confidence,
+                    suggestion:
+                        "Only test code reaches '\(declaration.name)' — production code never uses it"
+                ))
+        }
+        return results
+    }
+
+    /// Kind gate + confidence floor shared by both passes; nil when the
+    /// declaration should not be reported.
+    private func reportableConfidence(
+        of declaration: Declaration,
+        context: CorpusContext
+    ) -> Confidence? {
+        guard shouldReport(declaration) else { return nil }
+        let confidence = declaration.unusedConfidence(context: context)
+        guard confidence >= configuration.minimumConfidence else { return nil }
+        return confidence
     }
 
     /// Kind-level report gate.

@@ -59,7 +59,8 @@ public struct Analyzer: Sendable {
             Self.collectArtifacts(
                 path: entry.path,
                 source: entry.source,
-                deadBranchesEnabled: self.configuration.isEnabled(.deadBranch)
+                deadBranchesEnabled: self.configuration.isEnabled(.deadBranch),
+                deadStoresEnabled: self.configuration.isEnabled(.deadStore)
             )
         }
 
@@ -73,6 +74,7 @@ public struct Analyzer: Sendable {
         if engineConfig.detectImports {
             unused.append(contentsOf: detector.detectUnusedImports(result: result))
         }
+        unused.append(contentsOf: detector.detectAssignOnly(result: result, context: context))
         unused.append(contentsOf: perFile.flatMap(\.deadBranches))
 
         // Surface per-file degraded-analysis notes (e.g. over-bound
@@ -107,7 +109,8 @@ public struct Analyzer: Sendable {
         let artifacts = Self.collectArtifacts(
             path: path,
             source: source,
-            deadBranchesEnabled: configuration.isEnabled(.deadBranch)
+            deadBranchesEnabled: configuration.isEnabled(.deadBranch),
+            deadStoresEnabled: configuration.isEnabled(.deadStore)
         )
         let result = StaticAnalyzer.aggregate([artifacts.facts], files: [path])
         let context = CorpusContext(result: result)
@@ -120,6 +123,7 @@ public struct Analyzer: Sendable {
         if engineConfig.detectImports {
             unused.append(contentsOf: detector.detectUnusedImports(result: result))
         }
+        unused.append(contentsOf: detector.detectAssignOnly(result: result, context: context))
         unused.append(contentsOf: artifacts.deadBranches)
 
         let mapper = FindingMapper(configuration: configuration, mode: .simple)
@@ -158,7 +162,8 @@ public struct Analyzer: Sendable {
     private static func collectArtifacts(
         path: String,
         source: String,
-        deadBranchesEnabled: Bool
+        deadBranchesEnabled: Bool,
+        deadStoresEnabled: Bool
     ) -> FileArtifacts {
         // One SourceLocationConverter per file: the directive scanner, both
         // fact collectors, and the CFG builder all share this line table.
@@ -167,8 +172,14 @@ public struct Analyzer: Sendable {
         let directives = DirectiveScanner.scan(tree: tree, converter: converter)
         let facts = StaticAnalyzer().collectFacts(tree: tree, file: path, converter: converter)
         let deadBranchOutput =
-            deadBranchesEnabled
-            ? DeadBranchPass.run(tree: tree, file: path, converter: converter)
+            deadBranchesEnabled || deadStoresEnabled
+            ? DeadBranchPass.run(
+                tree: tree,
+                file: path,
+                converter: converter,
+                includeDeadBranches: deadBranchesEnabled,
+                includeDeadStores: deadStoresEnabled
+            )
             : DeadBranchPass.Output()
         return FileArtifacts(
             path: path,
@@ -187,6 +198,12 @@ public struct Analyzer: Sendable {
             detectFunctions: configuration.isEnabled(.unusedFunction) || wantsPublicApi,
             detectTypes: configuration.isEnabled(.unusedType) || wantsPublicApi,
             detectImports: configuration.isEnabled(.unusedImport),
+            detectAssignOnly: configuration.isEnabled(.assignOnlyProperty),
+            // Production's two-pass reachability only exists in corpus mode;
+            // single-file analysis cannot see the tests.
+            productionMode: mode == .reachability && configuration.isProductionMode
+                && configuration.isEnabled(.referencedOnlyByTests),
+            testsGlob: configuration.testsGlob,
             mode: mode,
             minimumConfidence: .low,
             treatPublicAsRoot: !wantsPublicApi,

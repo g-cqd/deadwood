@@ -7,8 +7,9 @@
 // MARK: - ReachingDefinitionsAnalysis
 
 /// Forward data flow analysis for reaching definitions: def-use chains and
-/// potentially uninitialized uses per function body.
-// @dw:accept unused-type -- lifted data-flow pass, exercised by DataFlowTests; feeds a future dead-store rule
+/// potentially uninitialized uses per function body. Restricts the
+/// `dead-store` rule to stores that are actually overwritten (through
+/// `DeadBranchPass`).
 struct ReachingDefinitionsAnalysis: Sendable {
     /// A variable definition at a specific location.
     struct DefinitionSite: Sendable, Hashable {

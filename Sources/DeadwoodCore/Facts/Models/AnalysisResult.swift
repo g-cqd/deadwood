@@ -19,16 +19,22 @@ struct AnalysisResult: Sendable {
     /// Scope hierarchy.
     let scopes: ScopeTree
 
+    /// Identifier-shaped tokens appearing inside string literals anywhere
+    /// in the corpus (dynamic-reference demotion set).
+    let stringLiteralTokens: Set<String>
+
     init(
         files: [String],
         declarations: DeclarationIndex,
         references: ReferenceIndex,
-        scopes: ScopeTree
+        scopes: ScopeTree,
+        stringLiteralTokens: Set<String> = []
     ) {
         self.files = files
         self.declarations = declarations
         self.references = references
         self.scopes = scopes
+        self.stringLiteralTokens = stringLiteralTokens
     }
 }
 
@@ -48,15 +54,20 @@ struct FileAnalysisResult: Sendable {
     /// Scopes in this file.
     let scopes: [Scope]
 
+    /// Identifier-shaped tokens inside this file's string literals.
+    let stringLiteralTokens: Set<String>
+
     init(
         file: String,
         declarations: [Declaration],
         references: [Reference],
-        scopes: [Scope]
+        scopes: [Scope],
+        stringLiteralTokens: Set<String> = []
     ) {
         self.file = file
         self.declarations = declarations
         self.references = references
         self.scopes = scopes
+        self.stringLiteralTokens = stringLiteralTokens
     }
 }
