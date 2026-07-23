@@ -71,6 +71,27 @@ final class ReferenceCollector: ScopeTrackingVisitor {
             walk(argument.expression)
         }
 
+        // Memberwise-init labels: `Config(retries: 3)` writes the property
+        // `retries` — the label is the only source-level reference a stored
+        // property initialized this way ever gets. Bounded to uppercase
+        // callees (type constructions) to avoid connecting arbitrary
+        // function parameter labels.
+        if let callee = node.calledExpression.as(DeclReferenceExprSyntax.self),
+            callee.baseName.text.first?.isUppercase == true
+        {
+            for argument in node.arguments {
+                guard let label = argument.label?.text, !label.isEmpty else { continue }
+                references.append(
+                    Reference(
+                        identifier: label,
+                        location: location(of: argument),
+                        scope: currentScope,
+                        context: .write
+                    )
+                )
+            }
+        }
+
         // Track trailing closures (critical for `items.map { ... }`).
         if let trailingClosure = node.trailingClosure {
             walk(trailingClosure)

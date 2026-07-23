@@ -55,6 +55,11 @@ enum RootReason: String, Sendable {
     /// @dynamicMemberLookup or @dynamicCallable.
     case dynamicFeature
 
+    /// Property-wrapper compiler contract (`wrappedValue`, `projectedValue`):
+    /// accessed by wrapper synthesis at every use site, never directly by
+    /// name in source.
+    case propertyWrapperContract
+
     /// SwiftUI View type (body property is implicitly used).
     case swiftUIView
 
@@ -297,6 +302,12 @@ struct RootDetector: Sendable {
             || hasAttribute(declaration, named: "dynamicCallable")
         {
             return .dynamicFeature
+        }
+
+        // Wrapper synthesis reads these on every wrapper use; a name-level
+        // reference never appears in source.
+        if declaration.name == "wrappedValue" || declaration.name == "projectedValue" {
+            return .propertyWrapperContract
         }
 
         // Cross-language / runtime attribute roots: referenced through
