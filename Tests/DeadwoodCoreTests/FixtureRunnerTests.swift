@@ -16,7 +16,8 @@ import Testing
         {
             for marker in ["#dw:\(verb) ", "#deadwood:\(verb) "] {
                 guard let range = lineText.range(of: marker) else { continue }
-                let rule = lineText[range.upperBound...]
+                let rule =
+                    lineText[range.upperBound...]
                     .split(separator: " ").first.map(String.init) ?? ""
                 result.append((index + 1, rule))
             }
