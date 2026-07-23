@@ -6,7 +6,7 @@
 // MARK: - DeclarationKind
 
 /// The kind of declaration.
-enum DeclarationKind: String, Sendable, CaseIterable {
+enum DeclarationKind: String, Sendable, CaseIterable, Codable {
     case function
     case method
     case initializer
@@ -31,7 +31,7 @@ enum DeclarationKind: String, Sendable, CaseIterable {
 // MARK: - AccessLevel
 
 /// Swift access level modifiers, ordered from most to least restrictive.
-enum AccessLevel: String, Sendable, Comparable, CaseIterable {
+enum AccessLevel: String, Sendable, Comparable, CaseIterable, Codable {
     case `private`
     case `fileprivate`
     case `internal`
@@ -58,7 +58,7 @@ enum AccessLevel: String, Sendable, Comparable, CaseIterable {
 // MARK: - DeclarationModifiers
 
 /// Modifiers that can be applied to declarations.
-struct DeclarationModifiers: OptionSet, Sendable, Hashable {
+struct DeclarationModifiers: OptionSet, Sendable, Hashable, Codable {
     static let `static` = Self(rawValue: 1 << 0)
     static let `class` = Self(rawValue: 1 << 1)
     static let final = Self(rawValue: 1 << 2)
@@ -85,9 +85,9 @@ struct DeclarationModifiers: OptionSet, Sendable, Hashable {
 // MARK: - FunctionSignature
 
 /// A function or method signature.
-struct FunctionSignature: Sendable, Hashable {
+struct FunctionSignature: Sendable, Hashable, Codable {
     /// A single parameter in a function signature.
-    struct Parameter: Sendable, Hashable {
+    struct Parameter: Sendable, Hashable, Codable {
         /// External parameter label (nil for unlabeled).
         let label: String?
 
@@ -172,7 +172,7 @@ struct FunctionSignature: Sendable, Hashable {
 // MARK: - Declaration
 
 /// A declaration in Swift source code, as collected by `DeclarationCollector`.
-struct Declaration: Sendable, Hashable {
+struct Declaration: Sendable, Hashable, Codable {
     /// The declared name.
     let name: String
 

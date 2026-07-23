@@ -4,7 +4,7 @@
 // MARK: - UnusedReason
 
 /// Reasons why code is considered unused.
-enum UnusedReason: String, Sendable {
+enum UnusedReason: String, Sendable, Codable {
     /// Declaration is never referenced anywhere.
     case neverReferenced
 
@@ -30,7 +30,7 @@ enum UnusedReason: String, Sendable {
 // MARK: - Confidence
 
 /// Confidence level for unused code detection.
-enum Confidence: String, Sendable, Comparable, CaseIterable {
+enum Confidence: String, Sendable, Comparable, CaseIterable, Codable {
     /// Proven by dataflow analysis (dead branches): not a heuristic.
     case certain
 
@@ -60,7 +60,7 @@ enum Confidence: String, Sendable, Comparable, CaseIterable {
 // MARK: - UnusedCode
 
 /// A piece of unused code, as detected by the engine.
-struct UnusedCode: Sendable {
+struct UnusedCode: Sendable, Codable {
     /// The unused declaration (synthetic for dead branches).
     let declaration: Declaration
 
