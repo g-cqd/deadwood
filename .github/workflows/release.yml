@@ -1,0 +1,120 @@
+name: Release
+
+# Tag vX.Y.Z (matching ToolInfo.version) → build versioned binaries for both
+# platforms, checksum them, and attach everything to a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    container: swiftlang/swift:nightly-6.4.x-jammy
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Build, verify version, package
+        # Dynamic link + bundled Swift runtime .so files: the binary carries
+        # an $ORIGIN rpath, so the archive is self-contained on any
+        # glibc-compatible distro (the nightly static-stdlib SDK cannot link).
+        run: |
+          swift build -c release
+          BIN="$(swift build -c release --show-bin-path)/deadwood"
+          VERSION="$("$BIN" --version)"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_REF_NAME}" != "${GITHUB_REF}" ] && [ -n "$TAG" ] && [ "$VERSION" != "$TAG" ]; then
+            echo "tag v$TAG does not match ToolInfo.version $VERSION" >&2
+            exit 1
+          fi
+          NAME="deadwood-$VERSION-linux-x86_64"
+          mkdir "$NAME"
+          cp "$BIN" LICENSE README.md "$NAME/"
+          ldd "$BIN" | awk '$3 ~ /\/usr\/lib\/swift/ {print $3}' | sort -u \
+            | xargs -r -I{} cp {} "$NAME/"
+          tar -czf "$NAME.tar.gz" "$NAME"
+          sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: |
+            deadwood-*.tar.gz
+            deadwood-*.sha256
+
+  macos:
+    runs-on: macos-15
+    # Same stall countermeasures as CI: pipe isolation, step bounds, job bound.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Install nightly Swift (swiftly)
+        timeout-minutes: 10
+        run: |
+          curl -fsSL -o swiftly.pkg https://download.swift.org/swiftly/darwin/swiftly.pkg
+          installer -pkg swiftly.pkg -target CurrentUserHomeDirectory
+          "$HOME/.swiftly/bin/swiftly" init --assume-yes --skip-install --quiet-shell-followup || true
+          "$HOME/.swiftly/bin/swiftly" install main-snapshot --use --assume-yes
+          echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
+      - name: Build, verify version, package
+        timeout-minutes: 15
+        run: |
+          set +e
+          swift build -c release > build.log 2>&1 < /dev/null
+          status=$?
+          cat build.log
+          [ $status -ne 0 ] && exit $status
+          BIN="$(swift build -c release --show-bin-path)/deadwood"
+          VERSION="$("$BIN" --version)"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_REF_NAME}" != "${GITHUB_REF}" ] && [ -n "$TAG" ] && [ "$VERSION" != "$TAG" ]; then
+            echo "tag v$TAG does not match ToolInfo.version $VERSION" >&2
+            exit 1
+          fi
+          NAME="deadwood-$VERSION-macos-arm64"
+          mkdir "$NAME"
+          cp "$BIN" LICENSE README.md "$NAME/"
+          tar -czf "$NAME.tar.gz" "$NAME"
+          shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: |
+            deadwood-*.tar.gz
+            deadwood-*.sha256
+      - name: Reap toolchain stragglers
+        if: always()
+        run: |
+          pgrep -fl 'swift-frontend|swift-driver|swift-build|leaks' || true
+          for pattern in swift-frontend swift-driver swift-build swift-package SourceKitService sourcekit-lsp; do
+            pkill -9 -f "$pattern" 2>/dev/null || true
+          done
+          exit 0
+
+  publish:
+    needs: [linux, macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Create release with binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --generate-notes \
+            deadwood-*.tar.gz deadwood-*.sha256
