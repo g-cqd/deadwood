@@ -87,8 +87,10 @@ public struct Analyzer: Sendable {
             return (artifacts, false)
         }
         let perFile = outcomes.map(\.artifacts)
-        report.cacheHits = outcomes.count(where: \.cacheHit)
-        report.cacheMisses = outcomes.count - report.cacheHits
+        if cacheURL != nil {
+            report.cacheHits = outcomes.count(where: \.cacheHit)
+            report.cacheMisses = outcomes.count - report.cacheHits
+        }
 
         // Persist a cache rebuilt from ONLY this run's files: absent files
         // are pruned, and the cache stays shaped to the project.
