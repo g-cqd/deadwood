@@ -89,20 +89,14 @@ actor ReachabilityGraph {
 
     // MARK: - Building the graph
 
-    /// Size the graph for `count` declarations (indices `0..<count`),
-    /// clearing any previous state.
-    func prepare(declarationCount count: Int) {
+    /// Size the graph for `count` declarations (indices `0..<count`) with
+    /// the given root set, clearing any previous state. Out-of-range roots
+    /// are dropped defensively.
+    func prepare(declarationCount count: Int, roots rootIndices: Set<Int32> = []) {
         nodeCount = count
         adjacency = ContiguousArray(repeating: [], count: count)
         seenEdges = []
-        roots = []
-        invalidateCaches()
-    }
-
-    /// Mark a declaration index as a root (entry point).
-    func markRoot(_ index: Int32) {
-        guard index >= 0, Int(index) < nodeCount else { return }
-        roots.insert(index)
+        roots = rootIndices.filter { $0 >= 0 && Int($0) < count }
         invalidateCaches()
     }
 
@@ -140,12 +134,13 @@ actor ReachabilityGraph {
         context: CorpusContext,
         configuration: RootDetectionConfiguration = .default
     ) {
-        prepare(declarationCount: declarations.count)
         let detector = RootDetector(configuration: configuration)
+        var rootIndices: Set<Int32> = []
         for (index, declaration) in declarations.enumerated()
         where detector.rootReason(for: declaration, context: context) != nil {
-            roots.insert(Int32(index))
+            rootIndices.insert(Int32(index))
         }
+        prepare(declarationCount: declarations.count, roots: rootIndices)
     }
 
     // MARK: - Reachability
