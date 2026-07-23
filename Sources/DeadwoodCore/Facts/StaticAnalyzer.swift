@@ -38,9 +38,9 @@ struct StaticAnalyzer: Sendable {
         )
     }
 
-    /// Collect facts from one source string (parses it first).
+    /// Collect facts from one source string (parses and folds it first).
     func collectFacts(source: String, file: String) -> FileAnalysisResult {
-        collectFacts(tree: Parser.parse(source: source), file: file)
+        collectFacts(tree: foldedTree(Parser.parse(source: source)), file: file)
     }
 
     /// Parse and collect facts for a corpus of in-memory sources in
