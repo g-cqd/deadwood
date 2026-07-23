@@ -50,7 +50,16 @@ public struct Configuration: Sendable, Codable, Equatable {
         rules[rule.rawValue]?.severity ?? rule.defaultSeverity
     }
 
+    /// Whether the path is excluded from analysis. Entries containing glob
+    /// wildcards (`*`, `?`) match with anchored glob semantics through
+    /// `GlobMatcher`; plain entries keep their substring semantics.
     public func isExcluded(path: String) -> Bool {
-        exclude.contains { !$0.isEmpty && path.contains($0) }
+        exclude.contains { entry in
+            guard !entry.isEmpty else { return false }
+            if entry.contains("*") || entry.contains("?") {
+                return GlobMatcher.matchesWithFastPaths(path: path, pattern: entry)
+            }
+            return path.contains(entry)
+        }
     }
 }

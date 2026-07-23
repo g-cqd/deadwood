@@ -371,6 +371,40 @@ struct SCCPAnalysisTests {
         #expect(result.deadBranches.first?.deadBranch == .trueBranch)
     }
 
+    @Test("while true is the infinite-loop idiom, not a dead branch")
+    func whileTrueNotFlagged() {
+        let result = SCCPAnalysis().analyze(
+            buildCFG(
+                """
+                func test() -> Int {
+                    var count = 0
+                    while true {
+                        count += 1
+                        if count > 3 { return count }
+                    }
+                }
+                """))
+
+        #expect(result.deadBranches.isEmpty)
+    }
+
+    @Test("while false has a dead body")
+    func whileFalseFlagged() {
+        let result = SCCPAnalysis().analyze(
+            buildCFG(
+                """
+                func test() -> Int {
+                    while false {
+                        print("never")
+                    }
+                    return 0
+                }
+                """))
+
+        #expect(result.deadBranches.count == 1)
+        #expect(result.deadBranches.first?.deadBranch == .trueBranch)
+    }
+
     @Test("Varying condition produces no dead branch")
     func varyingConditionNoDeadBranch() {
         let result = SCCPAnalysis().analyze(
