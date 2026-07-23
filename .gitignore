@@ -4,3 +4,5 @@
 *.xcodeproj
 DESIGN.md
 .claude/
+Benchmarks/.build/
+Benchmarks/.swiftpm/
