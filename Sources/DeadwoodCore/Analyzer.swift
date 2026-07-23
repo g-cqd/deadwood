@@ -75,6 +75,14 @@ public struct Analyzer: Sendable {
         }
         unused.append(contentsOf: perFile.flatMap(\.deadBranches))
 
+        // Surface per-file degraded-analysis notes (e.g. over-bound
+        // functions the dead-branch pass skipped).
+        for artifacts in perFile {
+            for note in artifacts.degraded {
+                report.degradedFiles.append(.init(path: artifacts.path, detail: note))
+            }
+        }
+
         // Map to findings and apply per-file suppression tables.
         let mapper = FindingMapper(configuration: configuration, mode: .reachability)
         let findings = mapper.findings(from: unused, context: context)
@@ -119,6 +127,9 @@ public struct Analyzer: Sendable {
 
         var report = AnalysisReport()
         report.analyzedFileCount = 1
+        for note in artifacts.degraded {
+            report.degradedFiles.append(.init(path: path, detail: note))
+        }
         for finding in findings {
             if let reason = artifacts.table.suppression(for: finding.rule, line: finding.line) {
                 report.suppressed.append(.init(finding: finding, reason: reason))
@@ -133,12 +144,15 @@ public struct Analyzer: Sendable {
     // MARK: - Shared plumbing
 
     /// Everything derived from one file in a single parse: facts for the
-    /// corpus, the suppression table, and per-function dead branches.
+    /// corpus, the suppression table, per-function dead branches, and any
+    /// degraded-analysis notes (e.g. an over-bound function the dead-branch
+    /// pass skipped).
     private struct FileArtifacts: Sendable {
         let path: String
         let facts: FileAnalysisResult
         let table: SuppressionTable
         let deadBranches: [UnusedCode]
+        let degraded: [String]
     }
 
     private static func collectArtifacts(
@@ -152,14 +166,16 @@ public struct Analyzer: Sendable {
         let converter = SourceLocationConverter(fileName: path, tree: tree)
         let directives = DirectiveScanner.scan(tree: tree, converter: converter)
         let facts = StaticAnalyzer().collectFacts(tree: tree, file: path, converter: converter)
-        let deadBranches: [UnusedCode] =
+        let deadBranchOutput =
             deadBranchesEnabled
-            ? DeadBranchPass.run(tree: tree, file: path, converter: converter) : []
+            ? DeadBranchPass.run(tree: tree, file: path, converter: converter)
+            : DeadBranchPass.Output()
         return FileArtifacts(
             path: path,
             facts: facts,
             table: SuppressionTable(directives: directives),
-            deadBranches: deadBranches
+            deadBranches: deadBranchOutput.findings,
+            degraded: deadBranchOutput.degraded
         )
     }
 
