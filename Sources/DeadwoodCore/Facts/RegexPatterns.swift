@@ -23,8 +23,9 @@ func pathMatchesFixturesGlob(_ path: String) -> Bool {
 }
 
 /// Returns `true` when the identifier is wrapped in backticks.
+/// The degenerate "``" is not an identifier.
 func isBacktickedIdentifier(_ identifier: String) -> Bool {
-    guard identifier.count >= 2, identifier.first == "`", identifier.last == "`" else {
+    guard identifier.count > 2, identifier.first == "`", identifier.last == "`" else {
         return false
     }
 
