@@ -28,6 +28,31 @@ extension Array {
     }
 }
 
+// MARK: - Partition point (replaces `partitioningIndex(where:)`)
+
+extension RandomAccessCollection {
+    /// The index of the first element for which `belongsInSecondPartition`
+    /// is true, assuming the collection is partitioned (an all-false prefix
+    /// followed by an all-true suffix). O(log n).
+    func partitionPoint(
+        where belongsInSecondPartition: (Element) -> Bool
+    ) -> Index {
+        var low = startIndex
+        var length = distance(from: startIndex, to: endIndex)
+        while length > 0 {
+            let half = length / 2
+            let middle = index(low, offsetBy: half)
+            if belongsInSecondPartition(self[middle]) {
+                length = half
+            } else {
+                low = index(after: middle)
+                length -= half + 1
+            }
+        }
+        return low
+    }
+}
+
 // MARK: - ArrayQueue (replaces `Deque` for FIFO use)
 
 /// FIFO queue over a plain array with a moving head index: amortized O(1)
