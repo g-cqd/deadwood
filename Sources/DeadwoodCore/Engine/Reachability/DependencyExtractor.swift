@@ -56,10 +56,12 @@ struct DependencyExtractor: Sendable {
     ) async {
         let allDeclarations = result.declarations.declarations
 
-        // Name → declarations lookup (immutable copy for Sendable capture).
-        var declByNameMutable: [String: [Declaration]] = [:]
-        for declaration in allDeclarations {
-            declByNameMutable[declaration.name, default: []].append(declaration)
+        // Name → declaration indices lookup (immutable copy for Sendable
+        // capture). Indices are positions in the aggregated corpus array —
+        // the graph's node identity.
+        var declByNameMutable: [String: [Int32]] = [:]
+        for (index, declaration) in allDeclarations.enumerated() {
+            declByNameMutable[declaration.name, default: []].append(Int32(index))
         }
         let declByName = declByNameMutable
 
@@ -76,11 +78,12 @@ struct DependencyExtractor: Sendable {
         let maxConcurrency = ProcessInfo.processInfo.activeProcessorCount
 
         let computedEdges = await ParallelProcessor.compactMap(
-            allDeclarations,
+            Array(allDeclarations.enumerated()),
             maxConcurrency: maxConcurrency
-        ) { declaration -> [DependencyEdge]? in
+        ) { entry -> [DependencyEdge]? in
             let edges = self.computeEdgesForDeclaration(
-                declaration,
+                entry.element,
+                index: Int32(entry.offset),
                 sortedRefsByFile: sortedRefsByFile,
                 declByName: declByName
             )
@@ -104,30 +107,28 @@ struct DependencyExtractor: Sendable {
     /// same-named declaration (name-level over-approximation).
     private func computeEdgesForDeclaration(
         _ declaration: Declaration,
+        index: Int32,
         sortedRefsByFile: [String: [Reference]],
-        declByName: [String: [Declaration]]
+        declByName: [String: [Int32]]
     ) -> [DependencyEdge] {
         var edges: [DependencyEdge] = []
-        let declNode = DeclarationNode(declaration: declaration)
 
         let scopeRefs = findReferencesInScope(
             declaration: declaration, sortedRefsByFile: sortedRefsByFile)
 
         for ref in scopeRefs {
             for target in findTargetDeclarations(for: ref, declarations: declByName) {
-                let targetNode = DeclarationNode(declaration: target)
                 let kind = mapReferenceContextToEdgeKind(ref.context)
-                edges.append(DependencyEdge(from: declNode.id, to: targetNode.id, kind: kind))
+                edges.append(DependencyEdge(from: index, to: target, kind: kind))
             }
         }
 
         // Type annotations reference their type names.
         if let typeAnnotation = declaration.typeAnnotation {
             for typeName in extractTypeNames(from: typeAnnotation) {
-                for typeDecl in declByName[typeName] ?? [] {
-                    let targetNode = DeclarationNode(declaration: typeDecl)
+                for typeIndex in declByName[typeName] ?? [] {
                     edges.append(
-                        DependencyEdge(from: declNode.id, to: targetNode.id, kind: .typeReference))
+                        DependencyEdge(from: index, to: typeIndex, kind: .typeReference))
                 }
             }
         }
@@ -153,13 +154,13 @@ struct DependencyExtractor: Sendable {
         return fileRefs[lower..<upper]
     }
 
-    /// Declarations a reference might be pointing to (by name, plus the
-    /// qualifier of qualified references).
+    /// Declaration indices a reference might be pointing to (by name, plus
+    /// the qualifier of qualified references).
     private func findTargetDeclarations(
         for reference: Reference,
-        declarations: [String: [Declaration]]
-    ) -> [Declaration] {
-        var targets: [Declaration] = []
+        declarations: [String: [Int32]]
+    ) -> [Int32] {
+        var targets: [Int32] = []
 
         if let matches = declarations[reference.identifier] {
             targets.append(contentsOf: matches)
@@ -246,44 +247,49 @@ struct DependencyExtractor: Sendable {
     private func computeProtocolEdges(
         result: AnalysisResult,
         context: CorpusContext,
-        declByName: [String: [Declaration]]
+        declByName: [String: [Int32]]
     ) -> [DependencyEdge] {
         var edges: [DependencyEdge] = []
-        let protocols = result.declarations.find(kind: .protocol)
-        guard !protocols.isEmpty else { return edges }
+        let allDeclarations = result.declarations.declarations
 
-        // Requirements grouped by their protocol.
-        var requirementsByProtocol: [String: [Declaration]] = [:]
-        for declaration in result.declarations.declarations {
+        // Protocol declarations and requirements grouped by protocol name,
+        // both carrying their corpus indices.
+        var protocolIndices: [Int32] = []
+        var requirementsByProtocol: [String: [Int32]] = [:]
+        for (index, declaration) in allDeclarations.enumerated() {
+            if declaration.kind == .protocol {
+                protocolIndices.append(Int32(index))
+                continue
+            }
             guard let enclosing = context.nearestEnclosingType(of: declaration),
-                enclosing.kind == .protocol,
-                declaration.kind != .protocol
+                enclosing.kind == .protocol
             else { continue }
-            requirementsByProtocol[enclosing.name, default: []].append(declaration)
+            requirementsByProtocol[enclosing.name, default: []].append(Int32(index))
         }
+        guard !protocolIndices.isEmpty else { return edges }
 
-        for proto in protocols {
-            let protoNode = DeclarationNode(declaration: proto)
+        for protoIndex in protocolIndices {
+            let proto = allDeclarations[Int(protoIndex)]
+            let requirements = requirementsByProtocol[proto.name] ?? []
 
             if configuration.treatProtocolRequirementsAsRoot {
-                for requirement in requirementsByProtocol[proto.name] ?? [] {
-                    let requirementNode = DeclarationNode(declaration: requirement)
+                for requirement in requirements {
                     edges.append(
                         DependencyEdge(
-                            from: protoNode.id, to: requirementNode.id, kind: .protocolRequirement))
+                            from: protoIndex, to: requirement, kind: .protocolRequirement))
                 }
             }
 
-            for requirement in requirementsByProtocol[proto.name] ?? [] {
-                let requirementNode = DeclarationNode(declaration: requirement)
-                for witness in declByName[requirement.name] ?? [] {
-                    guard isWitness(witness, ofProtocol: proto.name, context: context) else {
-                        continue
-                    }
-                    let witnessNode = DeclarationNode(declaration: witness)
+            for requirement in requirements {
+                let requirementName = allDeclarations[Int(requirement)].name
+                for witness in declByName[requirementName] ?? [] {
+                    guard
+                        isWitness(
+                            allDeclarations[Int(witness)], ofProtocol: proto.name, context: context)
+                    else { continue }
                     edges.append(
                         DependencyEdge(
-                            from: requirementNode.id, to: witnessNode.id, kind: .protocolRequirement))
+                            from: requirement, to: witness, kind: .protocolRequirement))
                 }
             }
         }
@@ -367,15 +373,18 @@ struct ReachabilityBasedDetector: Sendable {
         let nodeCount = await graph.nodeCount
         let runParallel = configuration.useParallelBFS ?? (nodeCount >= configuration.parallelBFSThreshold)
 
-        let unreachable: [DeclarationNode]
+        let unreachable: [Int32]
         if runParallel {
             unreachable = await graph.computeUnreachableParallel()
         } else {
             unreachable = await graph.computeUnreachable()
         }
 
-        return unreachable.compactMap { node -> UnusedCode? in
-            let declaration = node.declaration
+        // Map indices back through the declaration array only here, at the
+        // findings boundary — the graph never carries declarations.
+        let declarations = result.declarations.declarations
+        return unreachable.compactMap { index -> UnusedCode? in
+            let declaration = declarations[Int(index)]
 
             guard shouldReport(declaration) else {
                 return nil

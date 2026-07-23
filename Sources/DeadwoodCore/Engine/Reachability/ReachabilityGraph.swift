@@ -4,53 +4,26 @@
 //    made context-aware; the doc-comment attribute fallback is gone.
 //  - `Deque`-based path finding, the report generator, and the per-edge
 //    mutators are trimmed (deadwood only builds once and queries once).
-
-// MARK: - DeclarationNode
-
-/// A node in the reachability graph representing a declaration.
-struct DeclarationNode: Hashable, Sendable {
-    /// Unique identifier for this node (file:line:name).
-    let id: String
-
-    /// The declaration this node represents.
-    let declaration: Declaration
-
-    /// Whether this is a root node (entry point).
-    let isRoot: Bool
-
-    /// Reason this is a root (if applicable).
-    let rootReason: RootReason?
-
-    init(declaration: Declaration, isRoot: Bool = false, rootReason: RootReason? = nil) {
-        id = "\(declaration.location.file):\(declaration.location.line):\(declaration.name)"
-        self.declaration = declaration
-        self.isRoot = isRoot
-        self.rootReason = rootReason
-    }
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.id == rhs.id
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-}
+//  - node identity is the declaration's dense corpus index (`Int32`), not a
+//    "file:line:name" string: no id interpolation at construction and no
+//    string hashing on edge insert, flatten, or projection. Unreachable
+//    results are indices; callers map back through the declaration array.
 
 // MARK: - DependencyEdge
 
-/// An edge in the reachability graph representing a dependency.
+/// An edge in the reachability graph. Endpoints are dense declaration
+/// indices (the declaration's position in the aggregated corpus array).
 struct DependencyEdge: Hashable, Sendable {
-    /// Source node ID.
-    let from: String
+    /// Source declaration index.
+    let from: Int32
 
-    /// Target node ID.
-    let to: String
+    /// Target declaration index.
+    let to: Int32
 
     /// Kind of dependency.
     let kind: DependencyKind
 
-    init(from: String, to: String, kind: DependencyKind) {
+    init(from: Int32, to: Int32, kind: DependencyKind) {
         self.from = from
         self.to = to
         self.kind = kind
@@ -90,137 +63,145 @@ enum DependencyKind: String, Sendable {
 ///
 /// An actor: the extractor inserts edge batches from parallel workers, and
 /// the actor model gives compile-time data-race safety for the mutable
-/// adjacency state.
+/// adjacency state. Nodes are implicit: every declaration index in
+/// `0..<nodeCount` is a node.
 actor ReachabilityGraph {
-    /// All nodes in the graph.
-    private var nodes: [String: DeclarationNode] = [:]
+    /// Number of declarations (nodes are `0..<nodeCount`).
+    private(set) var nodeCount = 0
 
-    /// Adjacency list (edges from each node).
-    private var edges: [String: Set<DependencyEdge>] = [:]
+    /// Adjacency lists indexed by declaration index.
+    private var adjacency: ContiguousArray<[Int32]> = []
 
-    /// Root nodes (entry points).
-    private var roots: Set<String> = []
+    /// Deduplication set for inserted (from, to) pairs, packed into one
+    /// 64-bit key so batch insert never hashes more than an integer.
+    private var seenEdges: Set<UInt64> = []
 
-    /// Cache of reachable nodes.
-    private var reachableCache: Set<String>?
+    /// Root declaration indices (entry points).
+    private var roots: Set<Int32> = []
+
+    /// Cache of reachable indices.
+    private var reachableCache: Set<Int>?
 
     /// Cached dense projection; invalidated on every mutation.
     private var denseGraphCache: DenseGraph?
 
     init() {}
 
-    /// Total number of nodes.
-    var nodeCount: Int {
-        nodes.count
-    }
-
     // MARK: - Building the graph
 
-    /// Add a declaration node to the graph.
-    func addNode(
-        _ declaration: Declaration,
-        isRoot: Bool = false,
-        rootReason: RootReason? = nil
-    ) {
-        let node = DeclarationNode(declaration: declaration, isRoot: isRoot, rootReason: rootReason)
-        nodes[node.id] = node
+    /// Size the graph for `count` declarations (indices `0..<count`),
+    /// clearing any previous state.
+    func prepare(declarationCount count: Int) {
+        nodeCount = count
+        adjacency = ContiguousArray(repeating: [], count: count)
+        seenEdges = []
+        roots = []
+        invalidateCaches()
+    }
 
-        if isRoot {
-            roots.insert(node.id)
-        }
-
-        reachableCache = nil
-        denseGraphCache = nil
+    /// Mark a declaration index as a root (entry point).
+    func markRoot(_ index: Int32) {
+        guard index >= 0, Int(index) < nodeCount else { return }
+        roots.insert(index)
+        invalidateCaches()
     }
 
     /// Add multiple edges in a single batch (one actor hop per worker).
+    /// Duplicate (from, to) pairs are dropped; out-of-range endpoints are
+    /// ignored defensively.
     func addEdges(_ newEdges: [DependencyEdge]) {
         guard !newEdges.isEmpty else { return }
 
         for edge in newEdges {
-            edges[edge.from, default: []].insert(edge)
+            guard edge.from >= 0, Int(edge.from) < nodeCount,
+                edge.to >= 0, Int(edge.to) < nodeCount
+            else { continue }
+            let key =
+                (UInt64(UInt32(bitPattern: edge.from)) << 32)
+                | UInt64(UInt32(bitPattern: edge.to))
+            if seenEdges.insert(key).inserted {
+                adjacency[Int(edge.from)].append(edge.to)
+            }
         }
 
+        invalidateCaches()
+    }
+
+    private func invalidateCaches() {
         reachableCache = nil
         denseGraphCache = nil
     }
 
     // MARK: - Root detection
 
-    /// Add every declaration as a node, marking roots per the detector.
+    /// Size the graph for the declarations and mark roots per the detector.
     func detectRoots(
         declarations: [Declaration],
         context: CorpusContext,
         configuration: RootDetectionConfiguration = .default
     ) {
+        prepare(declarationCount: declarations.count)
         let detector = RootDetector(configuration: configuration)
-        for declaration in declarations {
-            if let reason = detector.rootReason(for: declaration, context: context) {
-                addNode(declaration, isRoot: true, rootReason: reason)
-            } else {
-                addNode(declaration, isRoot: false)
-            }
+        for (index, declaration) in declarations.enumerated()
+        where detector.rootReason(for: declaration, context: context) != nil {
+            roots.insert(Int32(index))
         }
     }
 
     // MARK: - Reachability
 
-    /// Compute all reachable node IDs from the root set (sequential BFS
-    /// over the dense projection).
-    func computeReachable() -> Set<String> {
+    /// Compute all reachable declaration indices from the root set
+    /// (sequential BFS over the dense projection).
+    func computeReachable() -> Set<Int> {
         if let cached = reachableCache {
             return cached
         }
 
-        let dense = denseGraph()
-        let reachable = dense.toNodeIds(dense.computeReachableSequential())
-
+        let reachable = denseGraph().computeReachableSequential()
         reachableCache = reachable
         return reachable
     }
 
-    /// All unreachable nodes.
-    func computeUnreachable() -> [DeclarationNode] {
+    /// All unreachable declaration indices, ascending.
+    func computeUnreachable() -> [Int32] {
         let reachable = computeReachable()
-        return nodes.values.filter { !reachable.contains($0.id) }
+        return unreachableIndices(reachable: reachable)
     }
 
-    /// Compute reachable node IDs using direction-optimizing parallel BFS.
+    /// Compute reachable indices using direction-optimizing parallel BFS.
     func computeReachableParallel(
         configuration: ParallelBFS.Configuration = .default
-    ) async -> Set<String> {
-        let dense = denseGraph()
-        let reachableIndices = await ParallelBFS.computeReachable(
-            graph: dense,
-            configuration: configuration
-        )
-        return dense.toNodeIds(reachableIndices)
+    ) async -> Set<Int> {
+        await ParallelBFS.computeReachable(graph: denseGraph(), configuration: configuration)
     }
 
-    /// All unreachable nodes, via parallel BFS.
+    /// All unreachable declaration indices, ascending, via parallel BFS.
     func computeUnreachableParallel(
         configuration: ParallelBFS.Configuration = .default
-    ) async -> [DeclarationNode] {
+    ) async -> [Int32] {
         let reachable = await computeReachableParallel(configuration: configuration)
-        return nodes.values.filter { !reachable.contains($0.id) }
+        return unreachableIndices(reachable: reachable)
+    }
+
+    private func unreachableIndices(reachable: Set<Int>) -> [Int32] {
+        var unreachable: [Int32] = []
+        unreachable.reserveCapacity(max(0, nodeCount - reachable.count))
+        for index in 0..<nodeCount where !reachable.contains(index) {
+            unreachable.append(Int32(index))
+        }
+        return unreachable
     }
 
     // MARK: - Dense projection
 
-    /// Lazily build (and cache) the dense projection of the graph.
+    /// Lazily build (and cache) the dense projection of the graph: an
+    /// immutable snapshot of the adjacency the BFS backends can consume
+    /// outside the actor.
     private func denseGraph() -> DenseGraph {
         if let cached = denseGraphCache {
             return cached
         }
-        let nodeIds = Array(nodes.keys)
-        var flatEdges: [(from: String, to: String)] = []
-        flatEdges.reserveCapacity(edges.values.reduce(0) { $0 + $1.count })
-        for (from, outgoing) in edges {
-            for edge in outgoing {
-                flatEdges.append((from, edge.to))
-            }
-        }
-        let dense = DenseGraph(nodeIds: nodeIds, edges: flatEdges, rootIds: roots)
+        let dense = DenseGraph(adjacency: adjacency, roots: roots)
         denseGraphCache = dense
         return dense
     }
