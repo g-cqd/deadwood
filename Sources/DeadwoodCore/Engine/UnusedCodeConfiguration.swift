@@ -22,6 +22,19 @@ struct UnusedCodeConfiguration: Sendable {
     /// Detect unused imports (behind the `unused-import` rule).
     var detectImports: Bool
 
+    /// Detect assign-only properties (behind the `assign-only-property`
+    /// rule).
+    var detectAssignOnly: Bool
+
+    /// Production mode: run reachability twice (with and without test
+    /// roots) and split declarations only tests can reach into the
+    /// `referenced-only-by-tests` rule.
+    var productionMode: Bool
+
+    /// Glob deciding which files are test files in production mode; nil
+    /// uses the built-in heuristics (`**/Tests/**`, `**/*Tests.swift`).
+    var testsGlob: String?
+
     /// Detection mode to use.
     var mode: DetectionMode
 
@@ -72,6 +85,9 @@ struct UnusedCodeConfiguration: Sendable {
         detectFunctions: Bool = true,
         detectTypes: Bool = true,
         detectImports: Bool = false,
+        detectAssignOnly: Bool = false,
+        productionMode: Bool = false,
+        testsGlob: String? = nil,
         mode: DetectionMode = .reachability,
         minimumConfidence: Confidence = .low,
         ignoredPatterns: [String] = [],
@@ -90,6 +106,9 @@ struct UnusedCodeConfiguration: Sendable {
         self.detectFunctions = detectFunctions
         self.detectTypes = detectTypes
         self.detectImports = detectImports
+        self.detectAssignOnly = detectAssignOnly
+        self.productionMode = productionMode
+        self.testsGlob = testsGlob
         self.mode = mode
         self.minimumConfidence = minimumConfidence
         self.ignoredPatterns = ignoredPatterns
