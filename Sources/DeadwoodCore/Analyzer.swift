@@ -146,7 +146,7 @@ public struct Analyzer: Sendable {
         source: String,
         deadBranchesEnabled: Bool
     ) -> FileArtifacts {
-        let tree = Parser.parse(source: source)
+        let tree = foldedTree(Parser.parse(source: source))
         let converter = SourceLocationConverter(fileName: path, tree: tree)
         let directives = DirectiveScanner.scan(tree: tree, converter: converter)
         let facts = StaticAnalyzer().collectFacts(tree: tree, file: path)
