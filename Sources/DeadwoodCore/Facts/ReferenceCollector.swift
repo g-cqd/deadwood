@@ -15,11 +15,51 @@ final class ReferenceCollector: ScopeTrackingVisitor {
     /// Collected references.
     private(set) var references: [Reference] = []
 
+    /// Identifier-shaped tokens found inside string-literal segments
+    /// ("SCARF" set): a declaration whose name appears here may be reached
+    /// dynamically (NSClassFromString, selector strings, key paths by
+    /// name), so unused findings on it get demoted, never suppressed.
+    private(set) var stringLiteralTokens: Set<String> = []
+
     /// Stack tracking the current reference context.
     private var contextStack: [ReferenceContext] = [.unknown]
 
     private var currentContext: ReferenceContext {
         contextStack.last ?? .unknown
+    }
+
+    // MARK: - String literals (dynamic-reference name set)
+
+    override func visit(_ node: StringLiteralExprSyntax) -> SyntaxVisitorContinueKind {
+        for segment in node.segments {
+            guard let text = segment.as(StringSegmentSyntax.self)?.content.text else {
+                continue
+            }
+            collectIdentifierTokens(in: text)
+        }
+        // Interpolation segments contain expressions; the default child walk
+        // still collects their references.
+        return .visitChildren
+    }
+
+    /// Split segment text on non-identifier characters and record every
+    /// identifier-shaped token ("com.app.LegacyMigrator" yields all three).
+    private func collectIdentifierTokens(in text: String) {
+        var current = ""
+        func flush() {
+            if let first = current.first, first.isLetter || first == "_" {
+                stringLiteralTokens.insert(current)
+            }
+            current.removeAll(keepingCapacity: true)
+        }
+        for character in text {
+            if character.isLetter || character.isNumber || character == "_" {
+                current.append(character)
+            } else {
+                flush()
+            }
+        }
+        flush()
     }
 
     // MARK: - Identifier expressions

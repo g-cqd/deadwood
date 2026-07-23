@@ -20,11 +20,29 @@ public struct Configuration: Sendable, Codable, Equatable {
     public var rules: [String: RuleSettings]
     /// Path substrings to exclude (matched against the file path).
     public var exclude: [String]
+    /// Production mode: corpus reachability runs twice (with and without
+    /// test roots); declarations only tests can reach get the
+    /// `referenced-only-by-tests` rule. Absent means off.
+    public var production: Bool?
+    /// Glob deciding which files count as test files in production mode;
+    /// absent uses the built-in `**/Tests/**` + `**/*Tests.swift`
+    /// heuristics.
+    public var testsGlob: String?
 
-    public init(rules: [String: RuleSettings] = [:], exclude: [String] = []) {
+    public init(
+        rules: [String: RuleSettings] = [:],
+        exclude: [String] = [],
+        production: Bool? = nil,
+        testsGlob: String? = nil
+    ) {
         self.rules = rules
         self.exclude = exclude
+        self.production = production
+        self.testsGlob = testsGlob
     }
+
+    /// Whether production mode is on.
+    public var isProductionMode: Bool { production ?? false }
 
     public static let `default` = Configuration()
 

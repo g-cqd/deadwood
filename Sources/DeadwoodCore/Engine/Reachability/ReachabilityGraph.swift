@@ -170,12 +170,11 @@ actor ReachabilityGraph {
         await ParallelBFS.computeReachable(graph: denseGraph(), configuration: configuration)
     }
 
-    /// All unreachable declaration indices, ascending, via parallel BFS.
-    func computeUnreachableParallel(
-        configuration: ParallelBFS.Configuration = .default
-    ) async -> [Int32] {
-        let reachable = await computeReachableParallel(configuration: configuration)
-        return unreachableIndices(reachable: reachable)
+    /// Reachable indices from an EXPLICIT root set over the same edges —
+    /// production mode's second pass (without test roots). Uncached: the
+    /// root set is the caller's, not the graph's.
+    func computeReachable(fromRoots rootIndices: Set<Int32>) -> Set<Int> {
+        denseGraph().computeReachableSequential(from: rootIndices.map(Int.init))
     }
 
     private func unreachableIndices(reachable: Set<Int>) -> [Int32] {

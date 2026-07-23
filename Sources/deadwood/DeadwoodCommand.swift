@@ -29,6 +29,13 @@ struct Analyze: AsyncParsableCommand {
     @Flag(name: .long, help: "Exit 1 on any finding, not just errors.")
     var strict = false
 
+    @Flag(
+        name: .long,
+        help:
+            "Production mode: declarations reachable only through tests get the referenced-only-by-tests rule."
+    )
+    var production = false
+
     @Option(name: .long, help: "Configuration file (default: ./.deadwood.json when present).")
     var config: String?
 
@@ -39,7 +46,10 @@ struct Analyze: AsyncParsableCommand {
     var writeBaseline: String?
 
     func run() async throws {
-        let configuration = try loadConfiguration()
+        var configuration = try loadConfiguration()
+        if production {
+            configuration.production = true
+        }
         let files = try discoverSwiftFiles(configuration: configuration)
         guard !files.isEmpty else { throw ValidationError(DeadwoodError.noInputs.description) }
 

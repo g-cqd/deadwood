@@ -22,16 +22,20 @@ struct FindingMapper: Sendable {
     /// members of flagged types collapsed into the type's finding.
     func findings(from unused: [UnusedCode], context: CorpusContext) -> [Finding] {
         // Collapse: when a type is flagged, its members are implied — one
-        // finding on the type reads better than one per member.
+        // finding on the type reads better than one per member. Dataflow
+        // findings (dead branches/stores) are locations, not members.
         let flaggedTypeKeys = Set(
             unused
                 .filter { Self.typeKinds.contains($0.declaration.kind) }
                 .map { key(of: $0.declaration) }
         )
+        let dataflowReasons: Set<UnusedReason> = [.deadBranch, .deadStore]
 
         var findings: [Finding] = []
         for item in unused {
-            if item.reason != .deadBranch, isInsideFlaggedType(item.declaration, flaggedTypeKeys, context) {
+            if !dataflowReasons.contains(item.reason),
+                isInsideFlaggedType(item.declaration, flaggedTypeKeys, context)
+            {
                 continue
             }
             if let finding = finding(from: item, context: context) {
@@ -47,6 +51,8 @@ struct FindingMapper: Sendable {
         guard let rule = rule(for: item, context: context) else { return nil }
         guard configuration.isEnabled(rule) else { return nil }
 
+        let assessment = ConfidenceCalculator(context: context).assess(item)
+
         return Finding(
             rule: rule,
             severity: configuration.severity(for: rule),
@@ -54,7 +60,7 @@ struct FindingMapper: Sendable {
             line: item.declaration.location.line,
             column: item.declaration.location.column,
             message: message(for: item, rule: rule),
-            note: note(for: item)
+            note: note(for: item, assessment: assessment)
         )
     }
 
@@ -67,6 +73,15 @@ struct FindingMapper: Sendable {
     private func rule(for item: UnusedCode, context: CorpusContext) -> RuleID? {
         if item.reason == .deadBranch {
             return .deadBranch
+        }
+        if item.reason == .deadStore {
+            return .deadStore
+        }
+        if item.reason == .onlyAssigned {
+            return .assignOnlyProperty
+        }
+        if item.reason == .referencedOnlyByTests {
+            return .referencedOnlyByTests
         }
         if item.reason == .importNotUsed || item.declaration.kind == .import {
             return .unusedImport
@@ -114,8 +129,8 @@ struct FindingMapper: Sendable {
     private func message(for item: UnusedCode, rule: RuleID) -> String {
         let declaration = item.declaration
         switch rule {
-        case .deadBranch:
-            // The dead-branch pass fills the suggestion with the precise
+        case .deadBranch, .deadStore:
+            // The dataflow passes fill the suggestion with the precise
             // condition/value sentence; surface it as the message.
             return item.suggestion
         case .unusedImport:
@@ -131,6 +146,8 @@ struct FindingMapper: Sendable {
         switch item.reason {
         case .onlyAssigned:
             return "\(subject) is assigned but never read"
+        case .referencedOnlyByTests:
+            return "\(subject) is reachable only from test code"
         default:
             switch mode {
             case .simple:
@@ -141,15 +158,21 @@ struct FindingMapper: Sendable {
         }
     }
 
-    private func note(for item: UnusedCode) -> String {
+    private func note(for item: UnusedCode, assessment: ConfidenceCalculator.Assessment) -> String {
         let reasonText: String =
             switch item.reason {
             case .neverReferenced: "no reference found"
-            case .onlyAssigned: "written but never read"
+            case .onlyAssigned: "every reference is a write"
             case .importNotUsed: "syntax-level heuristic; extensions and operators are invisible"
             case .deadBranch: "sparse conditional constant propagation"
+            case .deadStore: "liveness + reaching definitions"
+            case .referencedOnlyByTests: "reachable with test roots, unreachable without them"
             }
-        return "confidence \(item.confidence.rawValue) — \(reasonText)"
+        var note = "confidence \(assessment.confidence.rawValue) — \(reasonText)"
+        for demotion in assessment.demotionNotes {
+            note += "; \(demotion)"
+        }
+        return note
     }
 
     private func displayName(of declaration: Declaration) -> String {
