@@ -178,9 +178,11 @@ final class ReferenceCollector: ScopeTrackingVisitor {
     // MARK: - Assignments
 
     override func visit(_ node: InfixOperatorExprSyntax) -> SyntaxVisitorContinueKind {
-        // Check if this is an assignment.
-        if let op = node.operator.as(BinaryOperatorExprSyntax.self),
-            op.operator.text == "="
+        // Check if this is an assignment. After operator folding, `=` is
+        // AssignmentExprSyntax (unfolded trees would show a
+        // BinaryOperatorExprSyntax with "=" text instead).
+        if node.operator.is(AssignmentExprSyntax.self)
+            || node.operator.as(BinaryOperatorExprSyntax.self)?.operator.text == "="
         {
             contextStack.append(.write)
             walk(node.leftOperand)
