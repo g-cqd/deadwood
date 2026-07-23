@@ -1,5 +1,5 @@
-import DeadwoodCore
 public import ArgumentParser
+import DeadwoodCore
 import Foundation
 
 @main
