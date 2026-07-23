@@ -11,38 +11,80 @@ import SwiftSyntax
 /// body, builds a CFG, runs sparse conditional constant propagation, and
 /// reports branches whose condition folds to a constant.
 enum DeadBranchPass {
+    /// Functions above this many statements are skipped and reported as a
+    /// degraded-file note instead of analyzed: CFG + SCCP work stays
+    /// bounded on adversarial input.
+    static let maxStatementsPerFunction = 5000
+
+    /// Findings plus degraded-function notes for one file.
+    struct Output: Sendable {
+        var findings: [UnusedCode] = []
+        /// One human-readable note per function skipped by the statement
+        /// bound.
+        var degraded: [String] = []
+    }
+
     /// Run the pass over one parsed file, reusing the file's one
     /// `SourceLocationConverter`.
     static func run(
         tree: SourceFileSyntax,
         file: String,
         converter: SourceLocationConverter
-    ) -> [UnusedCode] {
+    ) -> Output {
         let collector = FunctionBodyCollector()
         collector.walk(tree)
+        var output = Output()
         guard !collector.functions.isEmpty || !collector.initializers.isEmpty else {
-            return []
+            return output
         }
 
         let builder = CFGBuilder(file: file, converter: converter)
         let sccp = SCCPAnalysis()
-        var findings: [UnusedCode] = []
 
         var graphs: [ControlFlowGraph] = []
-        for function in collector.functions {
+        for (index, function) in collector.functions.enumerated() {
+            guard
+                withinBound(
+                    collector.functionStatementCounts[index],
+                    name: function.name.text,
+                    output: &output
+                )
+            else { continue }
             graphs.append(builder.buildCFG(from: function))
         }
-        for initializer in collector.initializers {
+        for (index, initializer) in collector.initializers.enumerated() {
+            guard
+                withinBound(
+                    collector.initializerStatementCounts[index],
+                    name: "init",
+                    output: &output
+                )
+            else { continue }
             graphs.append(builder.buildCFG(from: initializer))
         }
 
         for cfg in graphs {
             let result = sccp.analyze(cfg)
             for dead in result.deadBranches {
-                findings.append(makeFinding(for: dead, file: file))
+                output.findings.append(makeFinding(for: dead, file: file))
             }
         }
-        return findings
+        return output
+    }
+
+    /// Whether a body's statement count (measured during collection — no
+    /// extra walk) is inside the bound; records a degraded note when not.
+    private static func withinBound(
+        _ statementCount: Int,
+        name: String,
+        output: inout Output
+    ) -> Bool {
+        guard statementCount > maxStatementsPerFunction else { return true }
+        output.degraded.append(
+            "function '\(name)' exceeds \(maxStatementsPerFunction) statements — "
+                + "dead-branch analysis skipped for it"
+        )
+        return false
     }
 
     /// Wrap a dead branch in the declaration-centric `UnusedCode` shape
@@ -72,22 +114,68 @@ enum DeadBranchPass {
 // MARK: - FunctionBodyCollector
 
 /// Collects every function and initializer declaration in a parsed tree
-/// for the dead-branch pass.
+/// for the dead-branch pass, measuring each one's subtree statement count
+/// in the same walk (the adversarial bound needs the count, and a separate
+/// counting pass would double the traversal).
 private final class FunctionBodyCollector: SyntaxVisitor {
     private(set) var functions: [FunctionDeclSyntax] = []
     private(set) var initializers: [InitializerDeclSyntax] = []
+
+    /// Statement counts aligned with `functions` / `initializers`. A
+    /// function's count includes nested bodies (closures, local functions):
+    /// the bound caps total CFG work per top-level build.
+    private(set) var functionStatementCounts: [Int] = []
+    private(set) var initializerStatementCounts: [Int] = []
+
+    /// Open declaration frames: which result array the declaration lives
+    /// in, its index there, and the statements counted so far.
+    private var frames: [(isFunction: Bool, index: Int, count: Int)] = []
 
     init() {
         super.init(viewMode: .sourceAccurate)
     }
 
+    override func visit(_ node: CodeBlockItemSyntax) -> SyntaxVisitorContinueKind {
+        if !frames.isEmpty {
+            frames[frames.count - 1].count += 1
+        }
+        return .visitChildren
+    }
+
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         functions.append(node)
+        functionStatementCounts.append(0)
+        frames.append((isFunction: true, index: functions.count - 1, count: 0))
         return .visitChildren
+    }
+
+    override func visitPost(_ node: FunctionDeclSyntax) {
+        closeFrame()
     }
 
     override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
         initializers.append(node)
+        initializerStatementCounts.append(0)
+        frames.append((isFunction: false, index: initializers.count - 1, count: 0))
         return .visitChildren
+    }
+
+    override func visitPost(_ node: InitializerDeclSyntax) {
+        closeFrame()
+    }
+
+    /// Record the finished frame's count and roll it up into the enclosing
+    /// frame (a nested function's statements count against its parent's
+    /// subtree total too).
+    private func closeFrame() {
+        guard let frame = frames.popLast() else { return }
+        if frame.isFunction {
+            functionStatementCounts[frame.index] = frame.count
+        } else {
+            initializerStatementCounts[frame.index] = frame.count
+        }
+        if !frames.isEmpty {
+            frames[frames.count - 1].count += frame.count
+        }
     }
 }

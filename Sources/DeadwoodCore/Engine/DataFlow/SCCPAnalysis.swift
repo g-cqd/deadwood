@@ -569,11 +569,17 @@ private struct SCCPAnalysisSession {
     private func findUnreachableBlocks() -> Set<BlockID> {
         var unreachable = Set<BlockID>()
 
+        // One pass over the executable-edge set; the per-block check is a
+        // set lookup instead of a scan of every edge.
+        var executableTargets = Set<BlockID>(minimumCapacity: executableEdges.count)
+        for edge in executableEdges {
+            executableTargets.insert(edge.to)
+        }
+
         for id in cfg.blockOrder {
             if id == .entry { continue }
 
-            let hasExecutableIncoming = executableEdges.contains { $0.to == id }
-            if !hasExecutableIncoming {
+            if !executableTargets.contains(id) {
                 unreachable.insert(id)
             }
         }

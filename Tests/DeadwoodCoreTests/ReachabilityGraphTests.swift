@@ -20,8 +20,7 @@ struct ReachabilityGraphTests {
     @Test("Root nodes are reachable")
     func rootNodesReachable() async {
         let graph = ReachabilityGraph()
-        await graph.prepare(declarationCount: 1)
-        await graph.markRoot(0)
+        await graph.prepare(declarationCount: 1, roots: [0])
 
         let unreachable = await graph.computeUnreachable()
         #expect(unreachable.isEmpty)
@@ -30,8 +29,7 @@ struct ReachabilityGraphTests {
     @Test("Edges make targets reachable")
     func edgeReachability() async {
         let graph = ReachabilityGraph()
-        await graph.prepare(declarationCount: 2)
-        await graph.markRoot(0)
+        await graph.prepare(declarationCount: 2, roots: [0])
         await graph.addEdges([DependencyEdge(from: 0, to: 1, kind: .call)])
 
         let unreachable = await graph.computeUnreachable()
@@ -41,8 +39,7 @@ struct ReachabilityGraphTests {
     @Test("Unreachable nodes are detected")
     func unreachableNodes() async {
         let graph = ReachabilityGraph()
-        await graph.prepare(declarationCount: 2)
-        await graph.markRoot(0)
+        await graph.prepare(declarationCount: 2, roots: [0])
 
         let unreachable = await graph.computeUnreachable()
         #expect(unreachable == [1])
@@ -51,8 +48,7 @@ struct ReachabilityGraphTests {
     @Test("Transitive chains are fully reachable")
     func transitiveReachability() async {
         let graph = ReachabilityGraph()
-        await graph.prepare(declarationCount: 4)
-        await graph.markRoot(0)
+        await graph.prepare(declarationCount: 4, roots: [0])
         await graph.addEdges([
             DependencyEdge(from: 0, to: 1, kind: .call),
             DependencyEdge(from: 1, to: 2, kind: .call),
@@ -65,8 +61,7 @@ struct ReachabilityGraphTests {
     @Test("Duplicate edges are deduplicated, not double-counted")
     func duplicateEdges() async {
         let graph = ReachabilityGraph()
-        await graph.prepare(declarationCount: 2)
-        await graph.markRoot(0)
+        await graph.prepare(declarationCount: 2, roots: [0])
         await graph.addEdges([
             DependencyEdge(from: 0, to: 1, kind: .call),
             DependencyEdge(from: 0, to: 1, kind: .call),
@@ -79,9 +74,7 @@ struct ReachabilityGraphTests {
     @Test("Out-of-range edges and roots are ignored")
     func outOfRangeInputs() async {
         let graph = ReachabilityGraph()
-        await graph.prepare(declarationCount: 2)
-        await graph.markRoot(9)
-        await graph.markRoot(-1)
+        await graph.prepare(declarationCount: 2, roots: [9, -1])
         await graph.addEdges([
             DependencyEdge(from: 0, to: 9, kind: .call),
             DependencyEdge(from: -3, to: 1, kind: .call),
@@ -94,8 +87,7 @@ struct ReachabilityGraphTests {
     @Test("Mutation invalidates the reachability cache")
     func cacheInvalidation() async {
         let graph = ReachabilityGraph()
-        await graph.prepare(declarationCount: 2)
-        await graph.markRoot(0)
+        await graph.prepare(declarationCount: 2, roots: [0])
 
         #expect(await graph.computeUnreachable().count == 1)
 
@@ -119,8 +111,7 @@ struct ReachabilityGraphTests {
     @Test("Parallel and sequential unreachable sets agree")
     func parallelSequentialAgreement() async {
         let graph = ReachabilityGraph()
-        await graph.prepare(declarationCount: 50)
-        await graph.markRoot(0)
+        await graph.prepare(declarationCount: 50, roots: [0])
         var edges: [DependencyEdge] = []
         for index in 1..<40 {
             edges.append(DependencyEdge(from: Int32(index - 1), to: Int32(index), kind: .call))
