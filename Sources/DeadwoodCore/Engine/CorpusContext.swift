@@ -134,22 +134,6 @@ struct CorpusContext: Sendable {
         mergedConformancesByTypeName[name] ?? []
     }
 
-    /// Whether the declaration is a member of a type (or extension chain)
-    /// that inherits from or conforms to something declared *outside* the
-    /// corpus. Such members may witness external protocol requirements or
-    /// override external superclass members — usage that source-level
-    /// analysis cannot see.
-    func isMemberOfExternallyConformingType(_ declaration: Declaration) -> Bool {
-        guard let enclosing = nearestEnclosingType(of: declaration) else {
-            return false
-        }
-        // Default implementations inside `extension SomeProtocol` count as
-        // members of that protocol for witness purposes.
-        let typeName = enclosing.name
-        let inherited = conformances(ofTypeNamed: typeName)
-        return inherited.contains { !protocolNames.contains($0) && !nominalTypesByName.keys.contains($0) }
-    }
-
     /// Whether the declaration sits inside a type carrying the given
     /// attribute (e.g. "resultBuilder").
     func isMemberOfType(withAttribute attribute: String, _ declaration: Declaration) -> Bool {
