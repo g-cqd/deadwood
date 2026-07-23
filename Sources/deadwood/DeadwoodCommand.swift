@@ -45,6 +45,19 @@ struct Analyze: AsyncParsableCommand {
     @Option(name: .long, help: "Write the current findings as a new baseline, then exit 0.")
     var writeBaseline: String?
 
+    @Flag(
+        name: .long,
+        help:
+            "Enable the incremental facts cache (default location: ~/Library/Caches/deadwood/facts.json). Opt-in: on corpora of small files, re-parsing beats the cache's JSON round-trip."
+    )
+    var cache = false
+
+    @Option(name: .long, help: "Facts-cache file (implies --cache).")
+    var cachePath: String?
+
+    @Flag(name: .long, help: "Disable the incremental facts cache (overrides --cache/--cache-path).")
+    var noCache = false
+
     func run() async throws {
         var configuration = try loadConfiguration()
         if production {
@@ -53,7 +66,8 @@ struct Analyze: AsyncParsableCommand {
         let files = try discoverSwiftFiles(configuration: configuration)
         guard !files.isEmpty else { throw ValidationError(DeadwoodError.noInputs.description) }
 
-        var report = await Analyzer(configuration: configuration).analyze(files: files)
+        var report = await Analyzer(configuration: configuration)
+            .analyze(files: files, cacheURL: cacheURL())
 
         if let writeBaseline {
             try Baseline(findings: report.findings).write(path: writeBaseline)
@@ -78,12 +92,24 @@ struct Analyze: AsyncParsableCommand {
         if baselinedCount > 0 {
             summary += "; \(baselinedCount) baselined"
         }
+        if report.cacheHits + report.cacheMisses > 0, !noCache {
+            summary += "; cache: \(report.cacheHits) reused, \(report.cacheMisses) parsed"
+        }
         FileHandle.standardError.write(Data((summary + "\n").utf8))
 
         let failed = strict ? !report.findings.isEmpty : report.maxSeverity == .error
         if failed {
             throw ExitCode(1)
         }
+    }
+
+    private func cacheURL() -> URL? {
+        if noCache { return nil }
+        if let cachePath { return URL(fileURLWithPath: cachePath) }
+        guard cache,
+            let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        else { return nil }
+        return caches.appending(path: "deadwood/facts.json")
     }
 
     private func loadConfiguration() throws -> Configuration {
