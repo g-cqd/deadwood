@@ -145,6 +145,44 @@ struct UnusedCodeDetector: Sendable {
         }
     }
 
+    // MARK: - Assign-only properties
+
+    /// Stored properties whose every reference is a write: state maintained
+    /// that nothing consumes. Conservative on purpose — any non-write
+    /// reference context (reads, member accesses, patterns, key paths)
+    /// counts as a potential read, because `object.property` cannot be
+    /// classified as read or write at the syntax level.
+    func detectAssignOnly(result: AnalysisResult, context: CorpusContext) -> [UnusedCode] {
+        guard configuration.detectAssignOnly else { return [] }
+        let rootDetector = RootDetector(configuration: configuration.rootDetection)
+
+        return result.declarations.declarations.compactMap { declaration -> UnusedCode? in
+            guard declaration.kind == .variable || declaration.kind == .constant else {
+                return nil
+            }
+            guard declaration.name != "_" else { return nil }
+            // Wrapper-synthesized accessors read the property invisibly.
+            guard !declaration.hasImplicitUsageWrapper else { return nil }
+            guard rootDetector.rootReason(for: declaration, context: context) == nil else {
+                return nil
+            }
+            guard !context.isProtocolRequirement(declaration) else { return nil }
+            guard !compiledIgnorePatterns.anyMatches(declaration.name) else { return nil }
+
+            let refs = result.references.find(identifier: declaration.name)
+            guard !refs.isEmpty else { return nil }  // Never referenced → unused-property.
+            guard refs.allSatisfy({ $0.context == .write }) else { return nil }
+
+            return UnusedCode(
+                declaration: declaration,
+                reason: .onlyAssigned,
+                confidence: declaration.unusedConfidence(context: context),
+                suggestion:
+                    "Property '\(declaration.name)' is written but never read - remove it and its assignments"
+            )
+        }
+    }
+
     // MARK: - Unused imports
 
     /// Syntax-level unused-import heuristic: without index data a reference
@@ -160,6 +198,12 @@ struct UnusedCodeDetector: Sendable {
 
         for importDecl in imports {
             let moduleName = importDecl.name
+
+            // `@_exported import` re-exports the module to every client:
+            // the import IS the usage, so it is never flagged.
+            if importDecl.attributes.contains("_exported") {
+                continue
+            }
 
             // Per-file check: an import in one file is not justified by a
             // qualified reference in another.

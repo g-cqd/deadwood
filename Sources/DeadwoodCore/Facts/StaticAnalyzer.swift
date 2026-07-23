@@ -40,7 +40,8 @@ struct StaticAnalyzer: Sendable {
             file: file,
             declarations: declCollector.declarations + declCollector.imports,
             references: refCollector.references,
-            scopes: Array(declCollector.tracker.tree.scopes.values)
+            scopes: Array(declCollector.tracker.tree.scopes.values),
+            stringLiteralTokens: refCollector.stringLiteralTokens
         )
     }
 
@@ -68,6 +69,7 @@ struct StaticAnalyzer: Sendable {
         var declarationIndex = DeclarationIndex()
         var referenceIndex = ReferenceIndex()
         var scopeTree = ScopeTree()
+        var stringTokens: Set<String> = []
 
         for result in results {
             for declaration in result.declarations {
@@ -79,13 +81,15 @@ struct StaticAnalyzer: Sendable {
             for scope in result.scopes {
                 scopeTree.add(scope)
             }
+            stringTokens.formUnion(result.stringLiteralTokens)
         }
 
         return AnalysisResult(
             files: files,
             declarations: declarationIndex,
             references: referenceIndex,
-            scopes: scopeTree
+            scopes: scopeTree,
+            stringLiteralTokens: stringTokens
         )
     }
 }
