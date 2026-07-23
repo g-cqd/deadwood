@@ -17,7 +17,9 @@ let strictSwiftSettings: [SwiftSetting] = [
 
 let package = Package(
     name: "deadwood",
-    platforms: [.macOS(.v14)],
+    // macOS 15+: the parallel BFS visited-set and the regex cache sit on the
+    // stdlib Synchronization module (Atomic/Mutex), which landed in 15.
+    platforms: [.macOS(.v15)],
     products: [
         .library(name: "DeadwoodCore", targets: ["DeadwoodCore"]),
         .executable(name: "deadwood", targets: ["deadwood"]),
