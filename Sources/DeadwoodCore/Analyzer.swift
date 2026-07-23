@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import SwiftParser
 import SwiftSyntax
 
@@ -27,12 +27,25 @@ public struct Analyzer: Sendable {
 
     // MARK: - Corpus analysis
 
-    public func analyze(files: [String]) async -> AnalysisReport {
+    /// Analyze a corpus of files. With `cacheURL`, per-file artifacts
+    /// (facts, directives, dataflow findings) are reused when the file's
+    /// content fingerprint matches; the corpus-wide graph/BFS and every
+    /// rule always re-run, so findings can never go stale relative to rules
+    /// or configuration.
+    public func analyze(files: [String], cacheURL: URL? = nil) async -> AnalysisReport {
         var report = AnalysisReport()
+
+        let deadBranchesEnabled = configuration.isEnabled(.deadBranch)
+        let deadStoresEnabled = configuration.isEnabled(.deadStore)
+        // Cached artifacts depend on which CFG passes ran — salt the
+        // fingerprint so a rule toggle can never serve stale dataflow
+        // findings.
+        let salt = "branches=\(deadBranchesEnabled);stores=\(deadStoresEnabled)"
+        let snapshot = cacheURL.map(FactsCache.load(url:)) ?? FactsCache()
 
         // Read every file up front (bounded); degraded files are reported,
         // never silently skipped.
-        var sources: [(path: String, source: String)] = []
+        var sources: [(path: String, source: String, fingerprint: String)] = []
         sources.reserveCapacity(files.count)
         for path in files {
             if Task.isCancelled { break }
@@ -46,22 +59,49 @@ public struct Analyzer: Sendable {
                 )
                 continue
             }
-            sources.append((path, String(decoding: data, as: UTF8.self)))
+            sources.append(
+                (
+                    path,
+                    String(decoding: data, as: UTF8.self),
+                    FactsCache.fingerprint(of: data, salt: salt)
+                ))
         }
 
-        // Parse + collect facts + scan directives per file, in parallel.
+        // Parse + collect facts + scan directives per file, in parallel;
+        // fingerprint-matched files come from the cache snapshot instead.
         let engineConfig = engineConfiguration(mode: .reachability)
         let concurrency = ParallelMode.safe.concurrencyConfiguration
-        let perFile = await ParallelProcessor.map(
+        let outcomes = await ParallelProcessor.map(
             sources,
             maxConcurrency: concurrency.maxConcurrentFiles
-        ) { entry in
-            Self.collectArtifacts(
+        ) { entry -> (artifacts: FileArtifacts, cacheHit: Bool) in
+            if let cached = snapshot.artifacts(for: entry.path, fingerprint: entry.fingerprint) {
+                return (FileArtifacts(path: entry.path, cached: cached), true)
+            }
+            let artifacts = Self.collectArtifacts(
                 path: entry.path,
                 source: entry.source,
-                deadBranchesEnabled: self.configuration.isEnabled(.deadBranch),
-                deadStoresEnabled: self.configuration.isEnabled(.deadStore)
+                deadBranchesEnabled: deadBranchesEnabled,
+                deadStoresEnabled: deadStoresEnabled
             )
+            return (artifacts, false)
+        }
+        let perFile = outcomes.map(\.artifacts)
+        report.cacheHits = outcomes.count(where: \.cacheHit)
+        report.cacheMisses = outcomes.count - report.cacheHits
+
+        // Persist a cache rebuilt from ONLY this run's files: absent files
+        // are pruned, and the cache stays shaped to the project.
+        if let cacheURL {
+            var freshCache = FactsCache()
+            for (source, outcome) in zip(sources, outcomes) {
+                freshCache.update(
+                    path: source.path,
+                    fingerprint: source.fingerprint,
+                    artifacts: CachedFileArtifacts(outcome.artifacts)
+                )
+            }
+            freshCache.persist(url: cacheURL)
         }
 
         // Aggregate the corpus and run detection.
@@ -89,7 +129,7 @@ public struct Analyzer: Sendable {
         let mapper = FindingMapper(configuration: configuration, mode: .reachability)
         let findings = mapper.findings(from: unused, context: context)
         let tables = Dictionary(
-            perFile.map { ($0.path, $0.table) },
+            perFile.map { ($0.path, SuppressionTable(directives: $0.directives)) },
             uniquingKeysWith: { first, _ in first }
         )
         for finding in findings {
@@ -134,8 +174,9 @@ public struct Analyzer: Sendable {
         for note in artifacts.degraded {
             report.degradedFiles.append(.init(path: path, detail: note))
         }
+        let table = SuppressionTable(directives: artifacts.directives)
         for finding in findings {
-            if let reason = artifacts.table.suppression(for: finding.rule, line: finding.line) {
+            if let reason = table.suppression(for: finding.rule, line: finding.line) {
                 report.suppressed.append(.init(finding: finding, reason: reason))
             } else {
                 report.findings.append(finding)
@@ -148,15 +189,37 @@ public struct Analyzer: Sendable {
     // MARK: - Shared plumbing
 
     /// Everything derived from one file in a single parse: facts for the
-    /// corpus, the suppression table, per-function dead branches, and any
-    /// degraded-analysis notes (e.g. an over-bound function the dead-branch
-    /// pass skipped).
-    private struct FileArtifacts: Sendable {
+    /// corpus, the suppression directives, per-function dead branches, and
+    /// any degraded-analysis notes (e.g. an over-bound function the
+    /// dead-branch pass skipped). This is exactly the cacheable unit.
+    fileprivate struct FileArtifacts: Sendable {
         let path: String
         let facts: FileAnalysisResult
-        let table: SuppressionTable
+        let directives: [SuppressionDirective]
         let deadBranches: [UnusedCode]
         let degraded: [String]
+
+        init(
+            path: String,
+            facts: FileAnalysisResult,
+            directives: [SuppressionDirective],
+            deadBranches: [UnusedCode],
+            degraded: [String]
+        ) {
+            self.path = path
+            self.facts = facts
+            self.directives = directives
+            self.deadBranches = deadBranches
+            self.degraded = degraded
+        }
+
+        init(path: String, cached: CachedFileArtifacts) {
+            self.path = path
+            facts = cached.facts
+            directives = cached.directives
+            deadBranches = cached.deadBranches
+            degraded = cached.degraded
+        }
     }
 
     private static func collectArtifacts(
@@ -184,7 +247,7 @@ public struct Analyzer: Sendable {
         return FileArtifacts(
             path: path,
             facts: facts,
-            table: SuppressionTable(directives: directives),
+            directives: directives,
             deadBranches: deadBranchOutput.findings,
             degraded: deadBranchOutput.degraded
         )
@@ -208,6 +271,20 @@ public struct Analyzer: Sendable {
             minimumConfidence: .low,
             treatPublicAsRoot: !wantsPublicApi,
             treatVisibleOutsideFileAsRoot: mode == .simple
+        )
+    }
+}
+
+// MARK: - Cache bridging
+
+extension CachedFileArtifacts {
+    /// Snapshot the cacheable parts of one file's artifacts.
+    fileprivate init(_ artifacts: Analyzer.FileArtifacts) {
+        self.init(
+            facts: artifacts.facts,
+            directives: artifacts.directives,
+            deadBranches: artifacts.deadBranches,
+            degraded: artifacts.degraded
         )
     }
 }

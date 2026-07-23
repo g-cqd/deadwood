@@ -122,6 +122,29 @@ let benchmarks: @Sendable () -> Void = {
         }
     }
 
+    // Warm facts cache: one cold run primes it; every measured iteration
+    // reuses all 200 per-file artifacts (and re-persists the cache, as a
+    // real warm run would).
+    let cacheURL = FileManager.default.temporaryDirectory
+        .appending(path: "deadwood-benchmark-cache/facts.json")
+
+    Benchmark(
+        "analyze end-to-end warm cache 200 files",
+        configuration: .init(
+            metrics: defaultMetrics,
+            maxDuration: .seconds(10),
+            maxIterations: 20,
+            setup: {
+                try? FileManager.default.removeItem(at: cacheURL)
+                _ = await Analyzer().analyze(files: paths, cacheURL: cacheURL)
+            }
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(await Analyzer().analyze(files: paths, cacheURL: cacheURL))
+        }
+    }
+
     Benchmark(
         "extraction stage (parse+collect) 200 files",
         configuration: .init(metrics: defaultMetrics, maxDuration: .seconds(10), maxIterations: 30)
