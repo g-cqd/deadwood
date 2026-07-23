@@ -111,16 +111,17 @@ class ScopeTrackingVisitor: SyntaxVisitor {
     /// The scope tracker.
     var tracker: ScopeTracker
 
-    /// The source location converter.
+    /// The source location converter, provided by the caller so one file's
+    /// line table is built once and shared by every visitor over that file.
     let converter: SourceLocationConverter
 
     /// The file being visited.
     let file: String
 
-    init(file: String, tree: SourceFileSyntax) {
+    init(file: String, converter: SourceLocationConverter) {
         self.file = file
         tracker = ScopeTracker(file: file)
-        converter = SourceLocationConverter(fileName: file, tree: tree)
+        self.converter = converter
         super.init(viewMode: .sourceAccurate)
     }
 
