@@ -1,5 +1,6 @@
 //  Ported from SwiftStaticAnalysis UnusedCodeDetectorTests/DenseGraphTests
-//  (trimmed to the lifted surface: statistics and neighbor accessors are gone).
+//  (trimmed to the lifted surface: statistics and neighbor accessors are
+//  gone, and so is the String→Int node-id mapping — ids are dense indices).
 
 import Testing
 
@@ -9,7 +10,7 @@ import Testing
 struct DenseGraphTests {
     @Test("Empty graph has correct properties")
     func emptyGraph() {
-        let graph = DenseGraph(nodeIds: [], edges: [], rootIds: [])
+        let graph = DenseGraph(nodeCount: 0, edges: [], roots: [])
 
         #expect(graph.nodeCount == 0)
         #expect(graph.edgeCount == 0)
@@ -17,119 +18,90 @@ struct DenseGraphTests {
         #expect(graph.isEmpty)
     }
 
-    @Test("Node ID mapping is bijective")
-    func nodeIdMappingBijective() {
-        let nodeIds = ["A", "B", "C", "D"]
-        let graph = DenseGraph(nodeIds: nodeIds, edges: [], rootIds: [])
-
-        for (index, nodeId) in nodeIds.enumerated() {
-            #expect(graph.nodeToIndex[nodeId] == index)
-        }
-        for (index, nodeId) in graph.indexToNode.enumerated() {
-            #expect(nodeIds[index] == nodeId)
-        }
-    }
-
-    @Test("Adjacency correctly converted from string IDs")
-    func adjacencyConversion() {
+    @Test("Adjacency built from the edge list")
+    func adjacencyFromEdges() {
         let graph = DenseGraph(
-            nodeIds: ["A", "B", "C"],
-            edges: [("A", "B"), ("A", "C"), ("B", "C")],
-            rootIds: []
+            nodeCount: 3,
+            edges: [(0, 1), (0, 2), (1, 2)],
+            roots: []
         )
 
-        let aIndex = graph.nodeToIndex["A"]!
-        let bIndex = graph.nodeToIndex["B"]!
-        let cIndex = graph.nodeToIndex["C"]!
-
-        #expect(graph.adjacency[aIndex].contains(bIndex))
-        #expect(graph.adjacency[aIndex].contains(cIndex))
-        #expect(graph.adjacency[aIndex].count == 2)
-        #expect(graph.adjacency[bIndex] == [cIndex])
-        #expect(graph.adjacency[cIndex].isEmpty)
+        #expect(graph.adjacency[0].contains(1))
+        #expect(graph.adjacency[0].contains(2))
+        #expect(graph.adjacency[0].count == 2)
+        #expect(graph.adjacency[1] == [2])
+        #expect(graph.adjacency[2].isEmpty)
     }
 
     @Test("Reverse adjacency matches forward adjacency")
     func reverseAdjacency() {
         let graph = DenseGraph(
-            nodeIds: ["A", "B", "C"],
-            edges: [("A", "B"), ("A", "C"), ("B", "C")],
-            rootIds: []
+            nodeCount: 3,
+            edges: [(0, 1), (0, 2), (1, 2)],
+            roots: []
         )
 
-        let aIndex = graph.nodeToIndex["A"]!
-        let bIndex = graph.nodeToIndex["B"]!
-        let cIndex = graph.nodeToIndex["C"]!
-
-        #expect(graph.reverseAdjacency[bIndex].contains(aIndex))
-        #expect(graph.reverseAdjacency[cIndex].contains(aIndex))
-        #expect(graph.reverseAdjacency[cIndex].contains(bIndex))
-        #expect(graph.reverseAdjacency[cIndex].count == 2)
-        #expect(graph.reverseAdjacency[aIndex].isEmpty)
+        #expect(graph.reverseAdjacency[1].contains(0))
+        #expect(graph.reverseAdjacency[2].contains(0))
+        #expect(graph.reverseAdjacency[2].contains(1))
+        #expect(graph.reverseAdjacency[2].count == 2)
+        #expect(graph.reverseAdjacency[0].isEmpty)
     }
 
     @Test("Root indices correctly identified")
     func rootIndices() {
-        let graph = DenseGraph(nodeIds: ["A", "B", "C"], edges: [], rootIds: ["A", "C"])
+        let graph = DenseGraph(nodeCount: 3, edges: [], roots: [0, 2])
 
         #expect(graph.roots.count == 2)
-        #expect(graph.roots.contains(graph.nodeToIndex["A"]!))
-        #expect(graph.roots.contains(graph.nodeToIndex["C"]!))
+        #expect(graph.roots.contains(0))
+        #expect(graph.roots.contains(2))
     }
 
-    @Test("Invalid edges are skipped")
-    func invalidEdgesSkipped() {
+    @Test("Out-of-range edges and roots are skipped")
+    func outOfRangeSkipped() {
         let graph = DenseGraph(
-            nodeIds: ["A", "B"],
-            edges: [("A", "B"), ("A", "X"), ("Y", "B"), ("X", "Y")],
-            rootIds: []
+            nodeCount: 2,
+            edges: [(0, 1), (0, 7), (5, 1), (-1, 0)],
+            roots: [0, 9]
         )
 
         #expect(graph.edgeCount == 1)
-    }
-
-    @Test("ToNodeIds converts indices back to strings")
-    func toNodeIds() {
-        let graph = DenseGraph(nodeIds: ["A", "B", "C"], edges: [], rootIds: [])
-        #expect(graph.toNodeIds([0, 2]) == ["A", "C"])
+        #expect(graph.roots == [0])
     }
 
     @Test("TotalOutEdges calculates correctly")
     func totalOutEdges() {
         let graph = DenseGraph(
-            nodeIds: ["A", "B", "C"],
-            edges: [("A", "B"), ("A", "C"), ("B", "C")],
-            rootIds: []
+            nodeCount: 3,
+            edges: [(0, 1), (0, 2), (1, 2)],
+            roots: []
         )
 
-        let aIndex = graph.nodeToIndex["A"]!
-        let bIndex = graph.nodeToIndex["B"]!
-
-        #expect(graph.totalOutEdges(from: [aIndex]) == 2)
-        #expect(graph.totalOutEdges(from: [bIndex]) == 1)
-        #expect(graph.totalOutEdges(from: [aIndex, bIndex]) == 3)
+        #expect(graph.totalOutEdges(from: [0]) == 2)
+        #expect(graph.totalOutEdges(from: [1]) == 1)
+        #expect(graph.totalOutEdges(from: [0, 1]) == 3)
     }
 
     @Test("Sequential BFS finds all reachable nodes")
     func sequentialBFS() {
         let graph = DenseGraph(
-            nodeIds: ["A", "B", "C", "D", "E"],
-            edges: [("A", "B"), ("B", "C"), ("C", "D")],
-            rootIds: ["A"]
+            nodeCount: 5,
+            edges: [(0, 1), (1, 2), (2, 3)],
+            roots: [0]
         )
 
         let reachable = graph.computeReachableSequential()
 
         #expect(reachable.count == 4)
-        #expect(!reachable.contains(graph.nodeToIndex["E"]!))
+        #expect(!reachable.contains(4))
     }
 
     @Test("Sequential BFS with multiple roots")
     func sequentialBFSMultipleRoots() {
         let graph = DenseGraph(
-            nodeIds: ["A", "B", "C", "D"],
-            edges: [("A", "B"), ("C", "D")],
-            rootIds: ["A", "C"]
+            nodeCount: 4,
+            edges: [(0, 1), (2, 3)],
+            roots: [0, 2]
         )
 
         #expect(graph.computeReachableSequential().count == 4)
@@ -138,9 +110,9 @@ struct DenseGraphTests {
     @Test("Sequential BFS handles cycles")
     func sequentialBFSCycles() {
         let graph = DenseGraph(
-            nodeIds: ["A", "B", "C"],
-            edges: [("A", "B"), ("B", "C"), ("C", "A")],
-            rootIds: ["A"]
+            nodeCount: 3,
+            edges: [(0, 1), (1, 2), (2, 0)],
+            roots: [0]
         )
 
         #expect(graph.computeReachableSequential().count == 3)
@@ -148,13 +120,13 @@ struct DenseGraphTests {
 
     @Test("ParallelBFS matches sequential reference on a cyclic graph")
     func parallelMatchesSequentialOnCyclicGraph() async {
-        //   a → b → c → b   (back edge)
+        //   0 → 1 → 2 → 1   (back edge)
         //       ↓
-        //       d
+        //       3
         let graph = DenseGraph(
-            nodeIds: ["a", "b", "c", "d"],
-            edges: [("a", "b"), ("b", "c"), ("c", "b"), ("b", "d")],
-            rootIds: ["a"]
+            nodeCount: 4,
+            edges: [(0, 1), (1, 2), (2, 1), (1, 3)],
+            roots: [0]
         )
 
         let sequential = graph.computeReachableSequential()
@@ -170,9 +142,9 @@ struct DenseGraphTests {
     @Test("ParallelBFS matches sequential reference on a disconnected graph")
     func parallelMatchesSequentialOnDisconnectedGraph() async {
         let graph = DenseGraph(
-            nodeIds: ["a", "b", "c", "x", "y", "z"],
-            edges: [("a", "b"), ("b", "c"), ("x", "y"), ("y", "z")],
-            rootIds: ["a"]
+            nodeCount: 6,
+            edges: [(0, 1), (1, 2), (3, 4), (4, 5)],
+            roots: [0]
         )
 
         let sequential = graph.computeReachableSequential()
