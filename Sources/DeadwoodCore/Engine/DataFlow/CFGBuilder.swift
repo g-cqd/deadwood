@@ -276,9 +276,9 @@ final class CFGBuilder: SyntaxVisitor {
     /// Pending block connections (do/catch exception flow).
     private var pendingConnections: [(from: BlockID, to: BlockID)] = []
 
-    init(file: String, tree: SourceFileSyntax) {
+    init(file: String, converter: SourceLocationConverter) {
         self.file = file
-        converter = SourceLocationConverter(fileName: file, tree: tree)
+        self.converter = converter
         cfg = ControlFlowGraph(functionName: "", file: file)
         currentBlockID = .entry
         super.init(viewMode: .sourceAccurate)
