@@ -67,11 +67,12 @@ struct CFGStatement: Sendable {
     /// Source location.
     let location: SourceLocation
 
-    /// Variables read by the statement.
-    let uses: Set<VariableID>
+    /// Variables read by the statement (filled in by the one-pass body
+    /// use/def walk after CFG construction).
+    var uses: Set<VariableID>
 
     /// Variables written by the statement.
-    let defs: Set<VariableID>
+    var defs: Set<VariableID>
 
     init(
         syntax: Syntax,
@@ -276,6 +277,11 @@ final class CFGBuilder: SyntaxVisitor {
     /// Pending block connections (do/catch exception flow).
     private var pendingConnections: [(from: BlockID, to: BlockID)] = []
 
+    /// Where each registered statement lives, keyed by its syntax node id.
+    /// One post-construction walk of the whole body attributes use/def sets
+    /// to these slots instead of running a fresh extractor per statement.
+    private var statementRegistry: [SyntaxIdentifier: (block: BlockID, index: Int)] = [:]
+
     init(file: String, converter: SourceLocationConverter) {
         self.file = file
         self.converter = converter
@@ -286,33 +292,28 @@ final class CFGBuilder: SyntaxVisitor {
 
     /// Build a CFG for a function declaration.
     func buildCFG(from function: FunctionDeclSyntax) -> ControlFlowGraph {
-        resetAndBuild(name: function.name.text) {
-            if let body = function.body {
-                self.processCodeBlock(body)
-            }
-        }
+        resetAndBuild(name: function.name.text, body: function.body)
     }
 
     /// Build a CFG for an initializer declaration.
     func buildCFG(from initializer: InitializerDeclSyntax) -> ControlFlowGraph {
-        resetAndBuild(name: "init") {
-            if let body = initializer.body {
-                self.processCodeBlock(body)
-            }
-        }
+        resetAndBuild(name: "init", body: initializer.body)
     }
 
     // MARK: - Private
 
-    private func resetAndBuild(name: String, bodyProcessor: () -> Void) -> ControlFlowGraph {
+    private func resetAndBuild(name: String, body: CodeBlockSyntax?) -> ControlFlowGraph {
         cfg = ControlFlowGraph(functionName: name, file: file)
         currentBlockID = .entry
         blockCounter = 0
         loopStack = []
         switchStack = []
         pendingConnections = []
+        statementRegistry = [:]
 
-        bodyProcessor()
+        if let body {
+            processCodeBlock(body)
+        }
 
         // Connect the current block to exit if not already terminated.
         if cfg.blocks[currentBlockID]?.terminator == nil {
@@ -324,10 +325,35 @@ final class CFGBuilder: SyntaxVisitor {
             cfg.addEdge(from: from, to: to)
         }
 
+        applyUseDef(body: body)
         cfg.computeReversePostOrder()
         computeUseDef()
 
         return cfg
+    }
+
+    /// One walk of the whole function body attributes use/def sets to every
+    /// registered statement (statement-boundary stack in the walker) — the
+    /// old shape ran a fresh extractor sub-tree walk per statement.
+    private func applyUseDef(body: CodeBlockSyntax?) {
+        guard let body, !statementRegistry.isEmpty else { return }
+
+        var targets: [SyntaxIdentifier: Int] = [:]
+        targets.reserveCapacity(statementRegistry.count)
+        var slots: [(block: BlockID, index: Int)] = []
+        slots.reserveCapacity(statementRegistry.count)
+        for (id, place) in statementRegistry {
+            targets[id] = slots.count
+            slots.append(place)
+        }
+
+        let walker = BodyUseDefWalker(targets: targets)
+        walker.walk(body)
+
+        for (slot, place) in slots.enumerated() {
+            cfg.blocks[place.block]?.statements[place.index].uses = walker.results[slot].uses
+            cfg.blocks[place.block]?.statements[place.index].defs = walker.results[slot].defs
+        }
     }
 
     // MARK: - Block management
@@ -724,17 +750,11 @@ final class CFGBuilder: SyntaxVisitor {
         let loc = converter.location(for: syntax.positionAfterSkippingLeadingTrivia)
         let location = SourceLocation(file: file, line: loc.line, column: loc.column, offset: 0)
 
-        let extractor = UseDefExtractor()
-        extractor.walk(syntax)
-
-        let statement = CFGStatement(
-            syntax: syntax,
-            location: location,
-            uses: extractor.uses,
-            defs: extractor.defs
-        )
-
+        // Use/def sets start empty; the single body walk fills them in.
+        let statement = CFGStatement(syntax: syntax, location: location, uses: [], defs: [])
+        let index = cfg.blocks[currentBlockID]?.statements.count ?? 0
         cfg.blocks[currentBlockID]?.statements.append(statement)
+        statementRegistry[syntax.id] = (currentBlockID, index)
     }
 
     // MARK: - USE/DEF computation
@@ -765,41 +785,117 @@ final class CFGBuilder: SyntaxVisitor {
     }
 }
 
-// MARK: - UseDefExtractor
+// MARK: - BodyUseDefWalker
 
-/// Extracts variable uses and definitions from syntax with scope-aware
-/// tracking. Closures are handled conservatively: everything referenced
-/// inside a closure counts as used (captures).
-private final class UseDefExtractor: SyntaxVisitor {
-    var uses = Set<VariableID>()
-    var defs = Set<VariableID>()
+/// One-pass use/def attribution for a whole function body.
+///
+/// The CFG builder registers every statement it adds (any syntax node kind
+/// can be a statement root: expressions, declarations, condition lists,
+/// return/throw/... statements). This walker visits the body once,
+/// maintaining a statement-boundary stack: entering a registered node
+/// pushes its slot, and every use/def recorded while it is on top belongs
+/// to that statement. Recordings outside any registered subtree are
+/// discarded — exactly the nodes the per-statement extractor never walked.
+///
+/// The use/def semantics replicate the retired per-statement
+/// `UseDefExtractor`: closures are handled conservatively (everything
+/// referenced inside counts as used — potential captures), assignments
+/// def their DeclRef LHS without reading it, and compound assignments both
+/// read and write.
+private final class BodyUseDefWalker: SyntaxAnyVisitor {
+    /// Registered statement roots: syntax node id → result slot.
+    private let targets: [SyntaxIdentifier: Int]
 
-    /// Current scope nesting depth.
-    let scopeDepth: Int
+    /// Accumulated use/def sets per slot.
+    private(set) var results: [(uses: Set<VariableID>, defs: Set<VariableID>)]
 
-    init(scopeDepth: Int = 0) {
-        self.scopeDepth = scopeDepth
+    /// Statement-boundary stack (slots of the registered nodes currently
+    /// being traversed, with the node id so leaving is an O(1) compare;
+    /// registered subtrees are disjoint, so this rarely holds more than
+    /// one entry).
+    private var frameStack: [(slot: Int, nodeID: SyntaxIdentifier)] = []
+
+    /// Scope nesting depth (the CFG attribution level is always 0).
+    private let scopeDepth = 0
+
+    init(targets: [SyntaxIdentifier: Int]) {
+        self.targets = targets
+        results = Array(repeating: ([], []), count: targets.count)
         super.init(viewMode: .sourceAccurate)
     }
+
+    // MARK: - Statement boundaries
+
+    private func enterStatement(_ node: some SyntaxProtocol) {
+        if let slot = targets[node.id] {
+            frameStack.append((slot: slot, nodeID: node.id))
+        }
+    }
+
+    private func leaveStatement(_ node: some SyntaxProtocol) {
+        if let top = frameStack.last, top.nodeID == node.id {
+            frameStack.removeLast()
+        }
+    }
+
+    private func recordUse(_ variable: VariableID) {
+        if let top = frameStack.last {
+            results[top.slot].uses.insert(variable)
+        }
+    }
+
+    private func recordDef(_ variable: VariableID) {
+        if let top = frameStack.last {
+            results[top.slot].defs.insert(variable)
+        }
+    }
+
+    override func visitAny(_ node: Syntax) -> SyntaxVisitorContinueKind {
+        enterStatement(node)
+        return .visitChildren
+    }
+
+    override func visitAnyPost(_ node: Syntax) {
+        leaveStatement(node)
+    }
+
+    // Tokens are never statement roots and never contribute uses or defs:
+    // skipping them here removes the visitAny round-trip for roughly half
+    // of all nodes.
+    override func visit(_ token: TokenSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+
+    override func visitPost(_ node: TokenSyntax) {}
 
     // MARK: - Variable references (reads)
 
     override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
-        uses.insert(VariableID(name: node.baseName.text, scopeDepth: scopeDepth))
+        enterStatement(node)
+        recordUse(VariableID(name: node.baseName.text, scopeDepth: scopeDepth))
         return .visitChildren
+    }
+
+    override func visitPost(_ node: DeclReferenceExprSyntax) {
+        leaveStatement(node)
     }
 
     // MARK: - Variable bindings (writes)
 
     override func visit(_ node: PatternBindingSyntax) -> SyntaxVisitorContinueKind {
+        enterStatement(node)
         extractDefsFromPattern(node.pattern)
         return .visitChildren
+    }
+
+    override func visitPost(_ node: PatternBindingSyntax) {
+        leaveStatement(node)
     }
 
     /// Recursively extract definitions from any pattern type.
     private func extractDefsFromPattern(_ pattern: PatternSyntax) {
         if let identifier = pattern.as(IdentifierPatternSyntax.self) {
-            defs.insert(VariableID(name: identifier.identifier.text, scopeDepth: scopeDepth))
+            recordDef(VariableID(name: identifier.identifier.text, scopeDepth: scopeDepth))
         } else if let tuple = pattern.as(TuplePatternSyntax.self) {
             for element in tuple.elements {
                 extractDefsFromPattern(element.pattern)
@@ -819,13 +915,15 @@ private final class UseDefExtractor: SyntaxVisitor {
                 extractDefsFromExpression(argument.expression)
             }
         } else if let declRef = expr.as(DeclReferenceExprSyntax.self) {
-            defs.insert(VariableID(name: declRef.baseName.text, scopeDepth: scopeDepth))
+            recordDef(VariableID(name: declRef.baseName.text, scopeDepth: scopeDepth))
         }
     }
 
     // MARK: - Assignment expressions
 
     override func visit(_ node: InfixOperatorExprSyntax) -> SyntaxVisitorContinueKind {
+        enterStatement(node)
+
         // After operator folding, `=` is AssignmentExprSyntax and compound
         // assignments (+=) are BinaryOperatorExprSyntax. Comparisons that
         // merely end in `=` (==, !=, <=, >=) are not assignments.
@@ -847,12 +945,12 @@ private final class UseDefExtractor: SyntaxVisitor {
 
         if let declRef = node.leftOperand.as(DeclReferenceExprSyntax.self) {
             let varID = VariableID(name: declRef.baseName.text, scopeDepth: scopeDepth)
-            defs.insert(varID)
+            recordDef(varID)
             // Plain assignment doesn't read the LHS; compound assignment
             // (+=) both reads and writes. Walking only the RHS keeps the
             // LHS out of the use set (a full child walk would re-add it).
             if operatorText != "=" {
-                uses.insert(varID)
+                recordUse(varID)
             }
             walk(node.rightOperand)
             return .skipChildren
@@ -863,29 +961,50 @@ private final class UseDefExtractor: SyntaxVisitor {
         return .visitChildren
     }
 
+    override func visitPost(_ node: InfixOperatorExprSyntax) {
+        leaveStatement(node)
+    }
+
     // MARK: - For loop pattern
 
     override func visit(_ node: ForStmtSyntax) -> SyntaxVisitorContinueKind {
+        enterStatement(node)
         extractDefsFromPattern(node.pattern)
         return .visitChildren
+    }
+
+    override func visitPost(_ node: ForStmtSyntax) {
+        leaveStatement(node)
     }
 
     // MARK: - Guard/if let bindings
 
     override func visit(_ node: OptionalBindingConditionSyntax) -> SyntaxVisitorContinueKind {
+        enterStatement(node)
         extractDefsFromPattern(node.pattern)
         return .visitChildren
+    }
+
+    override func visitPost(_ node: OptionalBindingConditionSyntax) {
+        leaveStatement(node)
     }
 
     // MARK: - Closures (conservative)
 
     override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+        enterStatement(node)
         // Everything a closure references is a potential capture: mark it
         // used to prevent false dead-store positives.
         let captureExtractor = ClosureCaptureExtractor(scopeDepth: scopeDepth + 1)
         captureExtractor.walk(node)
-        uses.formUnion(captureExtractor.capturedVariables)
+        for variable in captureExtractor.capturedVariables {
+            recordUse(variable)
+        }
         return .skipChildren
+    }
+
+    override func visitPost(_ node: ClosureExprSyntax) {
+        leaveStatement(node)
     }
 }
 

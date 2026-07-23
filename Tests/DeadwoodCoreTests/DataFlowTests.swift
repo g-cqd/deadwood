@@ -23,6 +23,10 @@ private func buildCFG(_ source: String, function: String = "test") -> ControlFlo
 /// Run the dead-branch pass on a parsed tree, building the converter the
 /// pipeline would provide.
 private func runDeadBranchPass(tree: SourceFileSyntax, file: String) -> [UnusedCode] {
+    runDeadBranchPassFull(tree: tree, file: file).findings
+}
+
+private func runDeadBranchPassFull(tree: SourceFileSyntax, file: String) -> DeadBranchPass.Output {
     let converter = SourceLocationConverter(fileName: file, tree: tree)
     return DeadBranchPass.run(tree: tree, file: file, converter: converter)
 }
@@ -666,5 +670,51 @@ struct DeadBranchPassTests {
 
         #expect(report.findings.isEmpty)
         #expect(report.suppressed.count == 1)
+    }
+
+    // MARK: - Adversarial bound
+
+    /// One function body with more statements than the pass bound, plus a
+    /// provable dead branch that must NOT be analyzed (skipped, degraded).
+    private func overBoundSource() -> String {
+        let filler = (0..<DeadBranchPass.maxStatementsPerFunction).map { "    value += \($0)" }
+            .joined(separator: "\n")
+        return """
+            func megamorph() -> Int {
+                var value = 0
+            \(filler)
+                if false { return -1 }
+                return value
+            }
+            """
+    }
+
+    @Test("Functions above the statement bound skip dead-branch analysis")
+    func adversarialBoundSkips() {
+        let output = runDeadBranchPassFull(
+            tree: Parser.parse(source: overBoundSource()), file: "big.swift")
+
+        #expect(output.findings.isEmpty)
+        #expect(output.degraded.count == 1)
+        #expect(output.degraded.first?.contains("megamorph") == true)
+    }
+
+    @Test("Over-bound function surfaces as a degraded file, in-bound siblings still analyze")
+    func boundSurfacesDegradedNote() {
+        let source =
+            overBoundSource() + """
+
+                func small() -> Int {
+                    if false { return 1 }
+                    return 0
+                }
+                """
+        let report = Analyzer().analyze(source: source, path: "big.swift")
+
+        // The huge function is skipped and reported; the small sibling's
+        // dead branch is still found.
+        #expect(report.degradedFiles.count == 1)
+        #expect(report.degradedFiles.first?.detail.contains("megamorph") == true)
+        #expect(report.findings.map(\.rule) == [.deadBranch])
     }
 }
