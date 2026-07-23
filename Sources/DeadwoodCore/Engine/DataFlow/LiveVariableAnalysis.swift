@@ -6,8 +6,8 @@
 // MARK: - LiveVariableAnalysis
 
 /// Backward data flow analysis for live variables: dead stores and
-/// never-used definitions per function body.
-// @dw:accept unused-type -- lifted data-flow pass, exercised by DataFlowTests; feeds a future dead-store rule
+/// never-used definitions per function body. Feeds the `dead-store` rule
+/// through `DeadBranchPass`.
 struct LiveVariableAnalysis: Sendable {
     /// An assignment to a variable that is never read.
     struct DeadStore: Sendable {

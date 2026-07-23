@@ -17,12 +17,23 @@ enum UnusedReason: String, Sendable {
     /// Branch of an `if`/`guard`/`while` provably never executes — gated by
     /// a condition that folds to a constant (SCCP dead-branch pass).
     case deadBranch
+
+    /// A store whose value is overwritten before any read (liveness +
+    /// reaching definitions).
+    case deadStore
+
+    /// Reachable with test entry points, unreachable without them —
+    /// production mode only.
+    case referencedOnlyByTests
 }
 
 // MARK: - Confidence
 
 /// Confidence level for unused code detection.
 enum Confidence: String, Sendable, Comparable, CaseIterable {
+    /// Proven by dataflow analysis (dead branches): not a heuristic.
+    case certain
+
     /// Definitely unused (effectively private, no references found).
     case high
 
@@ -38,6 +49,7 @@ enum Confidence: String, Sendable, Comparable, CaseIterable {
 
     private var rank: Int {
         switch self {
+        case .certain: 4
         case .high: 3
         case .medium: 2
         case .low: 1

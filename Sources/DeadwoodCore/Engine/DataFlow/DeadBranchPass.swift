@@ -24,12 +24,16 @@ enum DeadBranchPass {
         var degraded: [String] = []
     }
 
-    /// Run the pass over one parsed file, reusing the file's one
-    /// `SourceLocationConverter`.
+    /// Run the per-function CFG passes over one parsed file, reusing the
+    /// file's one `SourceLocationConverter`. Dead branches ride SCCP; dead
+    /// stores (opt-in) ride liveness + reaching definitions on the same
+    /// CFGs, so enabling both costs one CFG build, not two.
     static func run(
         tree: SourceFileSyntax,
         file: String,
-        converter: SourceLocationConverter
+        converter: SourceLocationConverter,
+        includeDeadBranches: Bool = true,
+        includeDeadStores: Bool = false
     ) -> Output {
         let collector = FunctionBodyCollector()
         collector.walk(tree)
@@ -64,12 +68,41 @@ enum DeadBranchPass {
         }
 
         for cfg in graphs {
-            let result = sccp.analyze(cfg)
-            for dead in result.deadBranches {
-                output.findings.append(makeFinding(for: dead, file: file))
+            if includeDeadBranches {
+                let result = sccp.analyze(cfg)
+                for dead in result.deadBranches {
+                    output.findings.append(makeFinding(for: dead, file: file))
+                }
+            }
+            if includeDeadStores {
+                output.findings.append(contentsOf: findDeadStores(cfg: cfg, file: file))
             }
         }
         return output
+    }
+
+    /// Dead stores: liveness marks assignments never read afterwards;
+    /// reaching definitions restrict the report to stores OVERWRITTEN on
+    /// every path (a definition still reaching function exit is a "last
+    /// write" — unused-variable territory, not a dead store).
+    private static func findDeadStores(cfg: ControlFlowGraph, file: String) -> [UnusedCode] {
+        let live = LiveVariableAnalysis().analyze(cfg)
+        guard !live.deadStores.isEmpty else { return [] }
+
+        let reaching = ReachingDefinitionsAnalysis().analyze(cfg)
+        var reachingExit = reaching.reachIn[cfg.exitBlock] ?? []
+        for predecessor in cfg.blocks[cfg.exitBlock]?.predecessors ?? [] {
+            reachingExit.formUnion(reaching.reachOut[predecessor] ?? [])
+        }
+
+        return live.deadStores.compactMap { store -> UnusedCode? in
+            let survivesToExit = reachingExit.contains { definition in
+                definition.variable == store.variable.name
+                    && definition.location == store.location
+            }
+            guard !survivesToExit else { return nil }
+            return makeFinding(for: store, file: file)
+        }
     }
 
     /// Whether a body's statement count (measured during collection — no
@@ -104,9 +137,33 @@ enum DeadBranchPass {
         return UnusedCode(
             declaration: declaration,
             reason: .deadBranch,
-            confidence: .high,
+            confidence: .certain,
             suggestion:
                 "condition '\(condition)' is provably \(dead.conditionValue) — the \(branchWord) branch never executes"
+        )
+    }
+
+    /// Wrap a dead store in the declaration-centric `UnusedCode` shape
+    /// with a synthetic declaration at the store location.
+    private static func makeFinding(
+        for store: LiveVariableAnalysis.DeadStore,
+        file: String
+    ) -> UnusedCode {
+        let range = SourceRange(start: store.location, end: store.location)
+        let declaration = Declaration(
+            name: "deadStore(\(store.variable.name))",
+            kind: .variable,
+            accessLevel: .internal,
+            location: store.location,
+            range: range,
+            scope: .global
+        )
+        return UnusedCode(
+            declaration: declaration,
+            reason: .deadStore,
+            confidence: .high,
+            suggestion:
+                "value assigned to '\(store.variable.name)' is overwritten before any read — the store is dead"
         )
     }
 }

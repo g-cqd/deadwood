@@ -219,4 +219,48 @@ struct RootDetectionTests {
         let token = result.declarations.declarations.first { $0.name == "token" }!
         #expect(detector.rootReason(for: token, context: context) == .codableRequirement)
     }
+
+    @Test("Enum cases are rooted through extension-declared conformances")
+    func enumCaseExtensionConformanceRoot() {
+        // `case detail` carries no inheritance list of its own; the Codable
+        // conformance arrives via extension and must root the cases through
+        // the merged conformance list.
+        let source = """
+            enum Route {
+                case home
+                case detail
+            }
+
+            extension Route: Codable {}
+            """
+        let result = makeFacts(source)
+        let context = CorpusContext(result: result)
+        let detector = RootDetector(configuration: .default)
+
+        let cases = result.declarations.find(kind: .enumCase)
+        #expect(cases.count == 2)
+        for enumCase in cases {
+            #expect(
+                detector.rootReason(for: enumCase, context: context) == .externallyConstructedCase)
+        }
+    }
+
+    @Test("hash(into:) members of Hashable types are roots")
+    func hashSynthesisRoot() {
+        let source = """
+            struct Point: Hashable {
+                let x: Int
+                func hash(into hasher: inout Hasher) { hasher.combine(x) }
+                func helperNobodyCalls() {}
+            }
+            """
+        let result = makeFacts(source)
+        let context = CorpusContext(result: result)
+        let detector = RootDetector(configuration: .default)
+
+        let hash = result.declarations.declarations.first { $0.name == "hash" }!
+        let helper = result.declarations.declarations.first { $0.name == "helperNobodyCalls" }!
+        #expect(detector.rootReason(for: hash, context: context) == .possibleExternalWitness)
+        #expect(detector.rootReason(for: helper, context: context) == nil)
+    }
 }

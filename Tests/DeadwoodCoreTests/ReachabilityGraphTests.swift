@@ -118,13 +118,13 @@ struct ReachabilityGraphTests {
         }
         await graph.addEdges(edges)
 
-        let sequential = Set(await graph.computeUnreachable())
-        let parallel = Set(
-            await graph.computeUnreachableParallel(
-                configuration: ParallelBFS.Configuration(minParallelSize: 1)
-            ))
+        let sequentialUnreachable = Set(await graph.computeUnreachable().map(Int.init))
+        let parallelReachable = await graph.computeReachableParallel(
+            configuration: ParallelBFS.Configuration(minParallelSize: 1)
+        )
+        let parallelUnreachable = Set(0..<50).subtracting(parallelReachable)
 
-        #expect(sequential == parallel)
-        #expect(sequential.count == 10)
+        #expect(sequentialUnreachable == parallelUnreachable)
+        #expect(sequentialUnreachable.count == 10)
     }
 }

@@ -29,8 +29,13 @@ struct CorpusContext: Sendable {
     /// Names of protocols declared inside the corpus.
     let protocolNames: Set<String>
 
+    /// Identifier-shaped tokens appearing inside string literals anywhere
+    /// in the corpus (dynamic-reference demotion set).
+    private let stringLiteralTokens: Set<String>
+
     init(result: AnalysisResult) {
         scopes = result.scopes
+        stringLiteralTokens = result.stringLiteralTokens
 
         var byScopeStart: [String: Declaration] = [:]
         var nominals: [String: [Declaration]] = [:]
@@ -138,5 +143,40 @@ struct CorpusContext: Sendable {
     /// attribute (e.g. "resultBuilder").
     func isMemberOfType(withAttribute attribute: String, _ declaration: Declaration) -> Bool {
         enclosingTypeDeclarations(of: declaration).contains { $0.attributes.contains(attribute) }
+    }
+
+    /// Whether the type named `typeName` reaches `target` through its
+    /// merged conformance/inheritance lists, following in-corpus
+    /// superclasses transitively (e.g. C: B, B: NSObject).
+    func typeTransitivelyConforms(_ typeName: String, to target: String) -> Bool {
+        var visited: Set<String> = []
+        var stack = [typeName]
+        while let current = stack.popLast() {
+            guard visited.insert(current).inserted else { continue }
+            let names = conformances(ofTypeNamed: current)
+            if names.contains(target) {
+                return true
+            }
+            stack.append(contentsOf: names)
+        }
+        return false
+    }
+
+    // MARK: - Dynamic-reference risk
+
+    /// Whether the declaration's name appears inside any string literal in
+    /// the corpus — a possible dynamic reference (NSClassFromString,
+    /// selector strings, reflection by name).
+    func nameAppearsInStringLiteral(_ name: String) -> Bool {
+        stringLiteralTokens.contains(name)
+    }
+
+    /// Whether the declaration is a member of an NSObject-descendant class
+    /// without carrying `@objc` itself: the Objective-C runtime may still
+    /// reach it through selector machinery, so verdicts on it are demoted.
+    func isObjcAdjacentMember(_ declaration: Declaration) -> Bool {
+        guard !declaration.attributes.contains("objc") else { return false }
+        guard let enclosing = nearestEnclosingType(of: declaration) else { return false }
+        return typeTransitivelyConforms(enclosing.name, to: "NSObject")
     }
 }

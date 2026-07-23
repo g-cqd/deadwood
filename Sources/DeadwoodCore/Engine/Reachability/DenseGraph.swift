@@ -98,13 +98,20 @@ extension DenseGraph {
     /// Sequential BFS reference implementation (also the small-graph fast
     /// path for `ParallelBFS`).
     func computeReachableSequential() -> Set<Int> {
-        guard !roots.isEmpty else { return [] }
+        computeReachableSequential(from: roots)
+    }
+
+    /// Sequential BFS from an explicit root set (production mode runs the
+    /// same graph twice with different roots). Out-of-range roots are
+    /// skipped defensively.
+    func computeReachableSequential(from rootSet: [Int]) -> Set<Int> {
+        guard !rootSet.isEmpty else { return [] }
 
         var visited = [Bool](repeating: false, count: nodeCount)
         var queue = ArrayQueue<Int>()
         queue.reserveCapacity(nodeCount)
 
-        for root in roots where !visited[root] {
+        for root in rootSet where root >= 0 && root < nodeCount && !visited[root] {
             visited[root] = true
             queue.append(root)
         }

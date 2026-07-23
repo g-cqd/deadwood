@@ -346,7 +346,7 @@ struct RootDetector: Sendable {
         }
 
         // Enum cases constructed from outside the source.
-        if declaration.kind == .enumCase, isExternallyConstructedCase(declaration) {
+        if declaration.kind == .enumCase, isExternallyConstructedCase(declaration, context: context) {
             return .externallyConstructedCase
         }
 
@@ -376,11 +376,24 @@ struct RootDetector: Sendable {
         "CodingKey",
     ]
 
-    private func isExternallyConstructedCase(_ declaration: Declaration) -> Bool {
-        declaration.conformances.contains { conformance in
+    private func isExternallyConstructedCase(
+        _ declaration: Declaration,
+        context: CorpusContext
+    ) -> Bool {
+        // The parent enum's inheritance list rides on the case declaration;
+        // conformances added via `extension E: Codable {}` only appear in
+        // the context's merged list, so both sources are consulted.
+        if declaration.conformances.contains(where: { conformance in
             Self.externallyConstructingEnumConformances
                 .contains(CorpusContext.baseName(ofConformance: conformance))
+        }) {
+            return true
         }
+        guard let enclosing = context.nearestEnclosingType(of: declaration),
+            enclosing.kind == .enum
+        else { return false }
+        return !context.conformances(ofTypeNamed: enclosing.name)
+            .isDisjoint(with: Self.externallyConstructingEnumConformances)
     }
 
     /// First character outside identifier-start space means the function is
