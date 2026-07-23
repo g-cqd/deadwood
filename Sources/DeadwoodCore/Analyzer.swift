@@ -146,12 +146,15 @@ public struct Analyzer: Sendable {
         source: String,
         deadBranchesEnabled: Bool
     ) -> FileArtifacts {
+        // One SourceLocationConverter per file: the directive scanner, both
+        // fact collectors, and the CFG builder all share this line table.
         let tree = foldedTree(Parser.parse(source: source))
         let converter = SourceLocationConverter(fileName: path, tree: tree)
         let directives = DirectiveScanner.scan(tree: tree, converter: converter)
-        let facts = StaticAnalyzer().collectFacts(tree: tree, file: path)
+        let facts = StaticAnalyzer().collectFacts(tree: tree, file: path, converter: converter)
         let deadBranches: [UnusedCode] =
-            deadBranchesEnabled ? DeadBranchPass.run(tree: tree, file: path) : []
+            deadBranchesEnabled
+            ? DeadBranchPass.run(tree: tree, file: path, converter: converter) : []
         return FileArtifacts(
             path: path,
             facts: facts,

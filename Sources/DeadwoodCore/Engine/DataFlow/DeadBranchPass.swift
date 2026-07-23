@@ -11,15 +11,20 @@ import SwiftSyntax
 /// body, builds a CFG, runs sparse conditional constant propagation, and
 /// reports branches whose condition folds to a constant.
 enum DeadBranchPass {
-    /// Run the pass over one parsed file.
-    static func run(tree: SourceFileSyntax, file: String) -> [UnusedCode] {
+    /// Run the pass over one parsed file, reusing the file's one
+    /// `SourceLocationConverter`.
+    static func run(
+        tree: SourceFileSyntax,
+        file: String,
+        converter: SourceLocationConverter
+    ) -> [UnusedCode] {
         let collector = FunctionBodyCollector()
         collector.walk(tree)
         guard !collector.functions.isEmpty || !collector.initializers.isEmpty else {
             return []
         }
 
-        let builder = CFGBuilder(file: file, tree: tree)
+        let builder = CFGBuilder(file: file, converter: converter)
         let sccp = SCCPAnalysis()
         var findings: [UnusedCode] = []
 
