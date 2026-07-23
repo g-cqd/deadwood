@@ -41,7 +41,7 @@ struct AnalysisResult: Sendable {
 // MARK: - FileAnalysisResult
 
 /// Collected facts for a single file.
-struct FileAnalysisResult: Sendable {
+struct FileAnalysisResult: Sendable, Codable {
     /// The file path.
     let file: String
 

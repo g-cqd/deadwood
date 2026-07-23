@@ -3,7 +3,7 @@
 // MARK: - ReferenceContext
 
 /// The context in which an identifier is referenced.
-enum ReferenceContext: String, Sendable {
+enum ReferenceContext: String, Sendable, Codable {
     /// Function or method call: `foo()`
     case call
 
@@ -47,7 +47,7 @@ enum ReferenceContext: String, Sendable {
 // MARK: - Reference
 
 /// A reference to an identifier in source code.
-struct Reference: Sendable, Hashable {
+struct Reference: Sendable, Hashable, Codable {
     /// The referenced identifier.
     let identifier: String
 

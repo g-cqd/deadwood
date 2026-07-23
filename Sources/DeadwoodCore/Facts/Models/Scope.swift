@@ -4,7 +4,7 @@
 // MARK: - ScopeID
 
 /// Unique identifier for a lexical scope.
-struct ScopeID: Sendable, Hashable {
+struct ScopeID: Sendable, Hashable, Codable {
     /// The global/file scope.
     static let global = Self("global")
 
@@ -19,7 +19,7 @@ struct ScopeID: Sendable, Hashable {
 // MARK: - ScopeKind
 
 /// The kind of lexical scope.
-enum ScopeKind: String, Sendable {
+enum ScopeKind: String, Sendable, Codable {
     case global
     case `class`
     case `struct`
@@ -50,7 +50,7 @@ enum ScopeKind: String, Sendable {
 // MARK: - Scope
 
 /// A lexical scope in the source code.
-struct Scope: Sendable, Hashable {
+struct Scope: Sendable, Hashable, Codable {
     /// Unique identifier for this scope.
     let id: ScopeID
 

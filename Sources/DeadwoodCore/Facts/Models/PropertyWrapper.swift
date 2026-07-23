@@ -7,7 +7,7 @@ import Foundation
 
 /// Known property wrapper types whose synthesized accessors make the wrapped
 /// property "used" even when the reference collector sees no read.
-enum PropertyWrapperKind: String, Sendable, CaseIterable {
+enum PropertyWrapperKind: String, Sendable, CaseIterable, Codable {
     // SwiftUI state management
     case state = "State"
     case binding = "Binding"
@@ -84,7 +84,7 @@ enum PropertyWrapperKind: String, Sendable, CaseIterable {
 // MARK: - PropertyWrapperInfo
 
 /// A property wrapper applied to a declaration.
-struct PropertyWrapperInfo: Sendable, Hashable {
+struct PropertyWrapperInfo: Sendable, Hashable, Codable {
     /// The kind of property wrapper.
     let kind: PropertyWrapperKind
 
@@ -104,7 +104,7 @@ struct PropertyWrapperInfo: Sendable, Hashable {
 // MARK: - SwiftUIConformance
 
 /// SwiftUI protocol conformances that affect analysis.
-enum SwiftUIConformance: String, Sendable, CaseIterable {
+enum SwiftUIConformance: String, Sendable, CaseIterable, Codable {
     case view = "View"
     case viewModifier = "ViewModifier"
     case previewProvider = "PreviewProvider"
@@ -121,7 +121,7 @@ enum SwiftUIConformance: String, Sendable, CaseIterable {
 // MARK: - SwiftUITypeInfo
 
 /// SwiftUI-specific information for struct/class declarations.
-struct SwiftUITypeInfo: Sendable, Hashable {
+struct SwiftUITypeInfo: Sendable, Hashable, Codable {
     /// SwiftUI protocol conformances.
     let conformances: Set<SwiftUIConformance>
 
