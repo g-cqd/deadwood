@@ -54,7 +54,6 @@ struct DependencyExtractor: Sendable {
         result: AnalysisResult,
         context: CorpusContext
     ) async {
-        let references = result.references
         let allDeclarations = result.declarations.declarations
 
         // Name → declarations lookup (immutable copy for Sendable capture).
@@ -64,6 +63,16 @@ struct DependencyExtractor: Sendable {
         }
         let declByName = declByNameMutable
 
+        // Per-file references sorted by line, built once: each declaration
+        // binary-searches its line range instead of filtering the whole
+        // file's reference list — O((D+R) log R) per file, not O(D·R).
+        var sortedRefsMutable: [String: [Reference]] = [:]
+        sortedRefsMutable.reserveCapacity(result.references.byFile.count)
+        for (file, refs) in result.references.byFile {
+            sortedRefsMutable[file] = refs.sorted { $0.location.line < $1.location.line }
+        }
+        let sortedRefsByFile = sortedRefsMutable
+
         let maxConcurrency = ProcessInfo.processInfo.activeProcessorCount
 
         let computedEdges = await ParallelProcessor.compactMap(
@@ -72,7 +81,7 @@ struct DependencyExtractor: Sendable {
         ) { declaration -> [DependencyEdge]? in
             let edges = self.computeEdgesForDeclaration(
                 declaration,
-                references: references,
+                sortedRefsByFile: sortedRefsByFile,
                 declByName: declByName
             )
             return edges.isEmpty ? nil : edges
@@ -95,13 +104,14 @@ struct DependencyExtractor: Sendable {
     /// same-named declaration (name-level over-approximation).
     private func computeEdgesForDeclaration(
         _ declaration: Declaration,
-        references: ReferenceIndex,
+        sortedRefsByFile: [String: [Reference]],
         declByName: [String: [Declaration]]
     ) -> [DependencyEdge] {
         var edges: [DependencyEdge] = []
         let declNode = DeclarationNode(declaration: declaration)
 
-        let scopeRefs = findReferencesInScope(declaration: declaration, allRefs: references)
+        let scopeRefs = findReferencesInScope(
+            declaration: declaration, sortedRefsByFile: sortedRefsByFile)
 
         for ref in scopeRefs {
             for target in findTargetDeclarations(for: ref, declarations: declByName) {
@@ -125,17 +135,22 @@ struct DependencyExtractor: Sendable {
         return edges
     }
 
-    /// References inside a declaration's file and line range.
+    /// References inside a declaration's file and line range: two binary
+    /// searches over the file's line-sorted references bound the inclusive
+    /// [start.line, end.line] subrange (same membership as the old linear
+    /// filter, in line order instead of collection order).
     private func findReferencesInScope(
         declaration: Declaration,
-        allRefs: ReferenceIndex
-    ) -> [Reference] {
-        let fileRefs = allRefs.find(inFile: declaration.location.file)
-
-        return fileRefs.filter { ref in
-            ref.location.line >= declaration.range.start.line
-                && ref.location.line <= declaration.range.end.line
+        sortedRefsByFile: [String: [Reference]]
+    ) -> ArraySlice<Reference> {
+        guard let fileRefs = sortedRefsByFile[declaration.location.file] else {
+            return []
         }
+        let startLine = declaration.range.start.line
+        let endLine = declaration.range.end.line
+        let lower = fileRefs.partitionPoint { $0.location.line >= startLine }
+        let upper = fileRefs.partitionPoint { $0.location.line > endLine }
+        return fileRefs[lower..<upper]
     }
 
     /// Declarations a reference might be pointing to (by name, plus the
