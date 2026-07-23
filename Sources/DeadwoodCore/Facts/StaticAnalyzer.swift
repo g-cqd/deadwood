@@ -22,12 +22,18 @@ struct StaticAnalyzer: Sendable {
         self.concurrency = concurrency
     }
 
-    /// Collect facts from one file's already-parsed tree.
-    func collectFacts(tree: SourceFileSyntax, file: String) -> FileAnalysisResult {
-        let declCollector = DeclarationCollector(file: file, tree: tree)
+    /// Collect facts from one file's already-parsed tree. The caller
+    /// provides the file's one `SourceLocationConverter`; both collectors
+    /// share it instead of rebuilding the line table.
+    func collectFacts(
+        tree: SourceFileSyntax,
+        file: String,
+        converter: SourceLocationConverter
+    ) -> FileAnalysisResult {
+        let declCollector = DeclarationCollector(file: file, converter: converter)
         declCollector.walk(tree)
 
-        let refCollector = ReferenceCollector(file: file, tree: tree)
+        let refCollector = ReferenceCollector(file: file, converter: converter)
         refCollector.walk(tree)
 
         return FileAnalysisResult(
@@ -40,7 +46,9 @@ struct StaticAnalyzer: Sendable {
 
     /// Collect facts from one source string (parses and folds it first).
     func collectFacts(source: String, file: String) -> FileAnalysisResult {
-        collectFacts(tree: foldedTree(Parser.parse(source: source)), file: file)
+        let tree = foldedTree(Parser.parse(source: source))
+        let converter = SourceLocationConverter(fileName: file, tree: tree)
+        return collectFacts(tree: tree, file: file, converter: converter)
     }
 
     /// Parse and collect facts for a corpus of in-memory sources in

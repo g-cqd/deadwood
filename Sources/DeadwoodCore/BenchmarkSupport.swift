@@ -57,7 +57,8 @@ public enum BenchmarkStages {
         var total = 0
         for entry in sources {
             let tree = foldedTree(Parser.parse(source: entry.source))
-            total += DeadBranchPass.run(tree: tree, file: entry.path).count
+            let converter = SourceLocationConverter(fileName: entry.path, tree: tree)
+            total += DeadBranchPass.run(tree: tree, file: entry.path, converter: converter).count
         }
         return total
     }
