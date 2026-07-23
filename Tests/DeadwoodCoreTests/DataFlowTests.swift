@@ -14,9 +14,17 @@ private func buildCFG(_ source: String, function: String = "test") -> ControlFlo
     let tree = foldedTree(Parser.parse(source: source))
     let collector = TestFunctionCollector()
     collector.walk(tree)
-    let builder = CFGBuilder(file: "test.swift", tree: tree)
+    let converter = SourceLocationConverter(fileName: "test.swift", tree: tree)
+    let builder = CFGBuilder(file: "test.swift", converter: converter)
     let target = collector.functions.first { $0.name.text == function } ?? collector.functions[0]
     return builder.buildCFG(from: target)
+}
+
+/// Run the dead-branch pass on a parsed tree, building the converter the
+/// pipeline would provide.
+private func runDeadBranchPass(tree: SourceFileSyntax, file: String) -> [UnusedCode] {
+    let converter = SourceLocationConverter(fileName: file, tree: tree)
+    return DeadBranchPass.run(tree: tree, file: file, converter: converter)
 }
 
 private final class TestFunctionCollector: SyntaxVisitor {
@@ -586,7 +594,7 @@ struct DeadBranchPassTests {
                 return 0
             }
             """
-        let findings = DeadBranchPass.run(tree: Parser.parse(source: source), file: "test.swift")
+        let findings = runDeadBranchPass(tree: Parser.parse(source: source), file: "test.swift")
 
         #expect(findings.count == 1)
         #expect(findings.first?.reason == .deadBranch)
@@ -608,7 +616,7 @@ struct DeadBranchPassTests {
                 }
             }
             """
-        let findings = DeadBranchPass.run(tree: Parser.parse(source: source), file: "test.swift")
+        let findings = runDeadBranchPass(tree: Parser.parse(source: source), file: "test.swift")
         #expect(findings.count == 1)
     }
 
