@@ -88,7 +88,6 @@ struct CFGStatement: Sendable {
     /// The trimmed source text when it fits within `maxLength` characters;
     /// nil otherwise. The data-flow passes capture the RHS of small
     /// assignments as an opaque string.
-    // @dw:accept unused-function -- consumed by the lifted dead-store passes (LiveVariableAnalysis/ReachingDefinitions), which are exercised by tests and awaiting CLI wiring
     func shortDescription(maxLength: Int) -> String? {
         let text = syntax.description.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.count < maxLength ? text : nil
@@ -158,6 +157,11 @@ struct BasicBlock: Identifiable, Sendable {
     /// Live variables at block exit (computed by analysis).
     var liveOut: Set<VariableID>
 
+    /// Whether this block carries a loop condition. `while true { ... }`
+    /// intentionally never takes its exit edge — the dead-branch pass must
+    /// not flag the infinite-loop idiom.
+    var isLoopHeader: Bool
+
     init(id: BlockID) {
         self.id = id
         statements = []
@@ -168,6 +172,7 @@ struct BasicBlock: Identifiable, Sendable {
         def = []
         liveIn = []
         liveOut = []
+        isLoopHeader = false
     }
 }
 
@@ -481,6 +486,7 @@ final class CFGBuilder: SyntaxVisitor {
         cfg.blocks[currentBlockID]?.terminator = .branch(headerBlock)
 
         switchToBlock(headerBlock)
+        cfg.blocks[headerBlock]?.isLoopHeader = true
         addStatementToCurrentBlock(Syntax(forStmt.sequence))
         cfg.blocks[headerBlock]?.terminator = .conditionalBranch(
             condition: "for \(forStmt.pattern.description) in \(forStmt.sequence.description)",
@@ -513,6 +519,7 @@ final class CFGBuilder: SyntaxVisitor {
         cfg.blocks[currentBlockID]?.terminator = .branch(headerBlock)
 
         switchToBlock(headerBlock)
+        cfg.blocks[headerBlock]?.isLoopHeader = true
         let conditionText = whileStmt.conditions.description
         addStatementToCurrentBlock(Syntax(whileStmt.conditions))
         cfg.blocks[headerBlock]?.terminator = .conditionalBranch(
@@ -557,6 +564,7 @@ final class CFGBuilder: SyntaxVisitor {
         loopStack.removeLast()
 
         switchToBlock(conditionBlock)
+        cfg.blocks[conditionBlock]?.isLoopHeader = true
         let conditionText = repeatStmt.condition.description
         addStatementToCurrentBlock(Syntax(repeatStmt.condition))
         cfg.blocks[conditionBlock]?.terminator = .conditionalBranch(

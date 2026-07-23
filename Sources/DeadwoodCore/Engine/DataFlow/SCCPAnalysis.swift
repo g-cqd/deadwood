@@ -599,6 +599,9 @@ private struct SCCPAnalysisSession {
 
                 switch condValue {
                 case .constant(.bool(true)):
+                    // `while true` never takes its exit edge on purpose —
+                    // the infinite-loop idiom is not a dead branch.
+                    if block.isLoopHeader { break }
                     if !executableEdges.contains(CFGEdge(from: id, to: falseTarget)) {
                         deadBranches.append(
                             DeadBranch(
