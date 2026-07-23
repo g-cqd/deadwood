@@ -2,6 +2,6 @@
 /// baseline headers).
 public enum ToolInfo {
     public static let name = "deadwood"
-    public static let version = "0.1.0"
+    public static let version = "0.2.0"
     public static let informationURI = "https://github.com/g-cqd/deadwood"
 }
