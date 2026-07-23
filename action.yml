@@ -1,0 +1,41 @@
+name: "deadwood"
+description: "Unused- and dead-code detection for Swift: unreferenced declarations and provably dead branches. Uploads SARIF to code scanning."
+branding:
+  icon: "search"
+  color: "orange"
+
+inputs:
+  paths:
+    description: "Files or directories to analyze"
+    required: false
+    default: "Sources"
+  strict:
+    description: "Fail on any finding, not just errors"
+    required: false
+    default: "false"
+  upload-sarif:
+    description: "Upload the SARIF report to GitHub code scanning"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build deadwood
+      shell: bash
+      run: swift build -c release --package-path "${{ github.action_path }}"
+
+    - name: Analyze
+      shell: bash
+      run: |
+        BIN="$(swift build -c release --package-path "${{ github.action_path }}" --show-bin-path)/deadwood"
+        STRICT_FLAG=""
+        [ "${{ inputs.strict }}" = "true" ] && STRICT_FLAG="--strict"
+        "$BIN" analyze ${{ inputs.paths }} --format sarif $STRICT_FLAG > deadwood.sarif
+        exit 0
+
+    - name: Upload SARIF
+      if: ${{ inputs.upload-sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: deadwood.sarif
