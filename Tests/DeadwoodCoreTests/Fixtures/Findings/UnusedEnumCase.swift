@@ -9,14 +9,18 @@ private enum Route {
     // oracle:end
 }
 
-func destination(_ tab: Int) -> Route {
+private func destination(_ tab: Int) -> Route {
     tab == 0 ? .home : .settings
 }
 
-func label(_ route: Route) -> String {
+private func label(_ route: Route) -> String {
     switch route {
     case .home: "home"
     case .settings: "settings"
     default: "hidden"
     }
+}
+
+func routeSummary(_ tab: Int) -> String {
+    label(destination(tab))
 }

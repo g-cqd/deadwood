@@ -15,9 +15,11 @@ private func handleSuccess() { print("Success!") }
 private func processA() { print("Processing A") }
 private func processB() { print("Processing B") }
 
+// oracle:begin
 private func bar() { print("bar") }  // #dw:expect unused-function
 
 private func unusedHelper() { print("unused") }  // #dw:expect unused-function
+// oracle:end
 
 let functions: [() -> Void] = [foo]
 
@@ -52,9 +54,11 @@ private func transform(_ value: Int) -> Int {
     value * 2
 }
 
+// oracle:begin
 private func unusedTransform(_ value: Int) -> Int {  // #dw:expect unused-function
     value * 3
 }
+// oracle:end
 
 let numbers = [1, 2, 3, 4, 5]
 let doubled = numbers.map(transform)
