@@ -1,5 +1,10 @@
 //  Modeled on arcleak's FactsCache: fail-open per-file cache.
 
+// Fast, reflection-free JSON coders for the cache payload. `ADJSON.JSONEncoder`/
+// `.JSONDecoder` are structs, have no `.outputFormatting` OptionSet, and no
+// ADJSON type escapes this file — only the two seam functions below use it — so
+// a plain (internal) import is enough.
+import ADJSON
 import Foundation
 
 // MARK: - CachedFileArtifacts
@@ -9,6 +14,7 @@ import Foundation
 /// computes, so a cache hit skips the parse and every per-file walk. The
 /// corpus-wide graph/BFS and every rule always re-run: findings can never
 /// go stale relative to rules or configuration.
+@JSONCodable
 struct CachedFileArtifacts: Sendable, Codable {
     let facts: FileAnalysisResult
     let directives: [SuppressionDirective]
@@ -41,10 +47,38 @@ struct FactsCache: Sendable {
         }
     }
 
-    private struct Payload: Codable {
+    fileprivate struct Payload: Sendable, Codable {
         var tool: String
         var version: String
         var entries: [String: Entry]
+    }
+
+    // MARK: - Coder seam
+
+    // The single encode/decode seam. Swapping the JSON coder touches only these
+    // two functions; `load` and `persist` both route through them.
+    fileprivate static func encodePayload(_ payload: Payload) throws -> Data {
+        // ADJSON's single-pass byte writer over the reflection-free
+        // `ADJSONFastEncodable` graph (`@JSONCodable` structs + `FactsFastCoding`
+        // leaves). Default `.rfc8259` options — NO `keyOrder = .sorted`, which
+        // would force ADJSON off the streaming writer into a second
+        // compact -> re-parse-tape -> re-emit pass and cripple encode.
+        // Determinism (a byte-stable round-trip across decode) instead comes from
+        // `Payload.__adjsonEncode` emitting the top-level `entries` map in sorted
+        // key order — O(files·log files), not a re-sort of the whole tape. The
+        // cache is internal + version-gated, so `2.0`<->`2` and unescaped `/` are
+        // harmless: only this tool version ever reads these bytes back.
+        let encoder = ADJSON.JSONEncoder()
+        return try encoder.encode(payload)
+    }
+
+    fileprivate static func decodePayload(from data: Data) throws -> Payload {
+        // Byte-level decode: hand ADJSON a contiguous `[UInt8]` (no Foundation
+        // `Data` bridging in the parser), and the `@JSONCodable`-generated
+        // `_FastDecodeCursor` conformances read each field straight off the tape
+        // by statically-known key — no `KeyedDecodingContainer`, no per-key String.
+        let decoder = ADJSON.JSONDecoder()
+        return try decoder.decode(Payload.self, from: [UInt8](data))
     }
 
     private(set) var entries: [String: Entry]
@@ -94,7 +128,7 @@ struct FactsCache: Sendable {
     static func load(url: URL) -> FactsCache {
         guard
             let data = try? BoundedFileReader.read(path: url.path, cap: maxCacheBytes),
-            let payload = try? JSONDecoder().decode(Payload.self, from: data),
+            let payload = try? decodePayload(from: data),
             payload.tool == ToolInfo.name,
             payload.version == ToolInfo.version
         else {
@@ -107,13 +141,69 @@ struct FactsCache: Sendable {
     /// swallows failures — a read-only cache location must never fail a run.
     func persist(url: URL) {
         let payload = Payload(tool: ToolInfo.name, version: ToolInfo.version, entries: entries)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(payload) else { return }
+        guard let data = try? Self.encodePayload(payload) else { return }
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         try? data.write(to: url, options: .atomic)
+    }
+}
+
+// MARK: - Fast ADJSON coding (payload root)
+
+// `CachedFileArtifacts` and the whole nested model graph get their fast
+// `ADJSONFast{Encodable,Decodable}` conformance from `@JSONCodable` (the structs)
+// and `FactsFastCoding.swift` (the enums + `ScopeID`). `Entry` and `Payload` are
+// hand-written here so the root stays nested/`fileprivate` and — crucially — so
+// `Payload` emits the top-level `entries` map in sorted key order: that alone
+// makes the persisted cache byte-stable across a decode -> re-encode WITHOUT
+// paying ADJSON's `.sorted` whole-tape re-emit (it is the only hash-ordered
+// container in the payload; every other collection is an array).
+
+extension FactsCache.Entry: ADJSONFastEncodable, ADJSONFastDecodable {
+    func __adjsonEncode(into w: inout _JSONByteWriter) throws {
+        w.beginObject()
+        w.key("fingerprint")
+        w.string(fingerprint)
+        w.comma()
+        w.key("artifacts")
+        try artifacts.__adjsonEncode(into: &w)
+        w.endObject()
+    }
+
+    static func __adjsonDecode(_ c: _FastDecodeCursor) throws -> Self {
+        Self(
+            fingerprint: try c.string("fingerprint"),
+            artifacts: try c.decode(CachedFileArtifacts.self, "artifacts"))
+    }
+}
+
+extension FactsCache.Payload: ADJSONFastEncodable, ADJSONFastDecodable {
+    func __adjsonEncode(into w: inout _JSONByteWriter) throws {
+        w.beginObject()
+        w.key("tool")
+        w.string(tool)
+        w.comma()
+        w.key("version")
+        w.string(version)
+        w.comma()
+        w.key("entries")
+        w.beginObject()
+        var first = true
+        for (path, entry) in entries.sorted(by: { $0.key < $1.key }) {
+            if first { first = false } else { w.comma() }
+            w.dynamicKey(path)
+            try entry.__adjsonEncode(into: &w)
+        }
+        w.endObject()
+        w.endObject()
+    }
+
+    static func __adjsonDecode(_ c: _FastDecodeCursor) throws -> Self {
+        Self(
+            tool: try c.string("tool"),
+            version: try c.string("version"),
+            entries: try c.decode([String: FactsCache.Entry].self, "entries"))
     }
 }

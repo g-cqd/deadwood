@@ -1,6 +1,7 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — Models/PropertyWrapper.swift.
 //  Trimmed: `parse(from:)` and display helpers the engine never calls.
 
+import ADJSON
 import Foundation
 
 // MARK: - PropertyWrapperKind
@@ -84,6 +85,7 @@ enum PropertyWrapperKind: String, Sendable, CaseIterable, Codable {
 // MARK: - PropertyWrapperInfo
 
 /// A property wrapper applied to a declaration.
+@JSONCodable
 struct PropertyWrapperInfo: Sendable, Hashable, Codable {
     /// The kind of property wrapper.
     let kind: PropertyWrapperKind
@@ -121,6 +123,7 @@ enum SwiftUIConformance: String, Sendable, CaseIterable, Codable {
 // MARK: - SwiftUITypeInfo
 
 /// SwiftUI-specific information for struct/class declarations.
+@JSONCodable
 struct SwiftUITypeInfo: Sendable, Hashable, Codable {
     /// SwiftUI protocol conformances.
     let conformances: Set<SwiftUIConformance>
