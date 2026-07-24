@@ -153,16 +153,20 @@ Every finding's note carries its confidence:
 
 ## Facts cache
 
-Corpus runs can reuse per-file artifacts (facts, directives, dataflow
-findings) through a fail-open cache keyed by content fingerprint (FNV-1a),
-salted by the active dataflow passes, version-gated, and rebuilt from only
-the current run's files (absent files are pruned). Detection always
-re-runs, so findings can never go stale relative to rules or configuration.
-Opt-in (`--cache`, default location `~/Library/Caches/deadwood/facts.json`;
-`--cache-path` overrides and implies `--cache`; `--no-cache` wins) because
-on corpora of small files re-parsing beats the cache's JSON round-trip — it
-pays off when per-file extraction dominates. A corrupt or mismatched cache
-behaves as empty.
+Corpus runs reuse per-file artifacts (facts, directives, dataflow findings)
+through a fail-open cache keyed by content fingerprint (FNV-1a), salted by the
+active dataflow passes, version-gated, and rebuilt from only the current run's
+files (absent files are pruned). Detection always re-runs, so findings can
+never go stale relative to rules or configuration.
+
+On by default (default location `~/Library/Caches/deadwood/facts.json`;
+`--cache-path` sets an explicit file; `--no-cache` disables it). The cache
+serializes through [ADJSON](https://github.com/g-cqd/ADJSON)'s reflection-free
+JSON fast path, and a full-hit re-analysis skips both the re-parse and the
+redundant re-encode+write, so a warm run now beats a cold parse rather than
+losing to it: on SwiftStaticAnalysis/Sources (156 files, release) a warm run
+is ~263 ms against a ~282 ms cold `--no-cache` parse (0.93x). A corrupt or
+mismatched cache behaves as empty.
 
 ## CLI
 
@@ -171,7 +175,7 @@ deadwood analyze Sources            # xcode-format diagnostics, exit 1 on errors
 deadwood analyze --format sarif .   # SARIF 2.1.0 (also: --format json)
 deadwood analyze --strict Sources   # exit 1 on any finding
 deadwood analyze --production .     # split "only tests reach this" findings
-deadwood analyze --cache .          # reuse per-file facts across runs
+deadwood analyze --no-cache .       # disable the (default-on) facts cache
 deadwood analyze --index-store .    # USR-precise cross-module reachability (macOS; needs `swift build`)
 deadwood rules                      # list rules; `rules <id>` explains one
 ```
