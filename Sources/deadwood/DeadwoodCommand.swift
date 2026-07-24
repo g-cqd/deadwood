@@ -58,6 +58,27 @@ struct Analyze: AsyncParsableCommand {
     @Flag(name: .long, help: "Disable the incremental facts cache (overrides --cache/--cache-path).")
     var noCache = false
 
+    @Flag(
+        name: .long,
+        help:
+            "macOS only. Use the compiler's index store for USR-precise cross-module reachability (~95% precision) instead of the name-level syntax graph. Requires a built index (`swift build`); with no index found it prints a note and falls back to the syntax path. Default (absent) is the syntax path."
+    )
+    var indexStore = false
+
+    @Option(
+        name: .long,
+        help:
+            "Explicit path to an index store (e.g. .build/debug/index/store). Implies --index-store and skips discovery."
+    )
+    var indexStorePath: String?
+
+    @Flag(
+        name: .long,
+        help:
+            "Opt-in: run `swift build` to generate an index if none is found, then use it. Implies --index-store."
+    )
+    var indexStoreBuild = false
+
     func run() async throws {
         var configuration = try loadConfiguration()
         if production {
@@ -66,8 +87,18 @@ struct Analyze: AsyncParsableCommand {
         let files = try discoverSwiftFiles(configuration: configuration)
         guard !files.isEmpty else { throw ValidationError(DeadwoodError.noInputs.description) }
 
+        let indexOptions = IndexStoreOptions(
+            enabled: indexStore || indexStorePath != nil || indexStoreBuild,
+            explicitPath: indexStorePath,
+            autoBuild: indexStoreBuild
+        )
+
         var report = await Analyzer(configuration: configuration)
-            .analyze(files: files, cacheURL: cacheURL())
+            .analyze(files: files, cacheURL: cacheURL(), indexStore: indexOptions)
+
+        for note in report.notes {
+            FileHandle.standardError.write(Data((note + "\n").utf8))
+        }
 
         if let writeBaseline {
             try Baseline(findings: report.findings).write(path: writeBaseline)

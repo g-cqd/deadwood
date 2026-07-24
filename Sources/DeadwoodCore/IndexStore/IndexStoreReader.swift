@@ -27,10 +27,8 @@
 
     /// Errors that can occur when reading the index store.
     enum IndexStoreError: Error, Sendable {
-        case indexStoreNotFound(path: String)
+        /// The index database could not be opened.
         case failedToOpenDatabase(underlying: any Error)
-        case invalidConfiguration
-        case noIndexStoreForProject
         /// The sibling `IndexDatabase/` directory does not exist and the
         /// caller did not opt into creation.
         case databaseDirectoryMissing(String)
@@ -341,6 +339,12 @@
         /// Poll for changes to the index.
         func pollForChanges() {
             db.pollForUnitChangesAndWait()
+        }
+
+        /// Timestamp of the most recent index unit recorded for `filePath`,
+        /// used by the freshness check to spot sources edited after indexing.
+        func dateOfLatestUnit(forFile filePath: String) -> Date? {
+            db.dateOfLatestUnitFor(filePath: filePath)
         }
 
         // MARK: - Private helpers

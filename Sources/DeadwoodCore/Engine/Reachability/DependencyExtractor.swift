@@ -386,9 +386,42 @@ struct ReachabilityBasedDetector: Sendable {
         // Map indices back through the declaration array only here, at the
         // findings boundary — the graph never carries declarations.
         let declarations = result.declarations.declarations
-        var results: [UnusedCode] = []
+        var results = neverReferencedResults(
+            declarations: declarations,
+            reachableWithTests: reachableWithTests,
+            context: context
+        )
 
-        // Genuinely unreachable (even with test roots): normal rules.
+        if configuration.productionMode {
+            let classifier = TestScopeClassifier(testsGlob: configuration.testsGlob)
+            let testScoped = classifier.classify(declarations: declarations, context: context)
+            let reachableInProduction = await graph.computeReachable(
+                fromRoots: productionRootIndices(
+                    declarations: declarations, testScoped: testScoped, context: context))
+            results.append(
+                contentsOf: onlyTestedResults(
+                    declarations: declarations,
+                    reachableWithTests: reachableWithTests,
+                    reachableInProduction: reachableInProduction,
+                    testScoped: testScoped,
+                    context: context
+                ))
+        }
+
+        return results
+    }
+
+    // MARK: - Report tail (shared with the index-store oracle)
+
+    /// Genuinely unreachable declarations (even with test roots): normal
+    /// rules. Pure over a precomputed reachable-index set, so both the syntax
+    /// graph and the `--index-store` bridge feed it their own reachability.
+    func neverReferencedResults(
+        declarations: [Declaration],
+        reachableWithTests: Set<Int>,
+        context: CorpusContext
+    ) -> [UnusedCode] {
+        var results: [UnusedCode] = []
         for index in 0..<declarations.count where !reachableWithTests.contains(index) {
             let declaration = declarations[index]
             guard let confidence = reportableConfidence(of: declaration, context: context) else {
@@ -403,45 +436,19 @@ struct ReachabilityBasedDetector: Sendable {
                         "Unreachable from any entry point - consider removing '\(declaration.name)'"
                 ))
         }
-
-        if configuration.productionMode {
-            results.append(
-                contentsOf: await detectOnlyTestedDeclarations(
-                    declarations: declarations,
-                    reachableWithTests: reachableWithTests,
-                    graph: graph,
-                    context: context
-                ))
-        }
-
         return results
     }
 
-    /// Production-mode second pass: recompute the root set with test roots
-    /// dropped (no testMethod roots; no roots inside XCTestCase subclasses,
-    /// @Suite types, or tests-glob files), BFS the SAME edges again, and
-    /// report production declarations that only the test pass reaches.
-    private func detectOnlyTestedDeclarations(
+    /// Production declarations that only the test pass reaches. Pure over
+    /// precomputed reachable-index sets so the index bridge can reuse it with
+    /// index-derived reachability.
+    func onlyTestedResults(
         declarations: [Declaration],
         reachableWithTests: Set<Int>,
-        graph: ReachabilityGraph,
+        reachableInProduction: Set<Int>,
+        testScoped: [Bool],
         context: CorpusContext
-    ) async -> [UnusedCode] {
-        let classifier = TestScopeClassifier(testsGlob: configuration.testsGlob)
-        let testScoped = classifier.classify(declarations: declarations, context: context)
-
-        var rootConfiguration = extractionConfiguration.rootDetection
-        rootConfiguration.treatTestsAsRoot = false
-        let detector = RootDetector(configuration: rootConfiguration)
-
-        var productionRoots: Set<Int32> = []
-        for (index, declaration) in declarations.enumerated()
-        where !testScoped[index] && detector.rootReason(for: declaration, context: context) != nil {
-            productionRoots.insert(Int32(index))
-        }
-
-        let reachableInProduction = await graph.computeReachable(fromRoots: productionRoots)
-
+    ) -> [UnusedCode] {
         var results: [UnusedCode] = []
         for (index, declaration) in declarations.enumerated() {
             guard reachableWithTests.contains(index),
@@ -461,6 +468,26 @@ struct ReachabilityBasedDetector: Sendable {
                 ))
         }
         return results
+    }
+
+    /// Production roots: entry points that are not test-scoped, computed with
+    /// test roots dropped. Shared by the syntax second pass and the index
+    /// bridge's production pass.
+    func productionRootIndices(
+        declarations: [Declaration],
+        testScoped: [Bool],
+        context: CorpusContext
+    ) -> Set<Int32> {
+        var rootConfiguration = extractionConfiguration.rootDetection
+        rootConfiguration.treatTestsAsRoot = false
+        let detector = RootDetector(configuration: rootConfiguration)
+
+        var productionRoots: Set<Int32> = []
+        for (index, declaration) in declarations.enumerated()
+        where !testScoped[index] && detector.rootReason(for: declaration, context: context) != nil {
+            productionRoots.insert(Int32(index))
+        }
+        return productionRoots
     }
 
     /// Kind gate + confidence floor shared by both passes; nil when the
