@@ -11,6 +11,9 @@ public struct AnalysisReport: Sendable, Codable {
     /// cache was configured).
     public var cacheHits = 0
     public var cacheMisses = 0
+    /// Informational notes for stderr (e.g. the `--index-store` fallback
+    /// message, or a one-line index summary). Never affects exit status.
+    public var notes: [String] = []
 
     public init(
         findings: [Finding] = [],
