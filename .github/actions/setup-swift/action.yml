@@ -1,0 +1,33 @@
+name: "Setup Swift 6.4 (dated dev snapshot, macOS)"
+description: >-
+  Installs a pinned swift.org Swift 6.4.x development-snapshot toolchain on a
+  macOS runner and exports TOOLCHAINS so a bare `swift` resolves it. No hosted
+  macOS image ships Swift 6.4 yet, while this package is swift-tools 6.4. A
+  DATED 6.4.x-branch snapshot (not a moving "latest") keeps CI reproducible —
+  the macOS analogue of the pinned Linux 6.4.x container. Vendored deliberately
+  (not an external action) so the tool stays self-contained.
+inputs:
+  snapshot:
+    description: "swift.org swift-6.4.x-branch snapshot name (dated, bumped like a dependency)."
+    required: false
+    default: "swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-20-a"
+runs:
+  using: composite
+  steps:
+    - name: Install ${{ inputs.snapshot }} and export TOOLCHAINS
+      shell: bash
+      run: |
+        set -euo pipefail
+        SNAP="${{ inputs.snapshot }}"
+        TC_DIR="/Library/Developer/Toolchains/${SNAP}.xctoolchain"
+        if [ ! -d "$TC_DIR" ]; then
+          echo "Downloading ${SNAP}-osx.pkg …"
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/${SNAP}-osx.pkg" \
+            "https://download.swift.org/swift-6.4.x-branch/xcode/${SNAP}/${SNAP}-osx.pkg"
+          sudo installer -pkg "${RUNNER_TEMP}/${SNAP}-osx.pkg" -target /
+          rm -f "${RUNNER_TEMP}/${SNAP}-osx.pkg"
+        fi
+        TOOLCHAIN_ID="$(plutil -extract CFBundleIdentifier raw "${TC_DIR}/Info.plist")"
+        echo "TOOLCHAINS=${TOOLCHAIN_ID}" >> "$GITHUB_ENV"
+        echo "Installed toolchain: ${TOOLCHAIN_ID}"
+        TOOLCHAINS="${TOOLCHAIN_ID}" swift --version

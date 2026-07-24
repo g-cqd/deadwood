@@ -9,12 +9,21 @@
 # deleting that MUST break the typecheck, proving the oracle can detect a
 # bad removal at all.
 #
-# Not wired into CI yet; run locally.
+# Toolchain-agnostic: local dev resolves the pinned toolchain via swiftly; the
+# CI container (and any host without swiftly) uses swiftc straight off PATH.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+run_swiftc() {
+  if command -v swiftly > /dev/null 2>&1; then
+    swiftly run swiftc "$@"
+  else
+    swiftc "$@"
+  fi
+}
+
 typecheck() {
-  swiftly run swiftc -typecheck "$1" > /dev/null 2>&1
+  run_swiftc -typecheck "$1" > /dev/null 2>&1
 }
 
 strip_fences() {
