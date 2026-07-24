@@ -258,6 +258,21 @@ public struct Analyzer: Sendable {
                         allowsDirectoryCreation: fallbackConfig.allowsIndexDatabaseCreation
                     )
 
+                    // A discovered index that resolves NONE of the analyzed
+                    // declarations does not cover this corpus (wrong project
+                    // root, unbuilt files). Using it would mark everything
+                    // reachable and silently hide real dead code — fall back.
+                    guard reach.resolvedCount > 0 || declarations.isEmpty else {
+                        let syntax = await detector.detectUnused(in: result, context: context)
+                        return (
+                            syntax,
+                            [
+                                "\(ToolInfo.name): index at \(path) does not cover the analyzed "
+                                    + "files (0 declarations resolved); falling back to syntax reachability"
+                            ]
+                        )
+                    }
+
                     let tail = ReachabilityBasedDetector(
                         configuration: engineConfig,
                         extractionConfiguration: DependencyExtractionConfiguration(
