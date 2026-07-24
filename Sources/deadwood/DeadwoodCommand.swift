@@ -48,14 +48,14 @@ struct Analyze: AsyncParsableCommand {
     @Flag(
         name: .long,
         help:
-            "Enable the incremental facts cache (default location: ~/Library/Caches/deadwood/facts.json). Opt-in: on corpora of small files, re-parsing beats the cache's JSON round-trip."
+            "Incremental facts cache (default location: ~/Library/Caches/deadwood/facts.json). ON by default — a warm re-analysis beats a cold parse — so this flag is a redundant explicit opt-in; use --no-cache to disable."
     )
     var cache = false
 
-    @Option(name: .long, help: "Facts-cache file (implies --cache).")
+    @Option(name: .long, help: "Facts-cache file (default location otherwise; --no-cache still disables).")
     var cachePath: String?
 
-    @Flag(name: .long, help: "Disable the incremental facts cache (overrides --cache/--cache-path).")
+    @Flag(name: .long, help: "Disable the facts cache (on by default; overrides --cache and --cache-path).")
     var noCache = false
 
     @Flag(
@@ -147,10 +147,11 @@ struct Analyze: AsyncParsableCommand {
     }
 
     private func cacheURL() -> URL? {
+        // On by default: a warm re-analysis beats a cold parse (ADJSON fast path
+        // + persist-skip). `--no-cache` opts out; `--cache-path` picks the file.
         if noCache { return nil }
         if let cachePath { return URL(fileURLWithPath: cachePath) }
-        guard cache,
-            let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
         else { return nil }
         return caches.appending(path: "deadwood/facts.json")
     }
