@@ -103,6 +103,17 @@ struct CorpusContext: Sendable {
         nearestEnclosingType(of: declaration)?.kind == .protocol
     }
 
+    /// Whether the declaration lives inside a function/closure/control-flow
+    /// body (a local, as opposed to a file-level or type-member declaration).
+    /// The index-store oracle treats locals conservatively: same-named locals
+    /// map ambiguously by line, and dead locals are the dead-store pass's job.
+    func isLocalDeclaration(_ declaration: Declaration) -> Bool {
+        let localKinds: Set<ScopeKind> = [
+            .function, .closure, .if, .guard, .for, .while, .switch, .do,
+        ]
+        return scopes.chain(from: declaration.scope).contains { localKinds.contains($0.kind) }
+    }
+
     // MARK: - Effective access
 
     /// The declaration's effective access level: its declared level capped
