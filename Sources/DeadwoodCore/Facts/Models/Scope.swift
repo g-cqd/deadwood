@@ -1,6 +1,8 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — Models/Scope.swift.
 //  Trimmed: child-links and ancestor predicates nothing here consults.
 
+import ADJSON
+
 // MARK: - ScopeID
 
 /// Unique identifier for a lexical scope.
@@ -50,6 +52,7 @@ enum ScopeKind: String, Sendable, Codable {
 // MARK: - Scope
 
 /// A lexical scope in the source code.
+@JSONCodable
 struct Scope: Sendable, Hashable, Codable {
     /// Unique identifier for this scope.
     let id: ScopeID

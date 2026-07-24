@@ -129,6 +129,28 @@ import Testing
         #expect(rerun.cacheMisses == 2)
     }
 
+    /// Round-trip structural equality on a REAL analyzed payload: persisting
+    /// the cache, reloading it, and re-persisting must reproduce byte-identical
+    /// output. That proves the JSON coder (ADJSON) is a lossless, deterministic
+    /// round-trip over real declarations/references/scopes/dataflow — nothing is
+    /// dropped, reordered, or reshaped across a decode.
+    @Test func realPayloadRoundTripsByteStable() async throws {
+        let (dir, cache, files) = try makeWorkspace()
+        _ = await Analyzer().analyze(files: files, cacheURL: cache)
+
+        let loaded = FactsCache.load(url: cache)
+        #expect(loaded.entries.count == 2)
+
+        let rePersist = dir.appending(path: "facts-cache-roundtrip.json")
+        loaded.persist(url: rePersist)
+
+        let first = try Data(contentsOf: cache)
+        let second = try Data(contentsOf: rePersist)
+        #expect(first == second)
+        // A reload of the re-persisted file still yields the same entry set.
+        #expect(FactsCache.load(url: rePersist).entries.count == 2)
+    }
+
     @Test func fingerprintIsStableAndLengthSuffixed() {
         let data = Data("let x = 1".utf8)
         let first = FactsCache.fingerprint(of: data)
