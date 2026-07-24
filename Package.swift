@@ -45,6 +45,13 @@ let package = Package(
             url: "https://github.com/g-cqd/ADJSON.git",
             revision: "b0d347c146e7f158819e438d630fe99fe35a9175"
         ),
+        // Tokenizers (HuggingFace AutoTokenizer) backs the opt-in
+        // `--embedding-bundle` provider for the experimental
+        // embedding-confidence signal. Linked only on macOS through the
+        // conditional product dependency below, and the sole file that imports
+        // it is `#if canImport(CoreML)`, so the Linux build neither compiles
+        // nor links against it.
+        .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.3.2"),
     ],
     targets: [
         .target(
@@ -60,6 +67,12 @@ let package = Package(
                 ),
                 // Fast JSON coders for the facts cache (FactsCache.swift).
                 .product(name: "ADJSON", package: "ADJSON"),
+                // HF tokenizer for HFSemanticEmbeddingProvider.swift (macOS only).
+                .product(
+                    name: "Tokenizers",
+                    package: "swift-transformers",
+                    condition: .when(platforms: [.macOS])
+                ),
             ],
             swiftSettings: strictSwiftSettings
         ),

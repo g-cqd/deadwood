@@ -86,6 +86,13 @@ struct Analyze: AsyncParsableCommand {
     )
     var experimentalEmbeddingConfidence = false
 
+    @Option(
+        name: .long,
+        help:
+            "macOS only, and only meaningful with --experimental-embedding-confidence: score with a Core ML + HuggingFace tokenizer bundle in this directory (e.g. all-MiniLM-L6-v2) instead of NLContextualEmbedding, which is an English model rather than a code-trained one. A bundle that fails to load falls back to the on-device provider with a note. DEADWOOD_EMBEDDING_BUNDLE sets it for a model shipped beside the binary."
+    )
+    var embeddingBundle: String?
+
     func run() async throws {
         var configuration = try loadConfiguration()
         if production {
@@ -105,7 +112,8 @@ struct Analyze: AsyncParsableCommand {
                 files: files,
                 cacheURL: cacheURL(),
                 indexStore: indexOptions,
-                embeddingConfidence: experimentalEmbeddingConfidence
+                embeddingConfidence: experimentalEmbeddingConfidence,
+                embeddingBundle: embeddingBundle
             )
 
         for note in report.notes {
