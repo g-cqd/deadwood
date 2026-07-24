@@ -1,3 +1,4 @@
+public import ADJSON
 import Foundation
 
 /// One parsed `@dw:` / `@deadwood:` directive comment.
@@ -15,6 +16,7 @@ import Foundation
 ///     // @dw:enable  [rules|all]               region end
 ///
 /// `@deadwood:` is an exact synonym for `@dw:`.
+@JSONCodable
 public struct SuppressionDirective: Sendable, Equatable, Codable {
     public enum Kind: Sendable, Equatable, Codable {
         case acceptThis
