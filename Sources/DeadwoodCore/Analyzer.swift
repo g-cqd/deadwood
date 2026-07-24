@@ -108,7 +108,20 @@ public struct Analyzer: Sendable {
                     artifacts: CachedFileArtifacts(outcome.artifacts)
                 )
             }
-            freshCache.persist(url: cacheURL)
+            // Persist-skip guard: on a full-hit run that pruned nothing, the
+            // rebuilt cache is byte-identical to what is already on disk (every
+            // entry came from the snapshot, unchanged, and the sorted encode is
+            // deterministic), so the re-encode+write is pure cost. Skipping it is
+            // what lets a warm run beat a cold one — the eval measured
+            // warm − encode < cold. A changed or added file is a miss
+            // (cacheMisses > 0); a deleted file leaves the snapshot holding more
+            // entries than the rebuild — either case still persists (and prunes).
+            let unchanged =
+                report.cacheMisses == 0
+                && freshCache.entries.count == snapshot.entries.count
+            if !unchanged {
+                freshCache.persist(url: cacheURL)
+            }
         }
 
         // Aggregate the corpus and run detection.
