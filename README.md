@@ -128,14 +128,46 @@ oracle does not manufacture false positives from coverage gaps or dispatch.
 
 `deadwood analyze --experimental-embedding-confidence` (macOS) *annotates*
 each finding with a semantic-anomaly score and changes nothing about which
-findings fire. It embeds every flagged declaration's snippet with Apple's
-system `NLContextualEmbedding` (zero third-party download; a deterministic
-provider is the cross-platform fallback) and scores each as a kNN outlier
-among its peers — a declaration whose code is a semantic outlier among the
-other candidates is a softer or harder bet on being genuinely dead. The
-score appears in the note (`embedding-confidence: N% anomaly [experimental]`).
-Experimental and off by default; where NaturalLanguage is unavailable the
-flag reports itself unavailable and leaves notes untouched.
+findings fire. It embeds every flagged declaration's snippet and scores each
+as a kNN outlier among its peers — a declaration whose code is a semantic
+outlier among the other candidates is a softer or harder bet on being
+genuinely dead. The score and the model that produced it appear in the note
+(`embedding-confidence: N% anomaly [experimental, <provider>]`), and the
+stderr summary names the provider too: which model scored a run changes how
+the number should be read, so it is never left implicit.
+
+The default provider is Apple's system `NLContextualEmbedding` — zero
+third-party download, with a deterministic n-gram provider as the fallback
+when the system asset is unavailable. Be honest about what it is: an
+*English natural-language* model, not a code-trained one. On code it maps
+unrelated declarations into one narrow region of the vector space, so the
+anomaly spread compresses and the annotation discriminates less.
+
+```sh
+# score with a code-trained Core ML + HuggingFace bundle instead
+deadwood analyze --experimental-embedding-confidence \
+  --embedding-bundle ~/Models/MiniLM Sources
+```
+
+`--embedding-bundle <dir>` (macOS; only meaningful together with
+`--experimental-embedding-confidence`) points at a directory holding both a
+Core ML model — `.mlpackage`, compiled on first use, or a prebuilt
+`.mlmodelc` — and the HuggingFace tokenizer files (`tokenizer.json`, …). It
+covers the standard HF feature-extraction shape: all-MiniLM-L6-v2, CodeBERT,
+GraphCodeBERT, jina-embeddings-v2-base-code, CodeT5+. Snippets are truncated
+to 128 tokens, the MiniLM-class window.
+
+With no flag, deadwood looks for a model shipped beside the binary —
+`<exec-dir>/Models/MiniLM`, then the FHS-style
+`<exec-dir>/../share/deadwood/Models/MiniLM` — so a distribution that ships
+one uses it automatically. `DEADWOOD_EMBEDDING_BUNDLE` overrides that
+location, and takes precedence over both.
+
+Every step degrades rather than fails: a bundle that will not load falls
+through to the on-device provider with a note on stderr, and where
+NaturalLanguage/CoreML are unavailable the flag reports itself unavailable
+and leaves notes untouched. The signal only annotates — no bundle, present or
+broken, can change which findings fire or the exit code.
 
 ## Confidence model
 
@@ -177,6 +209,7 @@ deadwood analyze --strict Sources   # exit 1 on any finding
 deadwood analyze --production .     # split "only tests reach this" findings
 deadwood analyze --no-cache .       # disable the (default-on) facts cache
 deadwood analyze --index-store .    # USR-precise cross-module reachability (macOS; needs `swift build`)
+deadwood analyze --experimental-embedding-confidence --embedding-bundle ~/Models/MiniLM .
 deadwood rules                      # list rules; `rules <id>` explains one
 ```
 
