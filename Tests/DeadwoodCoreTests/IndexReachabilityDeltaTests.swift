@@ -167,6 +167,25 @@
 
             // The finding SETS differ, and differ in the index's favor.
             #expect(index.findings.count == syntax.findings.count + 1)
+
+            // Robustness: pointing the (real) fixture index at an UNRELATED
+            // file resolves zero declarations, so the analyzer must fall back
+            // to syntax and still flag that file's dead code — never silently
+            // mask it behind a mismatched store. Reuses the built index.
+            let strayDir = FileManager.default.temporaryDirectory
+                .appending(path: "dw-idx-stray-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: strayDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: strayDir) }
+            let stray = strayDir.appending(path: "Stray.swift")
+            try "private func strayDead() {}\npublic func strayLive() { print(1) }\n"
+                .write(to: stray, atomically: true, encoding: .utf8)
+
+            let mismatched = await Analyzer().analyze(
+                files: [stray.path],
+                indexStore: IndexStoreOptions(enabled: true, explicitPath: storePath)
+            )
+            #expect(mismatched.notes.contains { $0.contains("does not cover") })
+            #expect(mismatched.findings.contains { $0.message.contains("strayDead") })
         }
     }
 #endif
