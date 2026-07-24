@@ -23,6 +23,8 @@
         let embeddingDimension: Int
         let language: NLLanguage
 
+        var providerName: String { "NLContextualEmbedding (on-device, zero-download)" }
+
         /// Loads the contextual-embedding asset eagerly so a later
         /// `embed(snippet:)` failure surfaces here at construction time.
         init(language: NLLanguage = .english) throws {
