@@ -51,21 +51,19 @@ jobs:
             deadwood-*.sha256
 
   macos:
-    runs-on: macos-15
+    runs-on: macos-26
+    # continue-on-error so a macOS post-run stall can never block the Linux
+    # binary: publish treats this job as satisfied and ships whatever built.
+    continue-on-error: true
     # Same stall countermeasures as CI: pipe isolation, step bounds, job bound.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Install nightly Swift (swiftly)
+      - name: Install Swift 6.4 (vendored dated snapshot)
         timeout-minutes: 10
-        run: |
-          curl -fsSL -o swiftly.pkg https://download.swift.org/swiftly/darwin/swiftly.pkg
-          installer -pkg swiftly.pkg -target CurrentUserHomeDirectory
-          "$HOME/.swiftly/bin/swiftly" init --assume-yes --skip-install --quiet-shell-followup || true
-          "$HOME/.swiftly/bin/swiftly" install main-snapshot --use --assume-yes
-          echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-swift
       - name: Build, verify version, package
         timeout-minutes: 15
         run: |
@@ -102,6 +100,10 @@ jobs:
           exit 0
 
   publish:
+    # macOS is continue-on-error, so `needs` treats it as satisfied even if it
+    # stalled or failed — publish then ships whatever artifacts exist (Linux
+    # always; macOS when it built). A single-platform stall never blocks a
+    # release.
     needs: [linux, macos]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -110,17 +112,23 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
-      - name: Create release with binaries
+      - name: Create or update release with whatever binaries built
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(deadwood-*.tar.gz deadwood-*.sha256)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "::error::no release artifacts built on any platform"
+            exit 1
+          fi
+          if ! ls deadwood-*-macos-arm64.tar.gz >/dev/null 2>&1; then
+            echo "::warning::no macOS artifact — publishing Linux only (macOS lane failed/stalled)"
+          fi
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            # Idempotent re-run (duplicate trigger or retry): refresh assets.
-            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
-              deadwood-*.tar.gz deadwood-*.sha256
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
           else
-            gh release create "$GITHUB_REF_NAME" \
-              --repo "$GITHUB_REPOSITORY" \
-              --generate-notes \
-              deadwood-*.tar.gz deadwood-*.sha256
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --generate-notes "${assets[@]}"
           fi
