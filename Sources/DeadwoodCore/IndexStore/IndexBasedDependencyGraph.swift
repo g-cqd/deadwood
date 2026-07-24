@@ -68,6 +68,10 @@
         case read
         case write
         case override
+        /// A member → its enclosing type: a reachable member (a called init, a
+        /// used method) keeps the type alive. The reverse edge is intentionally
+        /// absent so a reachable type does NOT resurrect its dead members.
+        case containedBy
     }
 
     // MARK: - IndexDependencyEdge
@@ -198,12 +202,23 @@
 
         // MARK: - Definition + edge collection
 
-        /// Collect all symbol definitions from files in scope.
+        /// Collect all symbol definitions from files in scope, and the
+        /// member→enclosing-type containment edges those definitions carry.
         private func collectDefinitions(from reader: IndexStoreReader) {
             for filePath in analysisFiles {
                 for occurrence in reader.rawOccurrences(inFile: filePath) {
                     guard isDefinitionLike(occurrence.roles) else { continue }
                     let usr = occurrence.symbol.usr
+
+                    // A member's definition carries a `.containedBy` relation to
+                    // its enclosing type. The edge member→type means a reachable
+                    // member (e.g. a called `init`) keeps the type alive — the
+                    // common case where `Foo()` references the initializer, not
+                    // the type name.
+                    for relation in occurrence.relations where relation.roles.contains(.containedBy) {
+                        addEdge(from: usr, to: relation.symbol.usr, kind: .containedBy)
+                    }
+
                     guard nodes[usr] == nil else { continue }
                     nodes[usr] = IndexSymbolNode(
                         usr: usr,
