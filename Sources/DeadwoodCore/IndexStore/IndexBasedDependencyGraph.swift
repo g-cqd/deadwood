@@ -214,7 +214,9 @@
                     // its enclosing type. The edge member→type means a reachable
                     // member (e.g. a called `init`) keeps the type alive — the
                     // common case where `Foo()` references the initializer, not
-                    // the type name.
+                    // the type name. (Inheritance is handled conservatively in
+                    // the bridge via deadwood's parsed conformance lists, which
+                    // are more reliable than the index's structural relations.)
                     for relation in occurrence.relations where relation.roles.contains(.containedBy) {
                         addEdge(from: usr, to: relation.symbol.usr, kind: .containedBy)
                     }
