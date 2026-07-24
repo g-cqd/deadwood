@@ -120,7 +120,8 @@
             var byNameFile: [String: [(line: Int, usr: String)]] = [:]
             for node in definitionNodes {
                 guard let file = node.definitionFile, let line = node.definitionLine else { continue }
-                byNameFile[nameKey(file: file, name: node.name), default: []].append((line, node.usr))
+                byNameFile[nameKey(file: file, name: baseName(node.name)), default: []]
+                    .append((line, node.usr))
             }
 
             var declToUSR: [Int: String] = [:]
@@ -184,6 +185,14 @@
         }
 
         private static let lineMatchTolerance = 5
+
+        /// IndexStoreDB reports function/method/init names with their argument
+        /// clause (`shared()`, `fetch(id:)`); deadwood declaration names are
+        /// base names (`shared`, `fetch`). Strip from the first `(` so the two
+        /// match. Line disambiguation still separates same-base overloads.
+        private static func baseName(_ name: String) -> String {
+            String(name.prefix { $0 != "(" })
+        }
 
         private static func nameKey(file: String, name: String) -> String {
             "\(file)\u{0}\(name)"
