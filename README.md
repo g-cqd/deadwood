@@ -50,6 +50,54 @@ unreachable declarations keep their normal rules, and the rule never points
 into test code itself. `testsGlob` in `.deadwood.json` overrides the
 built-in `**/Tests/**` + `**/*Tests.swift` heuristics.
 
+## Index-store mode (opt-in, macOS)
+
+`deadwood analyze --index-store Sources` swaps the reachability oracle from
+the name-level syntax graph to the compiler's **index store** (IndexStoreDB),
+resolving each reference to the one USR the compiler recorded rather than to
+every same-named declaration. This is the deferred M2: ~95% cross-module
+precision. Everything else — root detection, the confidence model, member
+collapse, suppression, the `unused-*` rules — is unchanged; only reachability
+is resolved more precisely, so the finding set differs exactly where the
+index is more accurate (it both *finds* dead code the name graph conflated
+away and *clears* false positives it raised for cross-module references).
+
+It needs a built index. deadwood discovers one under the project's
+`.build/debug/index/store`, the new SwiftPM build system's `.build/out`
+(versioned `vN/records`), or Xcode DerivedData:
+
+```sh
+swift build                                  # generate the index first
+deadwood analyze --index-store Sources       # USR-precise reachability
+deadwood analyze --index-store-path .build/out Sources   # explicit store
+deadwood analyze --index-store-build Sources # run `swift build` if none found
+```
+
+Graceful by design: with no index found — or on Linux, where IndexStoreDB's
+`libIndexStore.dylib` discovery is macOS-only — it prints a note to stderr
+(`no index store found; falling back to syntax reachability — run
+`swift build` to generate one`) and runs the ordinary syntax path. It never
+hard-fails on a missing index. Without the flag, behavior is byte-identical
+to the syntax analyzer.
+
+Conservatism carries over from the syntax graph: declarations the index
+cannot judge (unmapped), locals, in-corpus protocol requirements and their
+witnesses, and base types of live subtypes are never flagged, so the index
+oracle does not manufacture false positives from coverage gaps or dispatch.
+
+## Experimental: embedding confidence
+
+`deadwood analyze --experimental-embedding-confidence` (macOS) *annotates*
+each finding with a semantic-anomaly score and changes nothing about which
+findings fire. It embeds every flagged declaration's snippet with Apple's
+system `NLContextualEmbedding` (zero third-party download; a deterministic
+provider is the cross-platform fallback) and scores each as a kNN outlier
+among its peers — a declaration whose code is a semantic outlier among the
+other candidates is a softer or harder bet on being genuinely dead. The
+score appears in the note (`embedding-confidence: N% anomaly [experimental]`).
+Experimental and off by default; where NaturalLanguage is unavailable the
+flag reports itself unavailable and leaves notes untouched.
+
 ## Confidence model
 
 Every finding's note carries its confidence:
@@ -85,6 +133,7 @@ deadwood analyze --format sarif .   # SARIF 2.1.0 (also: --format json)
 deadwood analyze --strict Sources   # exit 1 on any finding
 deadwood analyze --production .     # split "only tests reach this" findings
 deadwood analyze --cache .          # reuse per-file facts across runs
+deadwood analyze --index-store .    # USR-precise cross-module reachability (macOS; needs `swift build`)
 deadwood rules                      # list rules; `rules <id>` explains one
 ```
 
