@@ -1,8 +1,11 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — Models/SourceLocation.swift.
 
+import ADJSON
+
 // MARK: - SourceLocation
 
 /// A location within a source file (1-indexed line/column).
+@JSONCodable
 struct SourceLocation: Sendable, Hashable, Codable {
     /// The file path.
     let file: String
@@ -27,6 +30,7 @@ struct SourceLocation: Sendable, Hashable, Codable {
 // MARK: - SourceRange
 
 /// A range of source code.
+@JSONCodable
 struct SourceRange: Sendable, Hashable, Codable {
     /// Start location.
     let start: SourceLocation

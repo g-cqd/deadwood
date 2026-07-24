@@ -35,6 +35,16 @@ let package = Package(
             url: "https://github.com/swiftlang/indexstore-db.git",
             revision: "cb3b960568f18a3cc018923f5824323b5c4edd0b"
         ),
+        // Fast, reflection-free JSON coders for the facts cache. Pinned by exact
+        // revision (Package.resolved captures the transitive ADFoundation +
+        // swift-collections + swift-system it pulls). The fast-path encoder
+        // REQUIRES the copy-on-write fix in this commit ("perf: stop
+        // JSONWriter(adopting:) COW-copying the streamed buffer"); the earlier
+        // pin has an O(n^2) generic-bridge encode bug.
+        .package(
+            url: "https://github.com/g-cqd/ADJSON.git",
+            revision: "b0d347c146e7f158819e438d630fe99fe35a9175"
+        ),
     ],
     targets: [
         .target(
@@ -48,6 +58,8 @@ let package = Package(
                     package: "indexstore-db",
                     condition: .when(platforms: [.macOS])
                 ),
+                // Fast JSON coders for the facts cache (FactsCache.swift).
+                .product(name: "ADJSON", package: "ADJSON"),
             ],
             swiftSettings: strictSwiftSettings
         ),
