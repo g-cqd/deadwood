@@ -1,5 +1,7 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — Models/Reference.swift.
 
+import ADJSON
+
 // MARK: - ReferenceContext
 
 /// The context in which an identifier is referenced.
@@ -47,6 +49,7 @@ enum ReferenceContext: String, Sendable, Codable {
 // MARK: - Reference
 
 /// A reference to an identifier in source code.
+@JSONCodable
 struct Reference: Sendable, Hashable, Codable {
     /// The referenced identifier.
     let identifier: String

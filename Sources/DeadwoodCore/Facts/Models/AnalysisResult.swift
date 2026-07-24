@@ -3,6 +3,8 @@
 //  (deadwood's typed failure surface is `DeadwoodError`; parsing itself is
 //  error-tolerant and never throws).
 
+import ADJSON
+
 // MARK: - AnalysisResult
 
 /// Complete collected facts for an analyzed corpus.
@@ -41,6 +43,7 @@ struct AnalysisResult: Sendable {
 // MARK: - FileAnalysisResult
 
 /// Collected facts for a single file.
+@JSONCodable
 struct FileAnalysisResult: Sendable, Codable {
     /// The file path.
     let file: String

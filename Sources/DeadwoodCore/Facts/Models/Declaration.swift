@@ -3,6 +3,8 @@
 //  `@dw:` table in the Analyzer), Codable conformance, and display helpers
 //  nothing in this tool reads.
 
+import ADJSON
+
 // MARK: - DeclarationKind
 
 /// The kind of declaration.
@@ -85,8 +87,10 @@ struct DeclarationModifiers: OptionSet, Sendable, Hashable, Codable {
 // MARK: - FunctionSignature
 
 /// A function or method signature.
+@JSONCodable
 struct FunctionSignature: Sendable, Hashable, Codable {
     /// A single parameter in a function signature.
+    @JSONCodable
     struct Parameter: Sendable, Hashable, Codable {
         /// External parameter label (nil for unlabeled).
         let label: String?
@@ -172,6 +176,7 @@ struct FunctionSignature: Sendable, Hashable, Codable {
 // MARK: - Declaration
 
 /// A declaration in Swift source code, as collected by `DeclarationCollector`.
+@JSONCodable
 struct Declaration: Sendable, Hashable, Codable {
     /// The declared name.
     let name: String
