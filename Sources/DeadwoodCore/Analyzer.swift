@@ -35,7 +35,8 @@ public struct Analyzer: Sendable {
     public func analyze(
         files: [String],
         cacheURL: URL? = nil,
-        indexStore: IndexStoreOptions = .disabled
+        indexStore: IndexStoreOptions = .disabled,
+        embeddingConfidence: Bool = false
     ) async -> AnalysisReport {
         var report = AnalysisReport()
 
@@ -158,6 +159,13 @@ public struct Analyzer: Sendable {
             }
         }
         report.findings.sort()
+
+        if embeddingConfidence {
+            report = await annotateEmbeddingConfidence(
+                report, unused: unused,
+                sourcesByPath: Dictionary(
+                    sources.map { ($0.path, $0.source) }, uniquingKeysWith: { first, _ in first }))
+        }
         return report
     }
 
@@ -292,6 +300,110 @@ public struct Analyzer: Sendable {
                     )
                 }
             }
+        }
+    #endif
+
+    // MARK: - Experimental embedding-confidence annotation
+
+    /// Annotate each finding's note with a kNN semantic-anomaly score over the
+    /// flagged declarations' snippets. Experimental: it never changes which
+    /// findings fire, only appends a confidence hint. Falls back to the
+    /// deterministic provider when the NL contextual asset is unavailable, and
+    /// no-ops (with a note) where NaturalLanguage is absent.
+    private func annotateEmbeddingConfidence(
+        _ report: AnalysisReport,
+        unused: [UnusedCode],
+        sourcesByPath: [String: String]
+    ) async -> AnalysisReport {
+        #if canImport(NaturalLanguage)
+            var report = report
+            guard report.findings.count > 1 else {
+                report.notes.append(
+                    "\(ToolInfo.name): --experimental-embedding-confidence needs >1 finding to score; skipped")
+                return report
+            }
+
+            // Declaration snippet by location key, from the engine candidates.
+            var rangeByKey: [String: SourceRange] = [:]
+            for item in unused {
+                rangeByKey[Self.locationKey(item.declaration.location)] = item.declaration.range
+            }
+
+            let snippets = report.findings.map { finding -> String in
+                let key = "\(finding.path):\(finding.line):\(finding.column)"
+                let source = sourcesByPath[finding.path] ?? ""
+                return Self.snippet(from: source, range: rangeByKey[key], line: finding.line)
+            }
+
+            let (provider, providerName) = Self.makeEmbeddingProvider()
+            let scores = await EmbeddingConfidence().anomalyScores(
+                snippets: snippets, provider: provider)
+
+            guard !scores.isEmpty else {
+                report.notes.append(
+                    "\(ToolInfo.name): --experimental-embedding-confidence produced no score "
+                        + "(\(providerName) unavailable); notes unchanged")
+                return report
+            }
+
+            report.findings = report.findings.enumerated().map { index, finding in
+                guard let score = scores[index] else { return finding }
+                let percent = Int((score * 100).rounded())
+                let annotated =
+                    (finding.note.map { "\($0); " } ?? "")
+                    + "embedding-confidence: \(percent)% anomaly [experimental, \(providerName)]"
+                return Finding(
+                    rule: finding.rule, severity: finding.severity, path: finding.path,
+                    line: finding.line, column: finding.column, message: finding.message,
+                    note: annotated)
+            }
+            report.notes.append(
+                "\(ToolInfo.name): --experimental-embedding-confidence annotated "
+                    + "\(scores.count) finding(s) via \(providerName)")
+            return report
+        #else
+            var report = report
+            report.notes.append(
+                "\(ToolInfo.name): --experimental-embedding-confidence is unavailable on this "
+                    + "platform (requires NaturalLanguage)")
+            return report
+        #endif
+    }
+
+    #if canImport(NaturalLanguage)
+        /// Prefer the system NL contextual embedding (zero download); fall back
+        /// to the deterministic provider when its asset is unavailable.
+        private static func makeEmbeddingProvider() -> (any SemanticEmbeddingProvider, String) {
+            if #available(macOS 14.0, *) {
+                if let provider = try? NLContextualSemanticEmbeddingProvider() {
+                    return (provider, "NLContextualEmbedding")
+                }
+            }
+            return (DeterministicEmbeddingProvider(), "deterministic-fallback")
+        }
+
+        private static func locationKey(_ location: SourceLocation) -> String {
+            "\(location.file):\(location.line):\(location.column)"
+        }
+
+        /// The declaration's source text (bounded), or the single finding line
+        /// when the range is unknown.
+        private static func snippet(from source: String, range: SourceRange?, line: Int) -> String {
+            let lines = source.split(separator: "\n", omittingEmptySubsequences: false)
+            guard !lines.isEmpty else { return "" }
+            let startLine: Int
+            let endLine: Int
+            if let range {
+                startLine = range.start.line
+                endLine = min(range.end.line, range.start.line + 40)  // bound huge decls
+            } else {
+                startLine = line
+                endLine = line
+            }
+            let lower = max(0, startLine - 1)
+            let upper = min(lines.count, endLine)
+            guard lower < upper else { return String(lines[min(lower, lines.count - 1)]) }
+            return lines[lower..<upper].joined(separator: "\n")
         }
     #endif
 

@@ -79,6 +79,13 @@ struct Analyze: AsyncParsableCommand {
     )
     var indexStoreBuild = false
 
+    @Flag(
+        name: .long,
+        help:
+            "EXPERIMENTAL (macOS): annotate each finding with a semantic-anomaly confidence score. Embeds the flagged declarations (Apple NLContextualEmbedding, zero download; deterministic fallback) and scores each as a kNN outlier among its peers. Never changes which findings fire — it only annotates the note."
+    )
+    var experimentalEmbeddingConfidence = false
+
     func run() async throws {
         var configuration = try loadConfiguration()
         if production {
@@ -94,7 +101,12 @@ struct Analyze: AsyncParsableCommand {
         )
 
         var report = await Analyzer(configuration: configuration)
-            .analyze(files: files, cacheURL: cacheURL(), indexStore: indexOptions)
+            .analyze(
+                files: files,
+                cacheURL: cacheURL(),
+                indexStore: indexOptions,
+                embeddingConfidence: experimentalEmbeddingConfidence
+            )
 
         for note in report.notes {
             FileHandle.standardError.write(Data((note + "\n").utf8))
