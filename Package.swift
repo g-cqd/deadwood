@@ -27,6 +27,14 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.2"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
+        // IndexStoreDB backs the opt-in `--index-store` reachability mode. It
+        // is linked only on macOS (its `libIndexStore.dylib` discovery is
+        // macOS-only), and every consumer sits behind `#if canImport`, so the
+        // Linux build never sees a symbol from it.
+        .package(
+            url: "https://github.com/swiftlang/indexstore-db.git",
+            revision: "cb3b960568f18a3cc018923f5824323b5c4edd0b"
+        ),
     ],
     targets: [
         .target(
@@ -35,6 +43,11 @@ let package = Package(
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftOperators", package: "swift-syntax"),
+                .product(
+                    name: "IndexStoreDB",
+                    package: "indexstore-db",
+                    condition: .when(platforms: [.macOS])
+                ),
             ],
             swiftSettings: strictSwiftSettings
         ),
