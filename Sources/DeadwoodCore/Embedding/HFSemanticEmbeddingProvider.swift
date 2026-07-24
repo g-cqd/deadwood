@@ -1,13 +1,16 @@
 //  Ported from dolly (which lifted it from SwiftStaticAnalysis, MIT) —
 //  DollyCore/Semantic/HFSemanticEmbeddingProvider.swift.
 //
-//  A `SemanticEmbeddingProvider` backed by a Core ML model plus a HuggingFace
-//  `AutoTokenizer` (swift-transformers). This is the `--embedding-bundle`
+//  A `SemanticEmbeddingProvider` backed by a Core ML model plus the BERT
+//  WordPiece tokenizer it was trained with (`WordPieceTokenizer`, built in
+//  rather than pulled from swift-transformers — see that file for why, and
+//  `WordPieceParityTests` for the token-for-token pin). This is the `--embedding-bundle`
 //  provider: point it at a directory holding both the Core ML model
 //  (`.mlpackage` — compiled on first use — or a prebuilt `.mlmodelc`) and the
-//  HF tokenizer files (`tokenizer.json`, …). It covers the standard HF
-//  feature-extraction shape used by MiniLM, CodeBERT, GraphCodeBERT,
-//  jina-embeddings-v2-base-code and CodeT5+.
+//  tokenizer files (`vocab.txt` / `tokenizer.json`). It covers the WordPiece
+//  feature-extraction shape used by MiniLM, CodeBERT and GraphCodeBERT; BPE and
+//  SentencePiece bundles fail to load rather than tokenizing wrongly, and the
+//  caller falls back to the zero-download provider.
 //
 //  Why it exists: the default `NLContextualEmbedding` is an English
 //  natural-language model. On code it maps unrelated declarations into one
@@ -24,7 +27,6 @@
 #if canImport(CoreML)
     import CoreML
     import Foundation
-    import Tokenizers
 
     // MARK: - HFSemanticEmbeddingProvider
 
@@ -92,7 +94,7 @@
             }
 
             do {
-                self.tokenizer = try await AutoTokenizer.from(modelFolder: bundleDir)
+                self.tokenizer = try WordPieceTokenizer(bundleDir: bundleDir)
             } catch {
                 throw SemanticEmbeddingError.modelLoadFailed(underlying: error)
             }
@@ -152,9 +154,8 @@
         }
 
         func embed(snippet: String) async throws -> [Float] {
-            // Tokenize through the HF AutoTokenizer (BPE / WordPiece /
-            // SentencePiece, plus the model's special tokens), capped to the
-            // model's fixed length or `maxLength`.
+            // Tokenize with the model's own WordPiece vocabulary (plus its
+            // special tokens), capped to the model's fixed length or `maxLength`.
             var ids = tokenizer.encode(text: snippet)
             let effectiveMax = fixedSequenceLength ?? maxLength
             if ids.count > effectiveMax {
@@ -208,7 +209,7 @@
         // MARK: - Private
 
         private let model: MLModel
-        private let tokenizer: any Tokenizer
+        private let tokenizer: WordPieceTokenizer
         private let maxLength: Int
         private let inputIDsName: String
         private let attentionMaskName: String
