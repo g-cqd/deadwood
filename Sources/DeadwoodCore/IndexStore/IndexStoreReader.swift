@@ -387,35 +387,27 @@
     /// Utility for finding index store paths in a project.
     enum IndexStorePathFinder {
         /// Find the index store path for a Swift package or Xcode project.
+        ///
+        /// The returned path is the store ROOT to hand IndexStoreDB. That is
+        /// the directory that either contains `records/`+`units/` directly
+        /// (classic `.build/debug/index/store`) or contains a versioned
+        /// `vN/records` subdir (the new SwiftPM "Swift Build" system's
+        /// `.build/out`, and Xcode DerivedData's `DataStore`). IndexStoreDB
+        /// reads the versioned subdir itself, so callers must pass the ROOT,
+        /// not `.../vN` (pointing at `vN` yields an empty database).
         static func findIndexStorePath(in projectRoot: String) -> String? {
             let buildDir = URL(fileURLWithPath: projectRoot).appendingPathComponent(".build")
 
-            let debugIndexStore =
-                buildDir
-                .appendingPathComponent("debug")
-                .appendingPathComponent("index")
-                .appendingPathComponent("store")
-            if FileManager.default.fileExists(atPath: debugIndexStore.path) {
-                return debugIndexStore.path
-            }
-
-            let releaseIndexStore =
-                buildDir
-                .appendingPathComponent("release")
-                .appendingPathComponent("index")
-                .appendingPathComponent("store")
-            if FileManager.default.fileExists(atPath: releaseIndexStore.path) {
-                return releaseIndexStore.path
-            }
-
-            // Explicit `.build/index/store` (what `--index-store-build`
-            // generates via `-index-store-path .build/index/store`).
-            let explicitIndexStore =
-                buildDir
-                .appendingPathComponent("index")
-                .appendingPathComponent("store")
-            if FileManager.default.fileExists(atPath: explicitIndexStore.path) {
-                return explicitIndexStore.path
+            let candidates = [
+                buildDir.appendingPathComponent("debug/index/store"),
+                buildDir.appendingPathComponent("release/index/store"),
+                buildDir.appendingPathComponent("index/store"),  // legacy explicit
+                buildDir.appendingPathComponent("out"),  // new "Swift Build" system
+            ]
+            for candidate in candidates {
+                if let root = indexStoreRoot(at: candidate) {
+                    return root
+                }
             }
 
             // Xcode DerivedData.
@@ -435,12 +427,8 @@
                         .appendingPathComponent(dir)
                         .appendingPathComponent("Index.noindex")
                         .appendingPathComponent("DataStore")
-
-                    if let versionedPath = findVersionedIndexStore(in: dataStore) {
-                        return versionedPath
-                    }
-                    if FileManager.default.fileExists(atPath: dataStore.path) {
-                        return dataStore.path
+                    if let root = indexStoreRoot(at: dataStore) {
+                        return root
                     }
                 }
             }
@@ -448,26 +436,25 @@
             return nil
         }
 
-        /// Find the versioned index store subdirectory (e.g. v5, v6).
-        private static func findVersionedIndexStore(in dataStore: URL) -> String? {
-            guard let contents = try? FileManager.default.contentsOfDirectory(atPath: dataStore.path)
-            else { return nil }
+        /// The store root to hand IndexStoreDB if `dir` is (or wraps) a usable
+        /// index store: `dir` itself when it holds `records/`+`units/` directly
+        /// or a versioned `vN/records` subdir; otherwise nil. IndexStoreDB
+        /// wants the root even for a versioned store — it descends into `vN`
+        /// on its own.
+        private static func indexStoreRoot(at dir: URL) -> String? {
+            let manager = FileManager.default
+            func holdsStore(_ base: URL) -> Bool {
+                manager.fileExists(atPath: base.appendingPathComponent("records").path)
+                    || manager.fileExists(atPath: base.appendingPathComponent("units").path)
+            }
 
-            let versionedDirs =
-                contents
-                .filter { $0.hasPrefix("v") && $0.dropFirst().allSatisfy(\.isNumber) }
-                .sorted { lhs, rhs in
-                    (Int(lhs.dropFirst()) ?? 0) > (Int(rhs.dropFirst()) ?? 0)
-                }
-
-            for versionedDir in versionedDirs {
-                let versionedPath = dataStore.appendingPathComponent(versionedDir)
-                let recordsPath = versionedPath.appendingPathComponent("records")
-                let unitsPath = versionedPath.appendingPathComponent("units")
-                if FileManager.default.fileExists(atPath: recordsPath.path)
-                    || FileManager.default.fileExists(atPath: unitsPath.path)
-                {
-                    return versionedPath.path
+            if holdsStore(dir) {
+                return dir.path
+            }
+            if let contents = try? manager.contentsOfDirectory(atPath: dir.path) {
+                let versioned = contents.filter { $0.hasPrefix("v") && $0.dropFirst().allSatisfy(\.isNumber) }
+                for name in versioned where holdsStore(dir.appendingPathComponent(name)) {
+                    return dir.path
                 }
             }
             return nil
