@@ -52,8 +52,21 @@
             let declToUSR = Self.mapDeclarationsToUSRs(
                 declarations: declarations, definitionNodes: graph.definitionNodes)
 
+            // Declarations the index oracle must never flag, mirroring the
+            // syntax graph's conservatism: locals (ambiguous line-mapping; the
+            // dead-store pass owns them) and in-corpus protocol requirements /
+            // witnesses (kept alive by the protocol, but invoked through
+            // dispatch that leaves no by-name index reference).
+            let forcedReachable = Self.forcedReachableIndices(
+                declarations: declarations, context: context)
+            // Forced declarations also SEED the BFS: their USRs join the root
+            // set so the symbols they reference (an error case a witness throws,
+            // a helper a default impl calls) propagate reachability and aren't
+            // themselves left dangling as false positives.
+            let forcedUSRs = Set(forcedReachable.compactMap { declToUSR[$0] })
+
             // With-test roots — deadwood's own rich root detection, projected
-            // onto the USRs those roots resolve to.
+            // onto the USRs those roots resolve to, plus the forced seeds.
             let reachableWithTests = Self.reachableIndices(
                 declarations: declarations,
                 declToUSR: declToUSR,
@@ -64,8 +77,9 @@
                         context: context,
                         configuration: rootConfiguration,
                         excludingTestScoped: nil
-                    )
-                )
+                    ).union(forcedUSRs)
+                ),
+                forcedReachable: forcedReachable
             )
 
             var reachableInProduction: Set<Int>?
@@ -82,8 +96,9 @@
                             context: context,
                             configuration: productionConfig,
                             excludingTestScoped: testScoped
-                        )
-                    )
+                        ).union(forcedUSRs)
+                    ),
+                    forcedReachable: forcedReachable
                 )
             }
 
@@ -163,14 +178,16 @@
         }
 
         /// Declaration indices reachable per the index. Unmapped declarations
-        /// are conservatively reachable so an index coverage gap can never
+        /// and `forcedReachable` declarations are conservatively reachable so
+        /// neither an index coverage gap nor a dispatch-only witness can
         /// manufacture a false "unused" verdict.
         private static func reachableIndices(
             declarations: [Declaration],
             declToUSR: [Int: String],
-            reachableUSRs: Set<String>
+            reachableUSRs: Set<String>,
+            forcedReachable: Set<Int>
         ) -> Set<Int> {
-            var reachable = Set<Int>()
+            var reachable = forcedReachable
             reachable.reserveCapacity(declarations.count)
             for index in declarations.indices {
                 guard let usr = declToUSR[index] else {
@@ -182,6 +199,79 @@
                 }
             }
             return reachable
+        }
+
+        /// Declarations the index oracle must never flag: locals, in-corpus
+        /// protocol requirements, and same-named witnesses of in-corpus
+        /// protocols.
+        static func forcedReachableIndices(
+            declarations: [Declaration],
+            context: CorpusContext
+        ) -> Set<Int> {
+            // Requirement names per in-corpus protocol.
+            var requirementNames: [String: Set<String>] = [:]
+            // In-corpus type names, and the subset of them named as a base /
+            // conformance of some type (a superclass or protocol kept alive by
+            // its subtypes — the index's structural inheritance relations are
+            // unreliable, so deadwood's parsed conformance lists drive this).
+            var typeNames = Set<String>()
+            var baseNames = Set<String>()
+            let typeKinds: Set<DeclarationKind> = [
+                .class, .struct, .enum, .protocol, .actor, .typealias,
+            ]
+            for declaration in declarations {
+                if typeKinds.contains(declaration.kind) {
+                    typeNames.insert(declaration.name)
+                }
+                for conformance in declaration.conformances {
+                    baseNames.insert(CorpusContext.baseName(ofConformance: conformance))
+                }
+                guard let enclosing = context.nearestEnclosingType(of: declaration),
+                    enclosing.kind == .protocol
+                else { continue }
+                requirementNames[enclosing.name, default: []].insert(declaration.name)
+            }
+            let inCorpusBaseTypes = baseNames.intersection(typeNames)
+
+            var forced = Set<Int>()
+            for (index, declaration) in declarations.enumerated() {
+                if context.isLocalDeclaration(declaration) {
+                    forced.insert(index)
+                    continue
+                }
+                if context.isProtocolRequirement(declaration) {
+                    forced.insert(index)
+                    continue
+                }
+                // A type that is a base/protocol of an in-corpus type is kept
+                // alive by its subtypes/conformers.
+                if typeKinds.contains(declaration.kind), inCorpusBaseTypes.contains(declaration.name) {
+                    forced.insert(index)
+                    continue
+                }
+                guard let enclosing = context.nearestEnclosingType(of: declaration),
+                    enclosing.kind != .protocol
+                else { continue }
+
+                // Default implementation: a member declared in an extension of
+                // an in-corpus protocol (`extension P { ... }`) is a witness the
+                // protocol keeps alive.
+                if context.protocolNames.contains(enclosing.name) {
+                    forced.insert(index)
+                    continue
+                }
+
+                // Witness: a member whose enclosing type conforms to an
+                // in-corpus protocol that declares a requirement of this name.
+                let inCorpusConformances = context.conformances(ofTypeNamed: enclosing.name)
+                    .intersection(context.protocolNames)
+                for proto in inCorpusConformances
+                where requirementNames[proto]?.contains(declaration.name) == true {
+                    forced.insert(index)
+                    break
+                }
+            }
+            return forced
         }
 
         private static let lineMatchTolerance = 5
