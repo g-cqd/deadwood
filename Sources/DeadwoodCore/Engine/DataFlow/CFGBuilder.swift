@@ -727,8 +727,15 @@ final class CFGBuilder: SyntaxVisitor {
 
     private func processFallthroughStatement(_ fallthroughStmt: FallThroughStmtSyntax) {
         addStatementToCurrentBlock(Syntax(fallthroughStmt))
+        // Create the successor FIRST, then assign. `newBlock()` mutates
+        // `cfg.blocks` (it inserts the new block), so evaluating it inside the
+        // `cfg.blocks[currentBlockID]?.terminator = …` subscript-modify is an
+        // overlapping exclusive access to `cfg.blocks` — a runtime exclusivity
+        // trap that aborts the process on any `fallthrough` (SIGABRT / exit
+        // 134, seen on real code). Hoisting the call removes the overlap.
+        let fallthroughTarget = newBlock()
         // The fallthrough target is connected when the next case processes.
-        cfg.blocks[currentBlockID]?.terminator = .fallthrough(newBlock())
+        cfg.blocks[currentBlockID]?.terminator = .fallthrough(fallthroughTarget)
     }
 
     private func processDoStatement(_ doStmt: DoStmtSyntax) {

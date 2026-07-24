@@ -55,6 +55,11 @@ enum RootReason: String, Sendable {
     /// @dynamicMemberLookup or @dynamicCallable.
     case dynamicFeature
 
+    /// OS-discovered entry point: a type the system instantiates by
+    /// conformance (App Intents / Shortcuts / Widgets), with no Swift call
+    /// site by design — the runtime reads the provider at install/launch.
+    case osEntryPoint
+
     /// Property-wrapper compiler contract (`wrappedValue`, `projectedValue`):
     /// accessed by wrapper synthesis at every use site, never directly by
     /// name in source.
@@ -232,6 +237,15 @@ enum ExternalProtocolCatalog {
 struct RootDetector: Sendable {
     let configuration: RootDetectionConfiguration
 
+    /// Protocols whose conformers the OS instantiates by reflection at
+    /// install/launch — no in-source call site ever exists, so a reference
+    /// graph must root them or it reports every one as dead.
+    static let osEntryPointConformances: Set<String> = [
+        "AppShortcutsProvider", "AppIntent", "AudioPlaybackIntent",
+        "WidgetBundle", "Widget", "ControlWidget", "LiveActivity",
+        "AppEntity", "EntityQuery", "TransientAppEntity",
+    ]
+
     init(configuration: RootDetectionConfiguration = .default) {
         self.configuration = configuration
     }
@@ -323,6 +337,17 @@ struct RootDetector: Sendable {
         }
         if hasAttribute(declaration, named: "_objcRuntimeName") {
             return .objcRuntimeName
+        }
+
+        // OS-discovered entry points: the system instantiates these by
+        // conformance (App Intents / Shortcuts / Widgets) — no Swift call site
+        // exists, so a reference graph would always flag them. Rooted with the
+        // SwiftUI toggle since they are the same "framework instantiates it"
+        // class of entry point.
+        if configuration.treatSwiftUIViewsAsRoot,
+            !Self.osEntryPointConformances.isDisjoint(with: declaration.conformances)
+        {
+            return .osEntryPoint
         }
 
         // SwiftUI roots.
