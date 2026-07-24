@@ -23,6 +23,11 @@
             /// Declaration indices reachable from production-only roots
             /// (production mode); nil otherwise.
             let reachableInProduction: Set<Int>?
+            /// How many corpus declarations resolved to an index USR. Zero
+            /// means the discovered index does not cover the analyzed files
+            /// (a wrong/stale store): the caller must fall back to syntax
+            /// rather than silently mark everything reachable.
+            let resolvedCount: Int
             /// One-line index summary (symbol counts, resolution rate).
             let summary: String
         }
@@ -114,6 +119,7 @@
             return Result(
                 reachableWithTests: reachableWithTests,
                 reachableInProduction: reachableInProduction,
+                resolvedCount: declToUSR.count,
                 summary: summary
             )
         }
