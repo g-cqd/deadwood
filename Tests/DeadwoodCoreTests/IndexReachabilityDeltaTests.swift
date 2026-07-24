@@ -121,7 +121,13 @@
 
         @Test(
             "Index mode flags the dead same-named method the syntax graph conflates",
-            .enabled(if: IndexTestToolchain.isAvailable)
+            // Local-only: builds a real index via a nested `swift build`, and the
+            // IndexStoreDB dependency already dominates the macOS CI compile
+            // budget. The fake-index unit suites cover the mapping/reachability
+            // logic on CI; this end-to-end proof runs locally before release.
+            .enabled(
+                if: IndexTestToolchain.isAvailable
+                    && ProcessInfo.processInfo.environment["CI"] == nil)
         )
         func indexResolvesSameNamedSymbolsSyntaxConflates() async throws {
             guard let swiftPath = IndexTestToolchain.swiftPath else { return }
