@@ -32,7 +32,11 @@ public struct Analyzer: Sendable {
     /// content fingerprint matches; the corpus-wide graph/BFS and every
     /// rule always re-run, so findings can never go stale relative to rules
     /// or configuration.
-    public func analyze(files: [String], cacheURL: URL? = nil) async -> AnalysisReport {
+    public func analyze(
+        files: [String],
+        cacheURL: URL? = nil,
+        indexStore: IndexStoreOptions = .disabled
+    ) async -> AnalysisReport {
         var report = AnalysisReport()
 
         let deadBranchesEnabled = configuration.isEnabled(.deadBranch)
@@ -111,7 +115,19 @@ public struct Analyzer: Sendable {
         let context = CorpusContext(result: result)
         let detector = UnusedCodeDetector(configuration: engineConfig)
 
-        var unused = await detector.detectUnused(in: result, context: context)
+        // Reachability is the one stage the index can resolve more precisely.
+        // Default (index disabled) is byte-identical to the syntax path; index
+        // mode swaps only this oracle, and any failure falls back to it.
+        let reachability = await reachabilityUnused(
+            result: result,
+            context: context,
+            engineConfig: engineConfig,
+            files: sources.map(\.path),
+            detector: detector,
+            indexStore: indexStore
+        )
+        report.notes.append(contentsOf: reachability.notes)
+        var unused = reachability.unused
         unused = UnusedCodeFilter(configuration: .sensibleDefaults).filter(unused)
         if engineConfig.detectImports {
             unused.append(contentsOf: detector.detectUnusedImports(result: result))
@@ -144,6 +160,140 @@ public struct Analyzer: Sendable {
         report.findings.sort()
         return report
     }
+
+    // MARK: - Reachability oracle (syntax vs index)
+
+    /// Compute the reachability-derived unused set, plus any stderr notes.
+    /// Index disabled → today's syntax reachability, byte-identical. Index
+    /// enabled → the index oracle when an index resolves, else the syntax
+    /// oracle with a fallback note. Never hard-fails on a missing index.
+    private func reachabilityUnused(
+        result: AnalysisResult,
+        context: CorpusContext,
+        engineConfig: UnusedCodeConfiguration,
+        files: [String],
+        detector: UnusedCodeDetector,
+        indexStore: IndexStoreOptions
+    ) async -> (unused: [UnusedCode], notes: [String]) {
+        guard indexStore.enabled else {
+            return (await detector.detectUnused(in: result, context: context), [])
+        }
+
+        #if canImport(IndexStoreDB)
+            return await indexBackedUnused(
+                result: result,
+                context: context,
+                engineConfig: engineConfig,
+                files: files,
+                detector: detector,
+                indexStore: indexStore
+            )
+        #else
+            // IndexStoreDB isn't available on this platform (Linux): honor the
+            // opt-in with a clear note, then run the syntax oracle.
+            let syntax = await detector.detectUnused(in: result, context: context)
+            return (
+                syntax,
+                [
+                    "\(ToolInfo.name): --index-store is macOS-only; "
+                        + "falling back to syntax reachability on this platform"
+                ]
+            )
+        #endif
+    }
+
+    #if canImport(IndexStoreDB)
+        /// The macOS index path: discover/open the index, run the bridge, and
+        /// feed the reachability report tail. Any resolution or read failure
+        /// degrades to the syntax oracle with a note.
+        private func indexBackedUnused(
+            result: AnalysisResult,
+            context: CorpusContext,
+            engineConfig: UnusedCodeConfiguration,
+            files: [String],
+            detector: UnusedCodeDetector,
+            indexStore: IndexStoreOptions
+        ) async -> (unused: [UnusedCode], notes: [String]) {
+            let cwd = FileManager.default.currentDirectoryPath
+            let projectRoot = IndexProjectLocator.projectRoot(for: files, fallback: cwd)
+            let fallbackConfig = FallbackConfiguration(autoBuild: indexStore.autoBuild)
+            let manager = IndexStoreFallbackManager(configuration: fallbackConfig)
+            let outcome = await manager.resolveIndexStore(
+                projectRoot: projectRoot,
+                sourceFiles: files,
+                explicitPath: indexStore.explicitPath
+            )
+
+            switch outcome {
+            case .fallback(let reason):
+                let syntax = await detector.detectUnused(in: result, context: context)
+                return (syntax, ["\(ToolInfo.name): \(reason.description)"])
+
+            case .index(let path, let stale):
+                let declarations = result.declarations.declarations
+                let productionMode = engineConfig.productionMode
+                let testScoped =
+                    productionMode
+                    ? TestScopeClassifier(testsGlob: engineConfig.testsGlob)
+                        .classify(declarations: declarations, context: context)
+                    : []
+
+                do {
+                    let reach = try IndexReachabilityBridge().computeReachability(
+                        result: result,
+                        context: context,
+                        rootConfiguration: engineConfig.rootDetection,
+                        productionMode: productionMode,
+                        testScoped: testScoped,
+                        indexStorePath: path,
+                        analysisFiles: files,
+                        allowsDirectoryCreation: fallbackConfig.allowsIndexDatabaseCreation
+                    )
+
+                    let tail = ReachabilityBasedDetector(
+                        configuration: engineConfig,
+                        extractionConfiguration: DependencyExtractionConfiguration(
+                            rootDetection: engineConfig.rootDetection,
+                            treatProtocolRequirementsAsRoot: true,
+                            trackProtocolWitnesses: true
+                        )
+                    )
+                    var unused = tail.neverReferencedResults(
+                        declarations: declarations,
+                        reachableWithTests: reach.reachableWithTests,
+                        context: context
+                    )
+                    if productionMode, let reachableInProduction = reach.reachableInProduction {
+                        unused.append(
+                            contentsOf: tail.onlyTestedResults(
+                                declarations: declarations,
+                                reachableWithTests: reach.reachableWithTests,
+                                reachableInProduction: reachableInProduction,
+                                testScoped: testScoped,
+                                context: context
+                            ))
+                    }
+
+                    var notes = ["\(ToolInfo.name): --index-store active at \(path) — \(reach.summary)"]
+                    if !stale.isEmpty {
+                        notes.append(
+                            "\(ToolInfo.name): index is stale for \(stale.count) file(s); "
+                                + "results may lag recent edits — re-run `swift build`")
+                    }
+                    return (unused, notes)
+                } catch {
+                    let syntax = await detector.detectUnused(in: result, context: context)
+                    return (
+                        syntax,
+                        [
+                            "\(ToolInfo.name): index at \(path) could not be read (\(error)); "
+                                + "falling back to syntax reachability"
+                        ]
+                    )
+                }
+            }
+        }
+    #endif
 
     // MARK: - Single-file analysis
 
