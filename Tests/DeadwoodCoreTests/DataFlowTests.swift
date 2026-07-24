@@ -48,6 +48,35 @@ private final class TestFunctionCollector: SyntaxVisitor {
 
 @Suite("CFG Builder")
 struct CFGBuilderTests {
+    @Test("fallthrough into default does not trap on overlapping cfg.blocks access")
+    func fallthroughDoesNotTrap() {
+        // Regression: `cfg.blocks[id]?.terminator = .fallthrough(newBlock())`
+        // opened an exclusive modify on `cfg.blocks` while `newBlock()` also
+        // mutated it — a runtime exclusivity trap that aborted the process
+        // (exit 134) on any `fallthrough`, seen on real code (Stations).
+        let source = """
+            func f(_ option: Int) {
+                switch option {
+                case 0:
+                    if option == 1 { g() }
+                    fallthrough
+                default:
+                    h()
+                }
+            }
+            func g() {}
+            func h() {}
+            """
+        let cfg = buildCFG(source, function: "f")
+        // Reaching here at all is the regression assertion (no trap); the
+        // fallthrough must produce a terminator of that kind.
+        let hasFallthrough = cfg.blocks.values.contains {
+            if case .fallthrough = $0.terminator { return true }
+            return false
+        }
+        #expect(hasFallthrough)
+    }
+
     @Test("Empty function creates minimal CFG")
     func emptyFunction() {
         let cfg = buildCFG("func test() {}")

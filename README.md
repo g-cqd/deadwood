@@ -39,6 +39,45 @@ Two analysis shapes:
   can be judged, because an internal declaration may be used from any other
   file of its module. Cross-file verdicts need corpus mode.
 
+## Recommended configuration for real-world use
+
+deadwood's precision depends heavily on **what you point it at**. Its default
+syntax reachability is a name-based graph over the files you pass — so a
+declaration referenced only from a file *outside* that set reads as unused.
+Empirically, on app codebases with rich test/preview suites the default mode's
+"unused" findings are a mix of genuinely deletable code and code that is live
+through a path the source-only graph can't see. Configure accordingly:
+
+- **Analyze the whole module, tests included.** Pass the test target
+  alongside the sources (`deadwood analyze Sources Tests`). The single biggest
+  false-positive class is production code referenced only from tests; including
+  the test target removes it. Pair with **`--production`** to then surface
+  those as their own `referenced-only-by-tests` findings instead of hiding
+  them.
+- **For a real "safe to delete" signal, use `--index-store` (macOS).** The
+  compiler index resolves cross-file/cross-target/dynamic references and
+  disambiguates same-named symbols the name graph conflates — it is the
+  accuracy mode. On SwiftStaticAnalysis it cleared a name-conflation false
+  positive and surfaced 58 genuinely dead declarations the syntax mode missed.
+  It falls open to syntax mode when no index is present.
+- **Keep the opt-in rules opt-in.** `unused-import` and `unused-public-api` are
+  deliberately off by default: the import heuristic can't see extension or
+  operator usage (it over-reports — hundreds of findings on a real corpus),
+  and public API is a library's *surface*, not dead code. Enable them only on
+  application targets, and treat them as review prompts, not deletion lists.
+- **OS-discovered and preview entry points.** Types the system instantiates by
+  conformance (`AppShortcutsProvider`, App Intents, Widgets) are rooted
+  automatically. Declarations referenced *only* inside a top-level `#Preview`
+  body are a known gap in syntax mode — exclude preview files
+  (`"exclude": ["+Previews.swift"]`) or use `--index-store`, which sees them.
+- **Accept intentional scaffolding** (author-your-own template stubs, debug
+  helpers) with `// @dw:accept -- reason` so the decision is on record rather
+  than re-flagged every run.
+
+Bottom line: `deadwood analyze Sources Tests --index-store` on macOS is the
+high-precision configuration; plain `deadwood analyze Sources` is the fast,
+zero-setup pass whose findings you review rather than delete blindly.
+
 ## Production mode
 
 `deadwood analyze --production Sources Tests` computes reachability twice
