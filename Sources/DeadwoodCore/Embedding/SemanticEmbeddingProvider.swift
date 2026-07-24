@@ -5,9 +5,12 @@
 //    embedding-confidence signal is built on the NL contextual embedding, so
 //    the whole substrate is macOS-oriented and absent where NL is unavailable
 //    (Linux), where the CLI flag reports itself unavailable.
-//  - Types are `internal` (deadwood convention). The HuggingFace / Core ML
-//    provider surface is intentionally NOT lifted — deadwood ships only the
-//    system NL provider (zero download) and a deterministic CI provider.
+//  - Types are `internal` (deadwood convention).
+//  - The HuggingFace / Core ML provider came over later (0.5.0), because
+//    NLContextualEmbedding is an ENGLISH natural-language model rather than a
+//    code-trained one: on code it over-clusters, which blunts the anomaly
+//    spread. `HFSemanticEmbeddingProvider` is the opt-in, macOS-only escape
+//    hatch to a code-trained bundle; the system provider stays the default.
 
 #if canImport(NaturalLanguage)
     import Foundation
@@ -24,6 +27,12 @@
         /// Dimension of every embedding this provider returns.
         var embeddingDimension: Int { get }
 
+        /// Human-readable identity of the model that actually ran, surfaced in
+        /// the stderr note and in every annotated finding. Which model produced
+        /// a score changes how the score should be read, so a run must never
+        /// leave that implicit.
+        var providerName: String { get }
+
         /// Embed a code snippet into a dense vector.
         func embed(snippet: String) async throws -> [Float]
 
@@ -32,6 +41,8 @@
     }
 
     extension SemanticEmbeddingProvider {
+        var providerName: String { "embedding" }
+
         func embed(snippets: [String]) async throws -> [[Float]] {
             var results: [[Float]] = []
             results.reserveCapacity(snippets.count)

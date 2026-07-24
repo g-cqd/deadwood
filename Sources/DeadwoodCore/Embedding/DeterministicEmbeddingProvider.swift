@@ -19,6 +19,8 @@
         let embeddingDimension: Int
         let ngramSize: Int
 
+        var providerName: String { "deterministic (n-gram hash, fallback)" }
+
         init(dimension: Int = 128, ngramSize: Int = 3) {
             precondition(dimension > 0, "dimension must be > 0")
             precondition(ngramSize > 0, "ngramSize must be > 0")

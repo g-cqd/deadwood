@@ -36,7 +36,8 @@ public struct Analyzer: Sendable {
         files: [String],
         cacheURL: URL? = nil,
         indexStore: IndexStoreOptions = .disabled,
-        embeddingConfidence: Bool = false
+        embeddingConfidence: Bool = false,
+        embeddingBundle: String? = nil
     ) async -> AnalysisReport {
         var report = AnalysisReport()
 
@@ -177,7 +178,8 @@ public struct Analyzer: Sendable {
             report = await annotateEmbeddingConfidence(
                 report, unused: unused,
                 sourcesByPath: Dictionary(
-                    sources.map { ($0.path, $0.source) }, uniquingKeysWith: { first, _ in first }))
+                    sources.map { ($0.path, $0.source) }, uniquingKeysWith: { first, _ in first }),
+                bundlePath: embeddingBundle)
         }
         return report
     }
@@ -335,13 +337,16 @@ public struct Analyzer: Sendable {
 
     /// Annotate each finding's note with a kNN semantic-anomaly score over the
     /// flagged declarations' snippets. Experimental: it never changes which
-    /// findings fire, only appends a confidence hint. Falls back to the
-    /// deterministic provider when the NL contextual asset is unavailable, and
-    /// no-ops (with a note) where NaturalLanguage is absent.
+    /// findings fire, only appends a confidence hint. The scoring model is
+    /// whatever ``EmbeddingProviderSelection`` resolves — an
+    /// `--embedding-bundle`, a model shipped next to the binary, the on-device
+    /// NL asset, or the deterministic fallback — and its name rides along in
+    /// every annotation. No-ops (with a note) where NaturalLanguage is absent.
     private func annotateEmbeddingConfidence(
         _ report: AnalysisReport,
         unused: [UnusedCode],
-        sourcesByPath: [String: String]
+        sourcesByPath: [String: String],
+        bundlePath: String?
     ) async -> AnalysisReport {
         #if canImport(NaturalLanguage)
             var report = report
@@ -363,7 +368,10 @@ public struct Analyzer: Sendable {
                 return Self.snippet(from: source, range: rangeByKey[key], line: finding.line)
             }
 
-            let (provider, providerName) = Self.makeEmbeddingProvider()
+            let (provider, selectionNotes) = await EmbeddingProviderSelection.resolve(
+                bundlePath: bundlePath)
+            report.notes.append(contentsOf: selectionNotes)
+            let providerName = provider.providerName
             let scores = await EmbeddingConfidence().anomalyScores(
                 snippets: snippets, provider: provider)
 
@@ -399,17 +407,6 @@ public struct Analyzer: Sendable {
     }
 
     #if canImport(NaturalLanguage)
-        /// Prefer the system NL contextual embedding (zero download); fall back
-        /// to the deterministic provider when its asset is unavailable.
-        private static func makeEmbeddingProvider() -> (any SemanticEmbeddingProvider, String) {
-            if #available(macOS 14.0, *) {
-                if let provider = try? NLContextualSemanticEmbeddingProvider() {
-                    return (provider, "NLContextualEmbedding")
-                }
-            }
-            return (DeterministicEmbeddingProvider(), "deterministic-fallback")
-        }
-
         private static func locationKey(_ location: SourceLocation) -> String {
             "\(location.file):\(location.line):\(location.column)"
         }
