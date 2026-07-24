@@ -152,10 +152,15 @@ deadwood analyze --experimental-embedding-confidence \
 `--embedding-bundle <dir>` (macOS; only meaningful together with
 `--experimental-embedding-confidence`) points at a directory holding both a
 Core ML model — `.mlpackage`, compiled on first use, or a prebuilt
-`.mlmodelc` — and the HuggingFace tokenizer files (`tokenizer.json`, …). It
-covers the standard HF feature-extraction shape: all-MiniLM-L6-v2, CodeBERT,
-GraphCodeBERT, jina-embeddings-v2-base-code, CodeT5+. Snippets are truncated
-to 128 tokens, the MiniLM-class window.
+`.mlmodelc` — and its WordPiece vocabulary (`vocab.txt`, or the vocab inside
+`tokenizer.json`). Snippets are truncated to 128 tokens, the MiniLM-class window.
+
+**WordPiece (BERT-family) bundles only** — all-MiniLM-L6-v2 and friends.
+deadwood tokenizes in-house (`WordPieceTokenizer`, pinned token-for-token
+against `swift-transformers` before that dependency was dropped) rather than
+linking a 9-package HuggingFace stack into every binary. A BPE/SentencePiece
+bundle (CodeBERT, GraphCodeBERT, jina-v2-code, CodeT5+) fails to load and falls
+back to the default provider rather than tokenizing wrongly.
 
 With no flag, deadwood looks for a model shipped beside the binary —
 `<exec-dir>/Models/MiniLM`, then the FHS-style
