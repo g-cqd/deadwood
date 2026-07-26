@@ -2,7 +2,12 @@
 //  Trimmed: `parse(from:)` and display helpers the engine never calls.
 
 import ADJSON
-import Foundation
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - PropertyWrapperKind
 

@@ -1,4 +1,8 @@
-import Foundation
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 /// Reads a small configuration-class file with a stat-first size cap, so a
 /// hostile or accidental giant JSON can't be pulled into RAM. Fails closed
@@ -12,11 +16,11 @@ enum BoundedFileReader {
         cap: Int = configByteCap
     ) throws(DeadwoodError) -> Data {
         let url = URL(fileURLWithPath: path)
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
-        guard values?.isRegularFile == true else {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+        guard (attributes?[.type] as? FileAttributeType) == .typeRegular else {
             throw .configurationUnreadable(path: path, underlying: "not a regular file")
         }
-        if let size = values?.fileSize, size > cap {
+        if let size = attributes?[.size] as? Int, size > cap {
             throw .configurationInvalid(path: path, detail: "exceeds \(cap) byte cap")
         }
         let data: Data

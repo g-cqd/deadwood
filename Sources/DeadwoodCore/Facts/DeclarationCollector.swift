@@ -8,8 +8,13 @@
 //  - Extensions record their conformance list (SSA dropped it), which the
 //    witness edges in `DependencyExtractor` rely on.
 
-import Foundation
 import SwiftSyntax
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - DeclarationCollector
 
@@ -90,7 +95,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
             }
 
             let typeAnnotation = binding.typeAnnotation?.type.description
-                .trimmingCharacters(in: .whitespaces)
+                .trimmedHorizontalWhitespace
 
             let declaration = makeDeclaration(
                 name: identifier.identifier.text,
@@ -117,7 +122,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
             return .visitChildren
         }
 
-        let typeAnnotation = node.type.description.trimmingCharacters(in: .whitespaces)
+        let typeAnnotation = node.type.description.trimmedHorizontalWhitespace
 
         let declaration = Declaration(
             name: name,
@@ -229,7 +234,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
     }
 
     override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-        let name = node.extendedType.description.trimmingCharacters(in: .whitespaces)
+        let name = node.extendedType.description.trimmedHorizontalWhitespace
         let declaration = makeDeclaration(
             name: name,
             kind: .extension,
@@ -442,7 +447,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
             let label: String? = firstName == "_" ? nil : firstName
             let name = secondName ?? firstName
 
-            let type = param.type.description.trimmingCharacters(in: .whitespaces)
+            let type = param.type.description.trimmedHorizontalWhitespace
             let isInout =
                 param.type.as(AttributedTypeSyntax.self)?.specifiers.contains { spec in
                     spec.as(SimpleTypeSpecifierSyntax.self)?.specifier.tokenKind == .keyword(.inout)
@@ -458,7 +463,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
             )
         }
 
-        let returnType = signature.returnClause?.type.description.trimmingCharacters(in: .whitespaces)
+        let returnType = signature.returnClause?.type.description.trimmedHorizontalWhitespace
         let throwsSpecifier = signature.effectSpecifiers?.throwsClause?.throwsSpecifier
 
         return FunctionSignature(
@@ -474,7 +479,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
         for piece in node.leadingTrivia {
             switch piece {
             case .docLineComment(let text):
-                return String(text.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                return String(text.dropFirst(3)).trimmedHorizontalWhitespace
 
             case .docBlockComment(let text):
                 var cleaned = text
@@ -484,7 +489,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
                 if cleaned.hasSuffix("*/") {
                     cleaned = String(cleaned.dropLast(2))
                 }
-                return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+                return cleaned.trimmedWhitespaceAndNewlines
 
             default:
                 continue
@@ -503,13 +508,13 @@ final class DeclarationCollector: ScopeTrackingVisitor {
                 continue
             }
 
-            let attributeText = attribute.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let attributeText = attribute.description.trimmedWhitespaceAndNewlines
             let attributeName = name(of: attribute)
             let kind = PropertyWrapperKind(attributeName: attributeName)
 
             var arguments: String?
             if let args = attribute.arguments {
-                arguments = args.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                arguments = args.description.trimmedWhitespaceAndNewlines
             }
 
             wrappers.append(
@@ -530,7 +535,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
         guard let clause = inheritanceClause else { return [] }
 
         return clause.inheritedTypes.map { inheritedType in
-            inheritedType.type.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            inheritedType.type.description.trimmedWhitespaceAndNewlines
         }
     }
 
@@ -575,7 +580,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
             identifier.name.text
         } else {
             attribute.attributeName.description
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmedWhitespaceAndNewlines
         }
     }
 }

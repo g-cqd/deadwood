@@ -1,4 +1,8 @@
-import Foundation
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 public enum OutputFormat: String, CaseIterable, Sendable {
     /// `path:line:col: warning|error: [rule] message — note` — parsed by Xcode

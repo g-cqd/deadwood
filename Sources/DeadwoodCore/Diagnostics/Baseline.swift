@@ -1,4 +1,8 @@
-import Foundation
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 /// A set of accepted finding fingerprints — pre-existing debt a team adopts
 /// the tool against without a wall of noise. Baselined findings are filtered
