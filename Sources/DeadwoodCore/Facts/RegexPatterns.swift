@@ -3,7 +3,11 @@
 //  USR helpers (index-store surface). What remains are the pure path/name
 //  predicates the filter and glob fast paths consume.
 
-import Foundation
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - Path helpers
 

@@ -5,7 +5,11 @@
 //  - `forEach` dropped (nothing in this tool runs side-effect-only batches).
 //  - `map` no longer throws: the parse pipeline is error-tolerant.
 
-import Foundation
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - ConcurrencyConfiguration
 

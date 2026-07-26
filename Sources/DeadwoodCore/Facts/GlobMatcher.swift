@@ -2,7 +2,11 @@
 //  Changes during the lift: compiled globs are cached in `RegexCache.shared`
 //  (upstream recompiled per call on the slow path).
 
-import Foundation
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - GlobMatcher
 
@@ -67,10 +71,10 @@ enum GlobMatcher {
 
         var working =
             pattern
-            .replacingOccurrences(of: "**/", with: doubleStarSlash)
-            .replacingOccurrences(of: "**", with: doubleStar)
-            .replacingOccurrences(of: "*", with: singleStar)
-            .replacingOccurrences(of: "?", with: question)
+            .replacingAll("**/", with: doubleStarSlash)
+            .replacingAll("**", with: doubleStar)
+            .replacingAll("*", with: singleStar)
+            .replacingAll("?", with: question)
 
         // Order matters — backslash must be escaped first or it
         // double-escapes the escaping added next.
@@ -89,14 +93,14 @@ enum GlobMatcher {
             ("|", "\\|"),
         ]
         for (needle, replacement) in metaCharacters {
-            working = working.replacingOccurrences(of: needle, with: replacement)
+            working = working.replacingAll(needle, with: replacement)
         }
 
         return
             working
-            .replacingOccurrences(of: doubleStarSlash, with: "(?:.*/)?")
-            .replacingOccurrences(of: doubleStar, with: ".*")
-            .replacingOccurrences(of: singleStar, with: "[^/]*")
-            .replacingOccurrences(of: question, with: "[^/]")
+            .replacingAll(doubleStarSlash, with: "(?:.*/)?")
+            .replacingAll(doubleStar, with: ".*")
+            .replacingAll(singleStar, with: "[^/]*")
+            .replacingAll(question, with: "[^/]")
     }
 }

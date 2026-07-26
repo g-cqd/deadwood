@@ -1,6 +1,11 @@
-public import Foundation
 import SwiftParser
 import SwiftSyntax
+
+#if canImport(FoundationEssentials)
+    public import FoundationEssentials
+#else
+    public import Foundation
+#endif
 
 /// Entry point of the pipeline: reads each file with a bounded reader, scans
 /// suppression directives, runs the detection engine, and assembles the

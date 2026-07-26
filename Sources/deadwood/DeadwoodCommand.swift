@@ -1,6 +1,23 @@
 public import ArgumentParser
 import DeadwoodCore
-import Foundation
+import SystemPackage
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
+
+/// Stand-in for `FileHandle.standardError`, which lives in corelibs Foundation:
+/// linking it would re-link ~51 MiB of ICU into every Linux binary. Keeps the
+/// `.write(Data(...))` shape of the call sites so nothing else changes.
+private struct StandardErrorHandle {
+    func write(_ bytes: Data) {
+        _ = try? FileDescriptor.standardError.writeAll(bytes)
+    }
+}
+
+private let standardError = StandardErrorHandle()
 
 @main
 struct DeadwoodCommand: AsyncParsableCommand {
@@ -117,12 +134,12 @@ struct Analyze: AsyncParsableCommand {
             )
 
         for note in report.notes {
-            FileHandle.standardError.write(Data((note + "\n").utf8))
+            standardError.write(Data((note + "\n").utf8))
         }
 
         if let writeBaseline {
             try Baseline(findings: report.findings).write(path: writeBaseline)
-            FileHandle.standardError.write(
+            standardError.write(
                 Data("\(ToolInfo.name): wrote baseline with \(report.findings.count) fingerprint(s)\n".utf8)
             )
             return
@@ -146,7 +163,7 @@ struct Analyze: AsyncParsableCommand {
         if report.cacheHits + report.cacheMisses > 0, !noCache {
             summary += "; cache: \(report.cacheHits) reused, \(report.cacheMisses) parsed"
         }
-        FileHandle.standardError.write(Data((summary + "\n").utf8))
+        standardError.write(Data((summary + "\n").utf8))
 
         let failed = strict ? !report.findings.isEmpty : report.maxSeverity == .error
         if failed {
@@ -184,32 +201,32 @@ struct Analyze: AsyncParsableCommand {
 
         for path in paths {
             guard
-                let isDirectory = try? URL(fileURLWithPath: path)
-                    .resourceValues(forKeys: [.isDirectoryKey]).isDirectory
+                let attributes = try? manager.attributesOfItem(atPath: path),
+                let type = attributes[.type] as? FileAttributeType
             else {
                 throw ValidationError("no such file or directory: \(path)")
             }
-            if !isDirectory {
+            if type != .typeDirectory {
                 files.insert(path)
                 continue
             }
-            let root = URL(fileURLWithPath: path)
-            guard
-                let enumerator = manager.enumerator(
-                    at: root,
-                    includingPropertiesForKeys: [.isRegularFileKey],
-                    options: [.skipsHiddenFiles]
-                )
-            else { continue }
-            for case let url as URL in enumerator {
-                if skippedComponents.contains(url.lastPathComponent) {
-                    enumerator.skipDescendants()
-                    continue
-                }
-                guard url.pathExtension == "swift" else { continue }
-                let filePath = url.path
-                if !configuration.isExcluded(path: filePath) {
-                    files.insert(filePath)
+            // Explicit worklist rather than FileManager.enumerator, which is
+            // corelibs-only. Preserves both old behaviours — skipsHiddenFiles and
+            // the skipDescendants prune — and seeds from an absolute path,
+            // because finding paths are part of the output contract.
+            var stack = [URL(fileURLWithPath: path).path]
+            while let directory = stack.popLast() {
+                guard let entries = try? manager.contentsOfDirectory(atPath: directory) else { continue }
+                for entry in entries {
+                    if entry.hasPrefix(".") { continue }
+                    if skippedComponents.contains(entry) { continue }
+                    let full = directory + "/" + entry
+                    let entryType = (try? manager.attributesOfItem(atPath: full))?[.type] as? FileAttributeType
+                    if entryType == .typeDirectory {
+                        stack.append(full)
+                    } else if full.hasSuffix(".swift"), !configuration.isExcluded(path: full) {
+                        files.insert(full)
+                    }
                 }
             }
         }
