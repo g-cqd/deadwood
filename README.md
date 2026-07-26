@@ -155,22 +155,21 @@ Core ML model — `.mlpackage`, compiled on first use, or a prebuilt
 `.mlmodelc` — and its WordPiece vocabulary (`vocab.txt`, or the vocab inside
 `tokenizer.json`). Snippets are truncated to 128 tokens, the MiniLM-class window.
 
-Two tokenizer families are supported, both implemented in-house rather than by
-linking a 9-package HuggingFace stack into every binary (each pinned
-token-for-token against `swift-transformers` before that dependency was
-dropped): **WordPiece** (BERT-family — all-MiniLM-L6-v2, BGE) and **byte-level
-BPE** (RoBERTa/GPT-2 family — CodeBERT, GraphCodeBERT, jina-v2-code). A
-SentencePiece/Unigram bundle fails to load and falls back to the default
-provider rather than tokenizing wrongly.
+**WordPiece (BERT-family) bundles** — all-MiniLM-L6-v2 and friends. deadwood
+tokenizes in-house (`WordPieceTokenizer`, pinned token-for-token against
+`swift-transformers` before that dependency was dropped) rather than linking a
+9-package HuggingFace stack into every binary. A BPE or SentencePiece bundle
+fails to load and falls back to the default provider rather than tokenizing
+wrongly.
 
-**Pick a *sentence-embedding* model, not a masked-LM checkpoint.** Measured on
-Bilbary's 29 findings, the anomaly-score spread was: all-MiniLM-L6-v2 **36-77%**
-(18 distinct values, stdev 10.96), Apple NLContextual 2-8% (7 values, stdev
-1.76), **CodeBERT 1-3% (3 values, stdev 0.68)** — the worst of the three. A
-masked-LM checkpoint like CodeBERT produces anisotropic vectors: everything
-crowds into one cone, so the scores collapse and the signal is useless. MiniLM
-is contrastively fine-tuned for cosine comparison, which is what this scoring
-needs.
+**Pick a *sentence-embedding* model, not a masked-LM checkpoint.** Byte-level BPE
+support shipped briefly in v0.6.0 to allow CodeBERT, then was withdrawn once
+measured: on Bilbary's 29 findings the anomaly-score spread was all-MiniLM-L6-v2
+**36-77%** (18 distinct values, stdev 10.96), Apple NLContextual 2-8% (7 values,
+stdev 1.76), **CodeBERT 1-3% (3 values, stdev 0.68)** — the worst of the three. A
+masked-LM checkpoint produces anisotropic vectors: everything crowds into one
+cone, the scores collapse, and the signal is useless. MiniLM is contrastively
+fine-tuned for cosine comparison, which is what this scoring needs.
 
 With no flag, deadwood looks for a model shipped beside the binary —
 `<exec-dir>/Models/MiniLM`, then the FHS-style
