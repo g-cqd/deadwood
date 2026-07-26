@@ -1,8 +1,13 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — Utilities/ScopeTracker.swift and
 //  the syntax-position bridge from Parsing/SwiftFileParser.swift.
 
-import Foundation
 import SwiftSyntax
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - Syntax position bridge
 
@@ -189,7 +194,7 @@ class ScopeTrackingVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-        let name = node.extendedType.description.trimmingCharacters(in: .whitespaces)
+        let name = node.extendedType.description.trimmedHorizontalWhitespace
         tracker.enterScope(kind: .extension, name: name, location: location(of: node))
         return .visitChildren
     }

@@ -27,6 +27,9 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.2"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
+        // swift-system: a safe, Sendable stderr handle. Foundation's FileHandle
+        // is corelibs-only and would re-link ~51 MiB of ICU into every Linux binary.
+        .package(url: "https://github.com/apple/swift-system.git", from: "1.7.1"),
         // IndexStoreDB backs the opt-in `--index-store` reachability mode. It
         // is linked only on macOS (its `libIndexStore.dylib` discovery is
         // macOS-only), and every consumer sits behind `#if canImport`, so the
@@ -69,6 +72,7 @@ let package = Package(
             dependencies: [
                 "DeadwoodCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "SystemPackage", package: "swift-system"),
             ],
             swiftSettings: strictSwiftSettings
         ),

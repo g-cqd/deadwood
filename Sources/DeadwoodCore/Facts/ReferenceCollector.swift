@@ -4,8 +4,13 @@
 //    `#keyPath(...)` arguments produce references — a method referenced only
 //    via `#selector` is used code (upstream precision gap).
 
-import Foundation
 import SwiftSyntax
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - ReferenceCollector
 
@@ -213,7 +218,7 @@ final class ReferenceCollector: ScopeTrackingVisitor {
             scope: currentScope,
             context: .typeAnnotation,
             isQualified: true,
-            qualifier: node.baseType.description.trimmingCharacters(in: .whitespaces)
+            qualifier: node.baseType.description.trimmedHorizontalWhitespace
         )
         references.append(reference)
 

@@ -1,7 +1,12 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — UnusedCodeDetector/DataFlow/CFGBuilder.swift.
 
-import Foundation
 import SwiftSyntax
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - VariableID
 
@@ -90,7 +95,7 @@ struct CFGStatement: Sendable {
     /// nil otherwise. The data-flow passes capture the RHS of small
     /// assignments as an opaque string.
     func shortDescription(maxLength: Int) -> String? {
-        let text = syntax.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = syntax.description.trimmedWhitespaceAndNewlines
         return text.count < maxLength ? text : nil
     }
 }

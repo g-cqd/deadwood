@@ -1,5 +1,10 @@
 public import ADJSON
-import Foundation
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 /// One parsed `@dw:` / `@deadwood:` directive comment.
 ///
@@ -58,7 +63,7 @@ public struct SuppressionDirective: Sendable, Equatable, Codable {
         if text.hasPrefix("//") { text.removeFirst(2) }
         if text.hasPrefix("/*") { text.removeFirst(2) }
         if text.hasSuffix("*/") { text.removeLast(2) }
-        text = text.trimmingCharacters(in: .whitespaces)
+        text = text.trimmedHorizontalWhitespace
 
         guard text.hasPrefix("@") else { return nil }
         text.removeFirst()
@@ -66,8 +71,8 @@ public struct SuppressionDirective: Sendable, Equatable, Codable {
         text.removeFirst(namespace.count)
 
         var reason: String?
-        if let range = text.range(of: "--") {
-            reason = String(text[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+        if let range = text.firstRange(of: "--") {
+            reason = String(text[range.upperBound...]).trimmedHorizontalWhitespace
             text = String(text[..<range.lowerBound])
         }
         let parts = text.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
