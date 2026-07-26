@@ -13,7 +13,11 @@
 //  - the dead-branch pass moved to `DeadBranchPass` (it consumes parsed
 //    trees instead of re-reading files).
 
-import Foundation
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - DependencyExtractor
 
@@ -201,14 +205,14 @@ struct DependencyExtractor: Sendable {
         let separators: [String] = ["[", "]", "<", ">", ",", ":", "(", ")", "->"]
         var cleaned =
             typeAnnotation
-            .replacingOccurrences(of: "?", with: "")
-            .replacingOccurrences(of: "!", with: "")
+            .replacingAll("?", with: "")
+            .replacingAll("!", with: "")
         for separator in separators {
-            cleaned = cleaned.replacingOccurrences(of: separator, with: " ")
+            cleaned = cleaned.replacingAll(separator, with: " ")
         }
 
         for part in cleaned.split(separator: " ") {
-            let name = String(part).trimmingCharacters(in: .whitespaces)
+            let name = String(part).trimmedHorizontalWhitespace
             if !name.isEmpty,
                 name.first?.isUppercase == true,
                 !isBuiltInType(name)

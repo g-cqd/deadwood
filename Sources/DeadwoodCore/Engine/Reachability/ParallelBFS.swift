@@ -3,7 +3,11 @@
 //  `BitArray` frontier replaced by `[Bool]`, and the stats-collecting
 //  variant trimmed.
 
-import Foundation
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - ParallelBFS
 

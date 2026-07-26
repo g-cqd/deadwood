@@ -5,7 +5,12 @@
 // ADJSON type escapes this file — only the two seam functions below use it — so
 // a plain (internal) import is enough.
 import ADJSON
-import Foundation
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - CachedFileArtifacts
 
