@@ -85,17 +85,18 @@
                 }
             }
 
-            // Deliberately NOT `.all`: these are sequence-length-flexible exports,
-            // and a RoBERTa-family model whose output is
-            // `hidden_states [batch, sequence, hidden]` is data-dependent, which
-            // the Neural Engine runtime refuses. Worse, it refuses at *prediction*
-            // time by writing an opaque Espresso "Invalid blob shape" diagnostic
-            // straight to **stdout** — corrupting `--format json` for the caller
-            // (measured: CodeBERT emitted 19 KB of that garbage ahead of the
+            // Deliberately NOT `.all`. These exports are sequence-length-flexible,
+            // and a model whose output is `[batch, sequence, hidden]` has a
+            // data-dependent shape, which the Neural Engine runtime refuses — at
+            // *prediction* time, by writing an opaque Espresso "Invalid blob
+            // shape" diagnostic straight to **stdout**. That corrupts
+            // `--format json` for the caller and no Swift-side error handling can
+            // undo it (measured on a RoBERTa export: 19 KB of garbage ahead of the
             // report). Even probing `.all` first is unsafe, because the probe's
-            // own failure prints it. Cost is small and bounded (~0.95 s -> ~1.35 s
-            // for a 30-finding rank, mostly model load), and it buys uncorrupted
-            // machine-readable output plus RoBERTa-family bundles working at all.
+            // own failure is what prints it. Nothing is lost by skipping it:
+            // measured over 230 snippets, `.cpuAndGPU` ran 5.29 s against 5.49 s
+            // for `.all`. So start on GPU and step down only if that cannot run,
+            // with one tiny probe prediction to confirm before committing.
             var loaded: MLModel?
             for units in [MLComputeUnits.cpuAndGPU, .cpuOnly] {
                 let configuration = MLModelConfiguration()
@@ -117,7 +118,7 @@
             self.model = resolvedModel
 
             do {
-                self.tokenizer = try BundleTokenizer.make(bundleDir: bundleDir)
+                self.tokenizer = try WordPieceTokenizer(bundleDir: bundleDir)
             } catch {
                 throw SemanticEmbeddingError.modelLoadFailed(underlying: error)
             }
@@ -232,7 +233,7 @@
         // MARK: - Private
 
         private let model: MLModel
-        private let tokenizer: any SubwordTokenizing
+        private let tokenizer: WordPieceTokenizer
         private let maxLength: Int
         private let inputIDsName: String
         private let attentionMaskName: String
