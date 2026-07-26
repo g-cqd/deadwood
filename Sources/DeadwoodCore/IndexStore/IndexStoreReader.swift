@@ -268,7 +268,7 @@
                 executable: URL(fileURLWithPath: "/usr/bin/xcrun"),
                 arguments: ["--find", "swift"]
             ), result.succeeded {
-                let swiftPath = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                let swiftPath = result.stdout.trimmedWhitespaceAndNewlines
                 if !swiftPath.isEmpty {
                     let toolchainPath = URL(fileURLWithPath: swiftPath)
                         .deletingLastPathComponent()  // bin
@@ -465,7 +465,7 @@
             let charactersToReplace = CharacterSet(charactersIn: " -.")
             var normalized = name
             for scalar in name.unicodeScalars where charactersToReplace.contains(scalar) {
-                normalized = normalized.replacingOccurrences(of: String(scalar), with: "_")
+                normalized = normalized.replacingAll(String(scalar), with: "_")
             }
             return normalized
         }

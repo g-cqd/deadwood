@@ -2,8 +2,13 @@
 //  pipeline. Consumes already-parsed trees — SSA re-read and re-parsed
 //  every file inside the reachability detector.
 
-import Foundation
 import SwiftSyntax
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - DeadBranchPass
 
@@ -123,7 +128,7 @@ enum DeadBranchPass {
     /// Wrap a dead branch in the declaration-centric `UnusedCode` shape
     /// with a synthetic declaration at the branch location.
     private static func makeFinding(for dead: DeadBranch, file: String) -> UnusedCode {
-        let condition = dead.condition.trimmingCharacters(in: .whitespacesAndNewlines)
+        let condition = dead.condition.trimmedWhitespaceAndNewlines
         let branchWord = dead.deadBranch == .trueBranch ? "true" : "false"
         let range = SourceRange(start: dead.location, end: dead.location)
         let declaration = Declaration(

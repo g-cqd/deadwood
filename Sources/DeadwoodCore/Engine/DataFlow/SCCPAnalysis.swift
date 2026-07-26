@@ -1,8 +1,13 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — UnusedCodeDetector/DataFlow/SCCPAnalysis.swift.
 //  Trimmed: the debug-description extension.
 
-import Foundation
 import SwiftSyntax
+
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 // MARK: - LatticeValue
 
@@ -503,7 +508,7 @@ private struct SCCPAnalysisSession {
     }
 
     private func evaluateCondition(_ condition: String) -> LatticeValue {
-        let trimmed = condition.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = condition.trimmedWhitespaceAndNewlines
         if trimmed == "true" {
             return .constant(.bool(true))
         }
@@ -553,7 +558,7 @@ private struct SCCPAnalysisSession {
             guard let terminator = block.terminator else { continue }
             switch terminator {
             case .conditionalBranch(let condition, _, _), .switch(let condition, _, _):
-                let trimmed = condition.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmed = condition.trimmedWhitespaceAndNewlines
                 if !trimmed.isEmpty {
                     useChain[trimmed, default: []].insert(blockID)
                 }
