@@ -29,15 +29,7 @@ public struct Baseline: Sendable, Equatable {
 
     /// Splits findings into (kept, baselined).
     public func filter(_ findings: [Finding]) -> (kept: [Finding], baselined: [Finding]) {
-        var kept: [Finding] = []
-        var baselined: [Finding] = []
-        for finding in findings {
-            if contains(finding) {
-                baselined.append(finding)
-            } else {
-                kept.append(finding)
-            }
-        }
+        let (kept, baselined) = findings.partitioned(by: contains)
         return (kept, baselined)
     }
 
