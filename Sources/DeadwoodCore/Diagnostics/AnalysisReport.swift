@@ -15,6 +15,15 @@ public struct AnalysisReport: Sendable, Codable {
     /// cache was configured).
     public var cacheHits = 0
     public var cacheMisses = 0
+
+    /// Set when the run was cancelled before the corpus was complete.
+    ///
+    /// A whole-program analysis over a *partial* corpus does not merely report
+    /// less — it reports wrongly, because "no reference anywhere" and "no clone
+    /// elsewhere" are both conclusions drawn from the corpus being whole. A
+    /// cancelled run therefore carries no findings at all, and callers must treat
+    /// it as a failed run rather than a clean one.
+    public var wasCancelled = false
     /// Informational notes for stderr (e.g. the `--index-store` fallback
     /// message, or a one-line index summary). Never affects exit status.
     public var notes: [String] = []
