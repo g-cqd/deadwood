@@ -44,6 +44,11 @@ public struct Analyzer: Sendable {
         embeddingConfidence: Bool = false,
         embeddingBundle: String? = nil
     ) async -> AnalysisReport {
+        // Canonicalize before anything reads a path: `Finding.path` feeds the
+        // fingerprint, and the corpus must not contain the same file twice
+        // under two spellings (it would enter the graph twice).
+        let files = SourcePath.canonicalized(files)
+
         var report = AnalysisReport()
 
         let deadBranchesEnabled = configuration.isEnabled(.deadBranch)
