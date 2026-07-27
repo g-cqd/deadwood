@@ -3,6 +3,10 @@ public struct AnalysisReport: Sendable, Codable {
     public var findings: [Finding]
     /// Findings that matched a suppression directive; kept so suppression debt is visible.
     public var suppressed: [SuppressedFinding]
+    /// Findings the engine produced that fell outside the configured
+    /// ``ReportScope``. Empty when no scope was set. Kept rather than dropped
+    /// so a scoped run never looks like a clean one.
+    public var outOfScope: [Finding] = []
     /// Files that failed to read or parse cleanly (analysis continued on the error-tolerant tree
     /// or skipped the file; either way the run is marked degraded, never silently complete).
     public var degradedFiles: [DegradedFile]
