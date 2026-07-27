@@ -6,13 +6,36 @@ branding:
 
 inputs:
   paths:
-    description: "Files or directories to analyze"
+    description: "Files or directories to analyze (whitespace-separated)"
     required: false
     default: "Sources"
+  only-from:
+    description: |
+      File of newline-separated paths to scope the report to — typically a pull
+      request's changed files. The whole corpus is still analyzed; only the
+      report is narrowed. Pass '-' to read stdin.
+    required: false
+    default: ""
+  baseline:
+    description: "Baseline file: findings it contains are filtered out"
+    required: false
+    default: ""
+  config:
+    description: "Configuration file (default: ./.deadwood.json when present)"
+    required: false
+    default: ""
+  cache-path:
+    description: "Facts-cache file. Empty uses the default user cache; set a workspace path to cache between runs."
+    required: false
+    default: ""
   strict:
     description: "Fail on any finding, not just errors"
     required: false
     default: "false"
+  version:
+    description: "Release to download. Defaults to the ref this action was used at."
+    required: false
+    default: ""
   upload-sarif:
     description: "Upload the SARIF report to GitHub code scanning"
     required: false
@@ -21,21 +44,85 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Build deadwood
+    - name: Resolve deadwood binary
+      id: resolve
       shell: bash
-      run: swift build -c release --package-path "${{ github.action_path }}"
+      env:
+        # Inputs arrive as environment variables rather than `${{ }}` inside the
+        # script: expression interpolation is substituted before bash sees the
+        # text, so any input containing a quote or semicolon would be a command
+        # injection.
+        REQUESTED_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_PATH: ${{ github.action_path }}
+        RUNNER_OS_NAME: ${{ runner.os }}
+        RUNNER_ARCH_NAME: ${{ runner.arch }}
+      run: |
+        set -euo pipefail
+        VERSION="${REQUESTED_VERSION:-${ACTION_REF#v}}"
+        case "${RUNNER_OS_NAME}-${RUNNER_ARCH_NAME}" in
+          macOS-ARM64) SLUG="macos-arm64" ;;
+          Linux-X64)   SLUG="linux-x86_64" ;;
+          *)           SLUG="" ;;
+        esac
+
+        # A source build needs a Swift 6.4 toolchain, which no released Xcode or
+        # stock runner image ships, and it compiles swift-syntax plus
+        # IndexStoreDB — minutes per job. Prefer the release binary.
+        if [ -n "$SLUG" ] && [ -n "$VERSION" ]; then
+          NAME="deadwood-${VERSION}-${SLUG}"
+          BASE="https://github.com/g-cqd/deadwood/releases/download/v${VERSION}"
+          if curl -fsSL --retry 3 -o "$NAME.tar.gz" "$BASE/$NAME.tar.gz" \
+            && curl -fsSL --retry 3 -o "$NAME.tar.gz.sha256" "$BASE/$NAME.tar.gz.sha256"; then
+            # Fail closed on a mismatch: a tampered or truncated download must
+            # never be executed.
+            if command -v shasum >/dev/null; then
+              shasum -a 256 -c "$NAME.tar.gz.sha256"
+            else
+              sha256sum -c "$NAME.tar.gz.sha256"
+            fi
+            tar -xzf "$NAME.tar.gz"
+            echo "bin=$PWD/$NAME/deadwood" >> "$GITHUB_OUTPUT"
+            rm -f "$NAME.tar.gz" "$NAME.tar.gz.sha256"
+            exit 0
+          fi
+          echo "::warning::no release asset for $NAME; falling back to a source build"
+        fi
+
+        swift build -c release --package-path "$ACTION_PATH"
+        echo "bin=$(swift build -c release --package-path "$ACTION_PATH" --show-bin-path)/deadwood" >> "$GITHUB_OUTPUT"
 
     - name: Analyze
       shell: bash
+      env:
+        BIN: ${{ steps.resolve.outputs.bin }}
+        PATHS: ${{ inputs.paths }}
+        ONLY_FROM: ${{ inputs.only-from }}
+        BASELINE: ${{ inputs.baseline }}
+        CONFIG: ${{ inputs.config }}
+        CACHE_PATH: ${{ inputs.cache-path }}
+        STRICT: ${{ inputs.strict }}
       run: |
-        BIN="$(swift build -c release --package-path "${{ github.action_path }}" --show-bin-path)/deadwood"
-        STRICT_FLAG=""
-        [ "${{ inputs.strict }}" = "true" ] && STRICT_FLAG="--strict"
-        "$BIN" analyze ${{ inputs.paths }} --format sarif $STRICT_FLAG > deadwood.sarif
-        exit 0
+        set -euo pipefail
+        args=()
+        [ "$STRICT" = "true" ] && args+=(--strict)
+        [ -n "$ONLY_FROM" ] && args+=(--only-from "$ONLY_FROM")
+        [ -n "$BASELINE" ] && args+=(--baseline "$BASELINE")
+        [ -n "$CONFIG" ] && args+=(--config "$CONFIG")
+        [ -n "$CACHE_PATH" ] && args+=(--cache-path "$CACHE_PATH")
+        # PATHS is word-split deliberately — it is documented as
+        # whitespace-separated — while every other value stays quoted.
+        read -r -a path_args <<< "$PATHS"
+        # The exit code is the gate, but the SARIF still has to reach the upload
+        # step, so capture rather than abort.
+        EXIT=0
+        "$BIN" analyze "${path_args[@]}" --format sarif "${args[@]}" > deadwood.sarif || EXIT=$?
+        exit "$EXIT"
 
     - name: Upload SARIF
-      if: ${{ inputs.upload-sarif == 'true' }}
+      # Runs even when the gate failed: a red check is exactly when the findings
+      # are worth having in code scanning.
+      if: ${{ always() && inputs.upload-sarif == 'true' }}
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: deadwood.sarif

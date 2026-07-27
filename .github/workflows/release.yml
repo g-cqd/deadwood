@@ -119,13 +119,53 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
+      - name: Assemble the SwiftPM artifact bundle
+        # A .artifactbundle.zip is what `.binaryTarget(url:checksum:)` consumes,
+        # so an Xcode project or a package can depend on a pinned deadwood the
+        # same way it already depends on SwiftLint or swift-format — no source
+        # build, no Swift 6.4 toolchain on the consumer's runner. Built here
+        # rather than per-platform because one bundle carries every variant.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          VERSION=""
+          BUNDLE="deadwood.artifactbundle"
+          mkdir -p "$BUNDLE"
+          variants=""
+          for archive in deadwood-*-macos-arm64.tar.gz deadwood-*-linux-x86_64.tar.gz; do
+            tar -xzf "$archive"
+            name="${archive%.tar.gz}"
+            case "$name" in
+              *-macos-arm64) triple="arm64-apple-macosx" ;;
+              *-linux-x86_64) triple="x86_64-unknown-linux-gnu" ;;
+              *) continue ;;
+            esac
+            VERSION="${name#deadwood-}"; VERSION="${VERSION%-macos-arm64}"; VERSION="${VERSION%-linux-x86_64}"
+            mkdir -p "$BUNDLE/$name/bin"
+            # Linux archives carry the Swift runtime .so files beside the
+            # binary; they must travel with it.
+            cp "$name"/deadwood "$BUNDLE/$name/bin/"
+            for so in "$name"/*.so*; do cp "$so" "$BUNDLE/$name/bin/"; done
+            variants="$variants{\"path\":\"$name/bin/deadwood\",\"supportedTriples\":[\"$triple\"]},"
+          done
+          if [ -z "$variants" ]; then
+            echo "::warning::no platform archives to bundle"
+            exit 0
+          fi
+          printf '{"schemaVersion":"1.0","artifacts":{"deadwood":{"type":"executable","version":"%s","variants":[%s]}}}\n' \
+            "$VERSION" "${variants%,}" > "$BUNDLE/info.json"
+          zip -qr "deadwood-$VERSION.artifactbundle.zip" "$BUNDLE"
+          # SwiftPM checksums the zip with `swift package compute-checksum`,
+          # which is a plain SHA-256 of the file.
+          sha256sum "deadwood-$VERSION.artifactbundle.zip" > "deadwood-$VERSION.artifactbundle.zip.sha256"
+
       - name: Create or update release with whatever binaries built
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          assets=(deadwood-*.tar.gz deadwood-*.sha256)
+          assets=(deadwood-*.tar.gz deadwood-*.artifactbundle.zip deadwood-*.sha256)
           if [ ${#assets[@]} -eq 0 ]; then
             echo "::error::no release artifacts built on any platform"
             exit 1
