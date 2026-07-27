@@ -264,7 +264,14 @@ struct Analyze: AsyncParsableCommand {
             text = contents
         }
         return text.split(separator: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
+            // Standard library rather than trimmingCharacters(in:), which is
+            // corelibs-only: deadwood builds against FoundationEssentials on Linux.
+            // DeadwoodCore's helper is internal, so this target inlines it.
+            .map { line -> String in
+                let horizontal: (Character) -> Bool = { $0 == " " || $0 == "\t" }
+                return String(
+                    line.drop(while: horizontal).reversed().drop(while: horizontal).reversed())
+            }
             .filter { !$0.isEmpty }
     }
 
