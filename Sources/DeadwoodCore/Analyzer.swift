@@ -37,12 +37,16 @@ public struct Analyzer: Sendable {
     /// content fingerprint matches; the corpus-wide graph/BFS and every
     /// rule always re-run, so findings can never go stale relative to rules
     /// or configuration.
+    /// - Parameter reportScope: narrows the *report* to a set of files; nil
+    ///   reports everything. Reachability is corpus-level either way — see
+    ///   ``ReportScope``.
     public func analyze(
         files: [String],
         cacheURL: URL? = nil,
         indexStore: IndexStoreOptions = .disabled,
         embeddingConfidence: Bool = false,
-        embeddingBundle: String? = nil
+        embeddingBundle: String? = nil,
+        reportScope: ReportScope? = nil
     ) async -> AnalysisReport {
         // Canonicalize before anything reads a path: `Finding.path` feeds the
         // fingerprint, and the corpus must not contain the same file twice
@@ -178,11 +182,18 @@ public struct Analyzer: Sendable {
         for finding in findings {
             if let reason = tables[finding.path]?.suppression(for: finding.rule, line: finding.line) {
                 report.suppressed.append(.init(finding: finding, reason: reason))
+            } else if let reportScope, !reportScope.contains(finding) {
+                // Kept, not dropped: the count stays visible in the summary and
+                // `--format json` still carries them. Scope is applied after
+                // suppression so suppression debt keeps counting the whole
+                // corpus.
+                report.outOfScope.append(finding)
             } else {
                 report.findings.append(finding)
             }
         }
         report.findings.sort()
+        report.outOfScope.sort()
 
         if embeddingConfidence {
             report = await annotateEmbeddingConfidence(
