@@ -159,6 +159,14 @@ struct Analyze: AsyncParsableCommand {
                 reportScope: reportScope
             )
 
+        // A cancelled run analysed a partial corpus and therefore reports nothing.
+        // That must never read as a clean gate — exit as an internal failure.
+        if report.wasCancelled {
+            standardError.write(
+                Data("deadwood: run cancelled before the corpus was complete; no findings reported\n".utf8))
+            throw ExitCode(ExitStatus.internalFailure)
+        }
+
         // Before anything reads a path: baselines, SARIF and the formatted
         // output must all agree on one spelling, and the fingerprint is
         // derived from it.
@@ -285,7 +293,32 @@ struct Analyze: AsyncParsableCommand {
         return caches.appending(path: "deadwood/facts.json")
     }
 
+    /// Exit codes, so CI can tell "the gate found problems" from "the gate broke".
+    ///
+    /// `1` means findings and nothing else: a script that posts a review comment
+    /// on `1` must not also fire on a typo in the config file. `sysexits.h`
+    /// supplies the rest — `64` usage (already used for bad paths), `70` an
+    /// internal failure, `78` a bad configuration.
+    enum ExitStatus {
+        static let findings: Int32 = 1
+        static let internalFailure: Int32 = 70
+        static let badConfiguration: Int32 = 78
+    }
+
+    /// A malformed config is a broken gate, not a finding — exit 78 so CI can
+    /// tell the two apart instead of reporting a typo as analysis output.
     private func loadConfiguration() throws -> Configuration {
+        do {
+            return try loadConfigurationUncaught()
+        } catch let error as ExitCode {
+            throw error
+        } catch {
+            standardError.write(Data("deadwood: \(error)\n".utf8))
+            throw ExitCode(ExitStatus.badConfiguration)
+        }
+    }
+
+    private func loadConfigurationUncaught() throws -> Configuration {
         if let config {
             return try Configuration.load(path: config)
         }

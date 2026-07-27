@@ -68,7 +68,16 @@ public struct Analyzer: Sendable {
         var sources: [(path: String, source: String, fingerprint: String)] = []
         sources.reserveCapacity(files.count)
         for path in files {
-            if Task.isCancelled { break }
+            // Abort, never truncate: deadwood decides "unused" by finding no
+            // reference anywhere, so continuing with a partial corpus turns
+            // live declarations into false positives. Report nothing instead.
+            if Task.isCancelled {
+                report.findings = []
+                report.outOfScope = []
+                report.suppressed = []
+                report.wasCancelled = true
+                return report
+            }
             report.analyzedFileCount += 1
             let data: Data
             do {
