@@ -192,8 +192,12 @@ struct Analyze: AsyncParsableCommand {
         return .default
     }
 
-    /// Deterministic discovery: explicit files pass through; directories are
-    /// walked recursively, skipping build products and VCS internals.
+    /// Deterministic discovery: directories are walked recursively, skipping
+    /// build products and VCS internals. Every path — explicit file argument or
+    /// walked entry — is normalized to absolute, because `Finding.path` feeds
+    /// the fingerprint, and a fingerprint that depends on how the corpus was
+    /// spelled on the command line makes baselines unusable across invocation
+    /// styles.
     private func discoverSwiftFiles(configuration: Configuration) throws -> [String] {
         let skippedComponents: Set<String> = [".build", ".git", "DerivedData", ".swiftpm", "checkouts"]
         var files: Set<String> = []
@@ -207,7 +211,7 @@ struct Analyze: AsyncParsableCommand {
                 throw ValidationError("no such file or directory: \(path)")
             }
             if type != .typeDirectory {
-                files.insert(path)
+                files.insert(URL(fileURLWithPath: path).path)
                 continue
             }
             // Explicit worklist rather than FileManager.enumerator, which is
