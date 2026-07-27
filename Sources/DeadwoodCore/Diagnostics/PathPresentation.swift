@@ -30,7 +30,7 @@ extension AnalysisReport {
             path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path
         }
         func stripInText(_ text: String) -> String {
-            text.replacingOccurrences(of: prefix, with: "")
+            text.replacing(prefix, with: "")
         }
         func relativize(_ finding: Finding) -> Finding {
             Finding(
