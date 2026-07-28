@@ -77,7 +77,7 @@ extension Finding {
     /// FNV-1a 64-bit over the finding's identifying fields — identity hashing,
     /// not security; collisions merely over-baseline one finding.
     public var fingerprint: String {
-        let hash = FNV1a.hash("\(rule.rawValue)|\(path)|\(line)|\(column)|\(message)")
+        let hash = FNV1a.hash("\(rule.rawValue)|\(fingerprintPath ?? path)|\(line)|\(column)|\(message)")
         return String(hash, radix: 16, uppercase: false)
     }
 }

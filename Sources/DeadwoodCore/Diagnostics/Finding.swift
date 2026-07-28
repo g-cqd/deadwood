@@ -8,6 +8,14 @@ public struct Finding: Sendable, Equatable {
     public let message: String
     /// Optional secondary context (retention path, doc citation, fix hint).
     public let note: String?
+    /// The path spelling the fingerprint hashes, when it must differ from the
+    /// one shown.
+    ///
+    /// Set to the repository-relative path so a baseline is portable by
+    /// construction: `--relative-to` then changes only what is *displayed*, and
+    /// forgetting it can no longer silently invalidate a baseline. nil outside a
+    /// repository, where `path` is hashed as before.
+    public let fingerprintPath: String?
 
     public init(
         rule: RuleID,
@@ -16,7 +24,8 @@ public struct Finding: Sendable, Equatable {
         line: Int,
         column: Int,
         message: String,
-        note: String? = nil
+        note: String? = nil,
+        fingerprintPath: String? = nil
     ) {
         self.rule = rule
         self.severity = severity
@@ -25,6 +34,7 @@ public struct Finding: Sendable, Equatable {
         self.column = column
         self.message = message
         self.note = note
+        self.fingerprintPath = fingerprintPath
     }
 }
 
