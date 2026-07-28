@@ -211,6 +211,13 @@ public struct Analyzer: Sendable {
                     sources.map { ($0.path, $0.source) }, uniquingKeysWith: { first, _ in first }),
                 bundlePath: embeddingBundle)
         }
+
+        // Anchor fingerprints to the repository, not to this machine's checkout path
+        // or to whether the caller remembered --relative-to. Display is a separate
+        // concern, handled by PathPresentation.
+        if let root = RepositoryRoot.common(of: sources.map(\.path)) {
+            report = report.fingerprintsAnchored(to: root)
+        }
         return report
     }
 
