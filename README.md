@@ -240,6 +240,51 @@ Directives use the `@` sigil with the `@dw:` or `@deadwood:` namespace:
 Accepted analysis limits are cataloged in
 `Tests/DeadwoodCoreTests/Fixtures/KnownGaps.md`, each pinned by a test.
 
+## Using it as a pull-request gate
+
+The corpus is always **everything**; only the *report* is scoped. Passing a
+pull request's changed files as the input produces a different and wrong
+answer, because these are whole-program analyses — deadwood decides "unused" by finding no reference anywhere, so shrinking the corpus makes live declarations look dead. Measured on a real 16-file pull request: 0 findings whole-corpus, 6 false positives when those files *were* the corpus.
+
+```sh
+git diff --name-only origin/main... -- '*.swift' > changed.txt
+deadwood analyze . --only-from changed.txt --baseline .deadwood-baseline.json --strict
+```
+
+`--only` (repeatable) and `--only-from <file|->` scope the report. Findings
+outside the scope are kept on `outOfScope` and counted in the summary, so a
+scoped run can never be mistaken for a clean one. An empty scope reports
+nothing — a pull request that changed no Swift is not a licence to report the
+whole repository.
+
+### Fingerprints are portable by default
+
+`Finding.fingerprint` — what `--baseline` matches and what SARIF exports as
+`partialFingerprints` — hashes the path **relative to the repository root**,
+found by walking up for `.git`. So a baseline committed to the repository
+matches on any machine, and it does not matter whether the corpus was named as
+a directory or as an explicit file list, or where the checkout lives.
+
+`--relative-to <dir>` additionally changes the paths that are *displayed* (and
+re-anchors fingerprints to that directory, which from the repository root is
+the same anchor). SARIF uris must be repository-relative for code scanning to
+link them, so pass it when uploading SARIF.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | no findings |
+| `1` | findings — and nothing else |
+| `64` | usage error (a path that does not exist) |
+| `70` | internal failure, including a run cancelled before the corpus was complete |
+| `78` | invalid configuration |
+
+`1` means findings *only*, so a step that posts a review comment on `1` will
+not fire on a typo in the config file. A cancelled run reports **no** findings
+and exits `70` rather than looking clean: a whole-program analysis over a
+partial corpus does not report less, it reports wrongly.
+
 ## License
 
 MIT — see `LICENSE`.

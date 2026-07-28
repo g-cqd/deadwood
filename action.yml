@@ -82,6 +82,15 @@ runs:
               sha256sum -c "$NAME.tar.gz.sha256"
             fi
             tar -xzf "$NAME.tar.gz"
+            # Assert the binary is the one that was asked for. A stale runner
+            # cache or a mis-tagged asset would otherwise run a different tool
+            # than the pin says, and fingerprints move between versions — the
+            # baseline would appear to "stop working" for no visible reason.
+            ACTUAL="$("$PWD/$NAME/deadwood" --version 2>/dev/null || true)"
+            if [ "$ACTUAL" != "$VERSION" ]; then
+              echo "::error::deadwood binary reports '$ACTUAL' but v$VERSION was requested"
+              exit 1
+            fi
             echo "bin=$PWD/$NAME/deadwood" >> "$GITHUB_OUTPUT"
             rm -f "$NAME.tar.gz" "$NAME.tar.gz.sha256"
             exit 0
