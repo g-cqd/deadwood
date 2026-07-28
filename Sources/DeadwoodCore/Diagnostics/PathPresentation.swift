@@ -40,7 +40,11 @@ extension AnalysisReport {
                 line: finding.line,
                 column: finding.column,
                 message: stripInText(finding.message),
-                note: finding.note.map(stripInText)
+                note: finding.note.map(stripInText),
+                // An explicit --relative-to is an explicit anchor request, so it sets
+                // the fingerprint spelling too; from the repository root it matches the
+                // automatic anchor exactly.
+                fingerprintPath: strip(finding.path)
             )
         }
 
@@ -52,6 +56,34 @@ extension AnalysisReport {
         }
         copy.degradedFiles = degradedFiles.map {
             DegradedFile(path: strip($0.path), detail: $0.detail)
+        }
+        return copy
+    }
+}
+
+extension AnalysisReport {
+    /// Rewrites every finding's `fingerprintPath` to be relative to `root`.
+    ///
+    /// Applied once, in the analyzer, before anything reads a fingerprint — so
+    /// baselines, SARIF and the report agree, and agree across machines.
+    func fingerprintsAnchored(to root: String) -> AnalysisReport {
+        func anchor(_ finding: Finding) -> Finding {
+            Finding(
+                rule: finding.rule,
+                severity: finding.severity,
+                path: finding.path,
+                line: finding.line,
+                column: finding.column,
+                message: finding.message,
+                note: finding.note,
+                fingerprintPath: RepositoryRoot.relativize(finding.path, to: root)
+            )
+        }
+        var copy = self
+        copy.findings = findings.map(anchor)
+        copy.outOfScope = outOfScope.map(anchor)
+        copy.suppressed = suppressed.map {
+            SuppressedFinding(finding: anchor($0.finding), reason: $0.reason)
         }
         return copy
     }
