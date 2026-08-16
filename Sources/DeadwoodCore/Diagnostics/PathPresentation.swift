@@ -44,7 +44,11 @@ extension AnalysisReport {
                 // An explicit --relative-to is an explicit anchor request, so it sets
                 // the fingerprint spelling too; from the repository root it matches the
                 // automatic anchor exactly.
-                fingerprintPath: strip(finding.path)
+                // When strip is a no-op — a root spelled through a symlink, a wrong
+                // directory — keep the repo-anchored fingerprint rather than
+                // reverting to the absolute path the anchoring exists to remove.
+                fingerprintPath: strip(finding.path) != finding.path
+                    ? strip(finding.path) : finding.fingerprintPath
             )
         }
 

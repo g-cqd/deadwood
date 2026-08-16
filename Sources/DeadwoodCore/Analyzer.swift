@@ -121,6 +121,21 @@ public struct Analyzer: Sendable {
             report.cacheMisses = outcomes.count - report.cacheHits
         }
 
+        // Cancellation may have landed *inside* the parallel phase: SCCP,
+        // liveness and frontier expansion cooperate by breaking out of their
+        // fixpoint loops, so their outputs are truncated, not merely late.
+        // Truncated artifacts fabricate findings (under-converged executability
+        // reads live code as dead) and, worse, would be persisted below keyed by
+        // the file's *content* fingerprint — replayed as cache hits on every
+        // later clean run. Abort before either can happen.
+        if Task.isCancelled {
+            report.findings = []
+            report.outOfScope = []
+            report.suppressed = []
+            report.wasCancelled = true
+            return report
+        }
+
         // Persist a cache rebuilt from ONLY this run's files: absent files
         // are pruned, and the cache stays shaped to the project.
         if let cacheURL {
@@ -210,6 +225,17 @@ public struct Analyzer: Sendable {
                 sourcesByPath: Dictionary(
                     sources.map { ($0.path, $0.source) }, uniquingKeysWith: { first, _ in first }),
                 bundlePath: embeddingBundle)
+        }
+
+        // Same guard after detection: reachability drains frontiers that
+        // truncate on cancellation, and a partial reachable set reports every
+        // node beyond the truncation as unused.
+        if Task.isCancelled {
+            report.findings = []
+            report.outOfScope = []
+            report.suppressed = []
+            report.wasCancelled = true
+            return report
         }
 
         // Anchor fingerprints to the repository, not to this machine's checkout path
