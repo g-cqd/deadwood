@@ -21,7 +21,10 @@
 /// declarations in the reachability graph.
 enum SourcePath {
     /// The absolute, lexically standardized form — matching what the directory
-    /// walk produces.
+    /// walk produces — with symlinks resolved, so a linked spelling and the real
+    /// one are one corpus entry (a symlinked duplicate used to clone-match
+    /// against itself), the reader's "regular file" check sees the target, and
+    /// a scope entry spelled through /tmp matches a corpus under /private/tmp.
     ///
     /// `.standardized` is lexical on purpose: it collapses `.` and `..` without
     /// touching the filesystem, so canonicalizing a 2600-file corpus costs
@@ -30,7 +33,7 @@ enum SourcePath {
     /// to `a/b` even when `link` points elsewhere) — the same trade SwiftPM and
     /// SwiftLint make, and one no `git diff` output can trigger.
     static func canonical(_ path: String) -> String {
-        URL(fileURLWithPath: path).standardized.path
+        URL(fileURLWithPath: path).standardized.resolvingSymlinksInPath().path
     }
 
     /// Canonicalizes every path and drops repeats, preserving first-seen order
