@@ -270,6 +270,16 @@ re-anchors fingerprints to that directory, which from the repository root is
 the same anchor). SARIF uris must be repository-relative for code scanning to
 link them, so pass it when uploading SARIF.
 
+### Scope-file hygiene
+
+Scope lines tolerate CRLF endings and strip git's simple C-quoting, but paths
+with non-ASCII bytes come out of `git diff --name-only` octal-escaped
+(`"So\303\251.swift"`), which no unquoting here decodes. Set
+`git config core.quotepath false` in the CI checkout so `git diff` emits raw
+paths — one line, and every filename matches. When a non-empty scope matches no
+analyzed file, deadwood prints a warning to stderr rather than silently
+reporting nothing.
+
 ### Exit codes
 
 | Code | Meaning |

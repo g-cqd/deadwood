@@ -151,6 +151,26 @@ public enum ReportFormatter {
                 partialFingerprints: ["deadwood/v1": finding.fingerprint]
             )
         }
+        // Degraded files were previously invisible in SARIF — the format the
+        // GitHub action uploads — so unparseable or unreadable code looked
+        // analyzed. A "note"-level result per degraded file keeps them on the
+        // record where the findings live.
+        let degradedResults = report.degradedFiles.map { file in
+            SarifResult(
+                ruleId: "deadwood/degraded-file",
+                level: "note",
+                message: SarifText(text: "file skipped: \(file.detail)"),
+                locations: [
+                    SarifLocation(
+                        physicalLocation: SarifPhysicalLocation(
+                            artifactLocation: SarifArtifactLocation(uri: file.path),
+                            region: SarifRegion(startLine: 1, startColumn: 1)
+                        )
+                    )
+                ],
+                partialFingerprints: [:]
+            )
+        }
         let log = SarifLog(runs: [
             SarifRun(
                 tool: SarifTool(
@@ -166,7 +186,7 @@ public enum ReportFormatter {
                             )
                         }
                     )),
-                results: results
+                results: results + degradedResults
             )
         ])
         let encoder = JSONEncoder()

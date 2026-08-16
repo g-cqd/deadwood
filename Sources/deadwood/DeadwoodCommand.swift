@@ -177,6 +177,18 @@ struct Analyze: AsyncParsableCommand {
 
         // A cancelled run analysed a partial corpus and therefore reports nothing.
         // That must never read as a clean gate — exit as an internal failure.
+        // A corpus where EVERY file degraded analyzed nothing; exiting 0 would be
+        // a green gate over unscanned code. Partial degradation stays a warning —
+        // single unreadable files are reported per-file — but total failure is a
+        // broken gate.
+        if report.analyzedFileCount > 0, report.degradedFiles.count >= report.analyzedFileCount {
+            standardError.write(
+                Data(
+                    "deadwood: every file in the corpus was skipped (unreadable, non-UTF8, or over the size cap); nothing was analyzed\n"
+                        .utf8))
+            throw ExitCode(ExitStatus.internalFailure)
+        }
+
         if report.wasCancelled {
             standardError.write(
                 Data("deadwood: run cancelled before the corpus was complete; no findings reported\n".utf8))
@@ -316,7 +328,10 @@ struct Analyze: AsyncParsableCommand {
         if let cachePath { return URL(fileURLWithPath: cachePath) }
         guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
         else { return nil }
-        return caches.appending(path: "deadwood/facts.json")
+        // Namespaced per workspace: one global file meant analyzing repo B
+        // evicted repo A's entries, so alternating projects never hit.
+        let key = RepositoryRoot.workspaceKey(from: FileManager.default.currentDirectoryPath)
+        return caches.appending(path: "deadwood/\(key)/facts.json")
     }
 
     /// Exit codes, so CI can tell "the gate found problems" from "the gate broke".
