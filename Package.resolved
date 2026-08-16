@@ -1,13 +1,13 @@
 {
-  "originHash" : "a4f38b6dfbd18b68a26d5b712686cf6c3f354824f415ffd329a060f256fdfd3d",
+  "originHash" : "ea3eff547a51ae27a5a485630f786c28583602c006e3dcd37e4e9b629b6ce06a",
   "pins" : [
     {
       "identity" : "adfoundation",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/ADFoundation.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "062d93ced7c742ab9a05dbc841d508770291edbc"
+        "revision" : "1c18a999192d59127ca5df7f32251c5a165dcf8c",
+        "version" : "0.1.1"
       }
     },
     {
@@ -15,7 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/ADJSON.git",
       "state" : {
-        "revision" : "1d7fb25c0175f6ff42676dbdd1f104ad29ed8348"
+        "revision" : "644b638147759451f90d558b7d8aefcc5426f749",
+        "version" : "0.1.1"
       }
     },
     {
@@ -67,8 +68,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-system.git",
       "state" : {
-        "revision" : "50688cacbd41d547e9eb9f7a213542340b7c442b",
-        "version" : "1.7.5"
+        "revision" : "869129b7bf4ecc57b97d0193ad29690ca2134750",
+        "version" : "1.8.1"
       }
     }
   ],

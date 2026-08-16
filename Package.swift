@@ -44,10 +44,11 @@ let package = Package(
         // REQUIRES the copy-on-write fix in this commit ("perf: stop
         // JSONWriter(adopting:) COW-copying the streamed buffer"); the earlier
         // pin has an O(n^2) generic-bridge encode bug.
-        .package(
-            url: "https://github.com/g-cqd/ADJSON.git",
-            revision: "1d7fb25c0175f6ff42676dbdd1f104ad29ed8348"
-        ),
+        // from v0.1.0: the first tagged release, which includes the COW fix
+        // above AND the FoundationEssentials migration — without it, ADJSON's
+        // unconditional `import Foundation` re-links ~47 MiB of ICU into the
+        // Linux binary that the rest of this package works to avoid.
+        .package(url: "https://github.com/g-cqd/ADJSON.git", from: "0.1.1"),
     ],
     targets: [
         .target(
