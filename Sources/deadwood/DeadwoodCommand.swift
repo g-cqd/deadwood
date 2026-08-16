@@ -142,6 +142,16 @@ struct Analyze: AsyncParsableCommand {
         let reportScope = try resolveReportScope()
         let files = try discoverSwiftFiles(configuration: configuration)
         guard !files.isEmpty else { throw ValidationError(DeadwoodError.noInputs.description) }
+        // A non-empty scope that intersects zero corpus files is almost always a
+        // misconfiguration (paths relative to the wrong directory, wrong workdir),
+        // and it silently reports nothing. Warn loudly; an *empty* scope stays
+        // silent — "no Swift changed" is legitimate.
+        if let scope = reportScope, !scope.files.isEmpty, !files.contains(where: scope.files.contains) {
+            standardError.write(
+                Data(
+                    "deadwood: warning: --only scope matches no analyzed file — check that scope paths are relative to the right directory\n"
+                        .utf8))
+        }
 
         let indexOptions = IndexStoreOptions(
             enabled: indexStore || indexStorePath != nil || indexStoreBuild,
@@ -158,6 +168,12 @@ struct Analyze: AsyncParsableCommand {
                 embeddingBundle: embeddingBundle,
                 reportScope: reportScope
             )
+
+        // Exclusion scopes the report, never the corpus (see the walker above).
+        if !configuration.exclude.isEmpty {
+            report.findings.removeAll { configuration.isExcluded(path: $0.path) }
+            report.outOfScope.removeAll { configuration.isExcluded(path: $0.path) }
+        }
 
         // A cancelled run analysed a partial corpus and therefore reports nothing.
         // That must never read as a clean gate — exit as an internal failure.
@@ -179,7 +195,7 @@ struct Analyze: AsyncParsableCommand {
         }
 
         if let writeBaseline {
-            try Baseline(findings: report.findings).write(path: writeBaseline)
+            try baselineOrExit { try Baseline(findings: report.findings).write(path: writeBaseline) }
             standardError.write(
                 Data("\(ToolInfo.name): wrote baseline with \(report.findings.count) fingerprint(s)\n".utf8)
             )
@@ -187,7 +203,7 @@ struct Analyze: AsyncParsableCommand {
         }
         var baselinedCount = 0
         if let baseline {
-            let loaded = try Baseline.load(path: baseline)
+            let loaded = try baselineOrExit { try Baseline.load(path: baseline) }
             let (kept, baselined) = loaded.filter(report.findings)
             report.findings = kept
             baselinedCount = baselined.count
@@ -276,9 +292,19 @@ struct Analyze: AsyncParsableCommand {
             // corelibs-only: deadwood builds against FoundationEssentials on Linux.
             // DeadwoodCore's helper is internal, so this target inlines it.
             .map { line -> String in
-                let horizontal: (Character) -> Bool = { $0 == " " || $0 == "\t" }
-                return String(
-                    line.drop(while: horizontal).reversed().drop(while: horizontal).reversed())
+                // \r too: a CRLF scope file (Windows-authored diff, autocrlf) would
+                // otherwise match nothing — every finding lands out of scope and the
+                // gate silently passes.
+                let trimmable: (Character) -> Bool = { $0 == " " || $0 == "\t" || $0 == "\r" }
+                var entry = String(
+                    line.drop(while: trimmable).reversed().drop(while: trimmable).reversed())
+                // git C-quotes paths with special bytes unless core.quotepath=false;
+                // strip the quotes so plain quoted paths keep matching.
+                if entry.hasPrefix("\"") && entry.hasSuffix("\"") && entry.count >= 2 {
+                    entry = String(entry.dropFirst().dropLast())
+                        .replacing("\\\"", with: "\"").replacing("\\\\", with: "\\")
+                }
+                return entry
             }
             .filter { !$0.isEmpty }
     }
@@ -307,6 +333,18 @@ struct Analyze: AsyncParsableCommand {
 
     /// A malformed config is a broken gate, not a finding — exit 78 so CI can
     /// tell the two apart instead of reporting a typo as analysis output.
+
+    /// A missing or corrupt baseline is a broken gate, not a finding — exit 78
+    /// so CI cannot mistake it for "findings found" (exit 1).
+    private func baselineOrExit<T>(_ body: () throws -> T) throws -> T {
+        do {
+            return try body()
+        } catch {
+            standardError.write(Data("deadwood: \(error)\n".utf8))
+            throw ExitCode(ExitStatus.badConfiguration)
+        }
+    }
+
     private func loadConfiguration() throws -> Configuration {
         do {
             return try loadConfigurationUncaught()
@@ -342,7 +380,11 @@ struct Analyze: AsyncParsableCommand {
 
         for path in paths {
             guard
-                let attributes = try? manager.attributesOfItem(atPath: path),
+                // Resolved first: attributesOfItem does not traverse a final symlink,
+                // so a linked Sources/ would classify as a "file", degrade, and
+                // exit 0 over zero analyzed code.
+                let attributes = try? manager.attributesOfItem(
+                    atPath: URL(fileURLWithPath: path).resolvingSymlinksInPath().path),
                 let type = attributes[.type] as? FileAttributeType
             else {
                 throw ValidationError("no such file or directory: \(path)")
@@ -362,10 +404,19 @@ struct Analyze: AsyncParsableCommand {
                     if entry.hasPrefix(".") { continue }
                     if skippedComponents.contains(entry) { continue }
                     let full = directory + "/" + entry
-                    let entryType = (try? manager.attributesOfItem(atPath: full))?[.type] as? FileAttributeType
+                    // Resolve so symlinked subtrees and files are walked too.
+                    let entryType =
+                        (try? manager.attributesOfItem(
+                            atPath: URL(fileURLWithPath: full).resolvingSymlinksInPath().path))?[
+                            .type] as? FileAttributeType
                     if entryType == .typeDirectory {
                         stack.append(full)
-                    } else if full.hasSuffix(".swift"), !configuration.isExcluded(path: full) {
+                    } else if full.hasSuffix(".swift") {
+                        // Excluded files stay IN the corpus: deadwood decides
+                        // "unused" by finding no reference anywhere, so removing
+                        // e.g. Generated/ here removes its *references* and
+                        // reports the handwritten helpers it calls as dead.
+                        // Exclusion is applied to the report, below.
                         files.insert(full)
                     }
                 }
