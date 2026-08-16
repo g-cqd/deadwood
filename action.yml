@@ -13,7 +13,6 @@ inputs:
     description: |
       File of newline-separated paths to scope the report to — typically a pull
       request's changed files. The whole corpus is still analyzed; only the
-      report is narrowed. Pass '-' to read stdin.
     required: false
     default: ""
   baseline:
@@ -120,18 +119,26 @@ runs:
         [ -n "$CONFIG" ] && args+=(--config "$CONFIG")
         [ -n "$CACHE_PATH" ] && args+=(--cache-path "$CACHE_PATH")
         # PATHS is word-split deliberately — it is documented as
-        # whitespace-separated — while every other value stays quoted.
-        read -r -a path_args <<< "$PATHS"
+        # whitespace-separated — while every other value stays quoted. `read`
+        # alone stops at the first newline, silently dropping the rest of a
+        # multiline `paths: |` block (a shrunken corpus fabricates findings);
+        # -d '' reads to EOF, splitting on all of IFS.
+        read -r -d '' -a path_args <<< "$PATHS" || true
         # The exit code is the gate, but the SARIF still has to reach the upload
         # step, so capture rather than abort.
         EXIT=0
-        "$BIN" analyze "${path_args[@]}" --format sarif "${args[@]}" > deadwood.sarif || EXIT=$?
+        # --relative-to .: GitHub code scanning resolves SARIF uris against the
+        # repository root; absolute runner paths would upload but link nowhere.
+        "$BIN" analyze "${path_args[@]}" --format sarif --relative-to . "${args[@]}" > deadwood.sarif || EXIT=$?
+        # A tool failure (64/70/78) leaves an empty file the upload step would
+        # then trip over, masking the real error.
+        [ -s deadwood.sarif ] || rm -f deadwood.sarif
         exit "$EXIT"
 
     - name: Upload SARIF
       # Runs even when the gate failed: a red check is exactly when the findings
       # are worth having in code scanning.
-      if: ${{ always() && inputs.upload-sarif == 'true' }}
+      if: ${{ always() && inputs.upload-sarif == 'true' && hashFiles('deadwood.sarif') != '' }}
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: deadwood.sarif
