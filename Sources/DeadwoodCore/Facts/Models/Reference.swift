@@ -1,6 +1,6 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — Models/Reference.swift.
 
-import ADJSON
+import AemiJSON
 
 // MARK: - ReferenceContext
 

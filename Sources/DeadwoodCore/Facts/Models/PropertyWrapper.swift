@@ -1,7 +1,7 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — Models/PropertyWrapper.swift.
 //  Trimmed: `parse(from:)` and display helpers the engine never calls.
 
-import ADJSON
+import AemiJSON
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials

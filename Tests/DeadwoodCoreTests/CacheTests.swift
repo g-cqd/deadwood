@@ -131,7 +131,7 @@ import Testing
 
     /// Round-trip structural equality on a REAL analyzed payload: persisting
     /// the cache, reloading it, and re-persisting must reproduce byte-identical
-    /// output. That proves the JSON coder (ADJSON) is a lossless, deterministic
+    /// output. That proves the JSON coder (AemiJSON) is a lossless, deterministic
     /// round-trip over real declarations/references/scopes/dataflow — nothing is
     /// dropped, reordered, or reshaped across a decode.
     @Test func realPayloadRoundTripsByteStable() async throws {
