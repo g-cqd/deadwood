@@ -1,7 +1,7 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — Models/Scope.swift.
 //  Trimmed: child-links and ancestor predicates nothing here consults.
 
-import ADJSON
+import AemiJSON
 
 // MARK: - ScopeID
 

@@ -1,22 +1,22 @@
 {
-  "originHash" : "ea3eff547a51ae27a5a485630f786c28583602c006e3dcd37e4e9b629b6ce06a",
+  "originHash" : "7c3e128bd3582506d4f3ee835955a4e6cb4a7a5cf273f46e2c04328a85d3ec39",
   "pins" : [
-    {
-      "identity" : "adfoundation",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/g-cqd/ADFoundation.git",
-      "state" : {
-        "revision" : "1c18a999192d59127ca5df7f32251c5a165dcf8c",
-        "version" : "0.1.1"
-      }
-    },
     {
       "identity" : "adjson",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/ADJSON.git",
       "state" : {
-        "revision" : "644b638147759451f90d558b7d8aefcc5426f749",
-        "version" : "0.1.1"
+        "branch" : "main",
+        "revision" : "f64a0821025769eb7f2f53ddb6e8279ac430dcc9"
+      }
+    },
+    {
+      "identity" : "aemi",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Aemi-Studio/aemi.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "37b4c4c60be95581e6a659aa56175b10c1f93fb0"
       }
     },
     {
@@ -51,7 +51,7 @@
       "location" : "https://github.com/swiftlang/swift-lmdb.git",
       "state" : {
         "branch" : "main",
-        "revision" : "a4bc87807721c1fd114bf35464457e2db0d0e6c0"
+        "revision" : "866bc2563f360a7d84f0e87feb27df23c8958537"
       }
     },
     {

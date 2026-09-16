@@ -1,7 +1,7 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — UnusedCodeDetector/Models/UnusedCodeTypes.swift.
 //  Trimmed: `UnusedCodeReport` (deadwood reports through `AnalysisReport`).
 
-import ADJSON
+import AemiJSON
 
 // MARK: - UnusedReason
 
