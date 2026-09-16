@@ -207,7 +207,7 @@ never go stale relative to rules or configuration.
 
 On by default (default location `~/Library/Caches/deadwood/facts.json`;
 `--cache-path` sets an explicit file; `--no-cache` disables it). The cache
-serializes through [ADJSON](https://github.com/g-cqd/ADJSON)'s reflection-free
+serializes through [AemiJSON](https://github.com/g-cqd/AemiJSON)'s reflection-free
 JSON fast path, and a full-hit re-analysis skips both the re-parse and the
 redundant re-encode+write, so a warm run now beats a cold parse rather than
 losing to it: on SwiftStaticAnalysis/Sources (156 files, release) a warm run
