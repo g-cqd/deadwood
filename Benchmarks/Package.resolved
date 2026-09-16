@@ -2,21 +2,21 @@
   "originHash" : "5c11674497d7d6e792529f9332baa983c8b3a4fced7f248a7ff52279d03ae409",
   "pins" : [
     {
-      "identity" : "adfoundation",
+      "identity" : "aemi",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/g-cqd/ADFoundation.git",
+      "location" : "https://github.com/Aemi-Studio/aemi.git",
       "state" : {
-        "revision" : "1c18a999192d59127ca5df7f32251c5a165dcf8c",
-        "version" : "0.1.1"
+        "branch" : "main",
+        "revision" : "a061a800d70233c453aed41ddbbb0f4727db0776"
       }
     },
     {
-      "identity" : "adjson",
+      "identity" : "aemijson",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/g-cqd/ADJSON.git",
+      "location" : "https://github.com/g-cqd/AemiJSON.git",
       "state" : {
-        "revision" : "34b763ccd4e31f4a0e100efb7dad56b94c1a18bf",
-        "version" : "0.1.1"
+        "branch" : "main",
+        "revision" : "9d7599638acb5d54027e8ca261a92cc46ba9fd11"
       }
     },
     {
@@ -25,7 +25,7 @@
       "location" : "https://github.com/g-cqd/deadwood.git",
       "state" : {
         "branch" : "main",
-        "revision" : "efa891988ae82a3b85bd59f88cb5638d86ba8e27"
+        "revision" : "7020fe69eaca804d40917b6210509d1ae5f25800"
       }
     },
     {
@@ -50,8 +50,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ordo-one/malloc-interposer.git",
       "state" : {
-        "revision" : "8ce418ba70e494577fdc046be8c8ddb5216f16e5",
-        "version" : "1.3.1"
+        "revision" : "9221411ac2e845a93ce65b9ca2ab84f8c1084b0d",
+        "version" : "1.4.0"
       }
     },
     {
@@ -59,8 +59,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ordo-one/package-benchmark",
       "state" : {
-        "revision" : "fe2bb355d50c92662fce5e840d84e8b35dfccf20",
-        "version" : "1.36.1"
+        "revision" : "2f192a6502392735b33466e3c5ae07e95a8065da",
+        "version" : "1.36.2"
       }
     },
     {
@@ -122,8 +122,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-system.git",
       "state" : {
-        "revision" : "50688cacbd41d547e9eb9f7a213542340b7c442b",
-        "version" : "1.7.5"
+        "revision" : "869129b7bf4ecc57b97d0193ad29690ca2134750",
+        "version" : "1.8.1"
       }
     },
     {
