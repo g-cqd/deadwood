@@ -38,17 +38,10 @@ let package = Package(
             url: "https://github.com/swiftlang/indexstore-db.git",
             revision: "cb3b960568f18a3cc018923f5824323b5c4edd0b"
         ),
-        // Fast, reflection-free JSON coders for the facts cache. Pinned by exact
-        // revision (Package.resolved captures the transitive ADFoundation +
-        // swift-collections + swift-system it pulls). The fast-path encoder
-        // REQUIRES the copy-on-write fix in this commit ("perf: stop
-        // JSONWriter(adopting:) COW-copying the streamed buffer"); the earlier
-        // pin has an O(n^2) generic-bridge encode bug.
-        // from v0.1.0: the first tagged release, which includes the COW fix
-        // above AND the FoundationEssentials migration — without it, ADJSON's
-        // unconditional `import Foundation` re-links ~47 MiB of ICU into the
-        // Linux binary that the rest of this package works to avoid.
-        .package(url: "https://github.com/g-cqd/ADJSON.git", from: "0.1.1"),
+        // The published JSON package uses Aemi's kernel and runtime products.
+        // The repository identity remains ADJSON; select its AemiJSON product.
+        // Only the internal facts cache uses this codec; report byte formats stay stable.
+        .package(url: "https://github.com/g-cqd/ADJSON.git", branch: "main"),
     ],
     targets: [
         .target(
@@ -63,7 +56,7 @@ let package = Package(
                     condition: .when(platforms: [.macOS])
                 ),
                 // Fast JSON coders for the facts cache (FactsCache.swift).
-                .product(name: "ADJSON", package: "ADJSON"),
+                .product(name: "AemiJSON", package: "ADJSON"),
                 // HF tokenizer for HFSemanticEmbeddingProvider.swift (macOS only).
             ],
             swiftSettings: strictSwiftSettings

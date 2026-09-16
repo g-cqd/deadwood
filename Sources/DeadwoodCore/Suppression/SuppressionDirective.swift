@@ -1,4 +1,4 @@
-public import ADJSON
+public import AemiJSON
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials
