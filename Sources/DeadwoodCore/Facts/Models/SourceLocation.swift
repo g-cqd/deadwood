@@ -1,6 +1,6 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — Models/SourceLocation.swift.
 
-import ADJSON
+import AemiJSON
 
 // MARK: - SourceLocation
 

@@ -3,7 +3,7 @@
 //  (deadwood's typed failure surface is `DeadwoodError`; parsing itself is
 //  error-tolerant and never throws).
 
-import ADJSON
+import AemiJSON
 
 // MARK: - AnalysisResult
 

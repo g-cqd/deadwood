@@ -322,7 +322,7 @@ struct Analyze: AsyncParsableCommand {
     }
 
     private func cacheURL() -> URL? {
-        // On by default: a warm re-analysis beats a cold parse (ADJSON fast path
+        // On by default: a warm re-analysis beats a cold parse (AemiJSON fast path
         // + persist-skip). `--no-cache` opts out; `--cache-path` picks the file.
         if noCache { return nil }
         if let cachePath { return URL(fileURLWithPath: cachePath) }

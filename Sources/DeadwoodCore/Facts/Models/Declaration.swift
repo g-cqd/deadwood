@@ -3,7 +3,7 @@
 //  `@dw:` table in the Analyzer), Codable conformance, and display helpers
 //  nothing in this tool reads.
 
-import ADJSON
+import AemiJSON
 
 // MARK: - DeclarationKind
 

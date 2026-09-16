@@ -1,10 +1,10 @@
 //  Modeled on arcleak's FactsCache: fail-open per-file cache.
 
-// Fast, reflection-free JSON coders for the cache payload. `ADJSON.JSONEncoder`/
+// Fast, reflection-free JSON coders for the cache payload. `AemiJSON.JSONEncoder`/
 // `.JSONDecoder` are structs, have no `.outputFormatting` OptionSet, and no
-// ADJSON type escapes this file — only the two seam functions below use it — so
+// AemiJSON type escapes this file — only the two seam functions below use it — so
 // a plain (internal) import is enough.
-import ADJSON
+import AemiJSON
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials
@@ -63,26 +63,26 @@ struct FactsCache: Sendable {
     // The single encode/decode seam. Swapping the JSON coder touches only these
     // two functions; `load` and `persist` both route through them.
     fileprivate static func encodePayload(_ payload: Payload) throws -> Data {
-        // ADJSON's single-pass byte writer over the reflection-free
-        // `ADJSONFastEncodable` graph (`@JSONCodable` structs + `FactsFastCoding`
+        // AemiJSON's single-pass byte writer over the reflection-free
+        // `AemiJSONFastEncodable` graph (`@JSONCodable` structs + `FactsFastCoding`
         // leaves). Default `.rfc8259` options — NO `keyOrder = .sorted`, which
-        // would force ADJSON off the streaming writer into a second
+        // would force AemiJSON off the streaming writer into a second
         // compact -> re-parse-tape -> re-emit pass and cripple encode.
         // Determinism (a byte-stable round-trip across decode) instead comes from
         // `Payload.__adjsonEncode` emitting the top-level `entries` map in sorted
         // key order — O(files·log files), not a re-sort of the whole tape. The
         // cache is internal + version-gated, so `2.0`<->`2` and unescaped `/` are
         // harmless: only this tool version ever reads these bytes back.
-        let encoder = ADJSON.JSONEncoder()
+        let encoder = AemiJSON.JSONEncoder()
         return try encoder.encode(payload)
     }
 
     fileprivate static func decodePayload(from data: Data) throws -> Payload {
-        // Byte-level decode: hand ADJSON a contiguous `[UInt8]` (no Foundation
+        // Byte-level decode: hand AemiJSON a contiguous `[UInt8]` (no Foundation
         // `Data` bridging in the parser), and the `@JSONCodable`-generated
         // `_FastDecodeCursor` conformances read each field straight off the tape
         // by statically-known key — no `KeyedDecodingContainer`, no per-key String.
-        let decoder = ADJSON.JSONDecoder()
+        let decoder = AemiJSON.JSONDecoder()
         return try decoder.decode(Payload.self, from: [UInt8](data))
     }
 
@@ -155,7 +155,7 @@ struct FactsCache: Sendable {
     }
 }
 
-// MARK: - Fast ADJSON coding (payload root)
+// MARK: - Fast AemiJSON coding (payload root)
 
 // `CachedFileArtifacts` and the whole nested model graph get their fast
 // `ADJSONFast{Encodable,Decodable}` conformance from `@JSONCodable` (the structs)
@@ -163,10 +163,10 @@ struct FactsCache: Sendable {
 // hand-written here so the root stays nested/`fileprivate` and — crucially — so
 // `Payload` emits the top-level `entries` map in sorted key order: that alone
 // makes the persisted cache byte-stable across a decode -> re-encode WITHOUT
-// paying ADJSON's `.sorted` whole-tape re-emit (it is the only hash-ordered
+// paying AemiJSON's `.sorted` whole-tape re-emit (it is the only hash-ordered
 // container in the payload; every other collection is an array).
 
-extension FactsCache.Entry: ADJSONFastEncodable, ADJSONFastDecodable {
+extension FactsCache.Entry: AemiJSONFastEncodable, AemiJSONFastDecodable {
     func __adjsonEncode(into w: inout _JSONByteWriter) throws {
         w.beginObject()
         w.key("fingerprint")
@@ -184,7 +184,7 @@ extension FactsCache.Entry: ADJSONFastEncodable, ADJSONFastDecodable {
     }
 }
 
-extension FactsCache.Payload: ADJSONFastEncodable, ADJSONFastDecodable {
+extension FactsCache.Payload: AemiJSONFastEncodable, AemiJSONFastDecodable {
     func __adjsonEncode(into w: inout _JSONByteWriter) throws {
         w.beginObject()
         w.key("tool")
