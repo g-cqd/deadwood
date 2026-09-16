@@ -41,7 +41,7 @@ let package = Package(
         // The published JSON package uses Aemi's kernel and runtime products.
         // The repository identity remains ADJSON; select its AemiJSON product.
         // Only the internal facts cache uses this codec; report byte formats stay stable.
-        .package(url: "https://github.com/g-cqd/ADJSON.git", branch: "main"),
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", branch: "main"),
     ],
     targets: [
         .target(
@@ -56,7 +56,7 @@ let package = Package(
                     condition: .when(platforms: [.macOS])
                 ),
                 // Fast JSON coders for the facts cache (FactsCache.swift).
-                .product(name: "AemiJSON", package: "ADJSON"),
+                .product(name: "AemiJSON", package: "AemiJSON"),
                 // HF tokenizer for HFSemanticEmbeddingProvider.swift (macOS only).
             ],
             swiftSettings: strictSwiftSettings
