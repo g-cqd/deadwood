@@ -14,21 +14,30 @@ import Testing
 @testable import DeadwoodCore
 
 @Suite struct FingerprintPortabilityTests {
-    private func makeCheckout(named name: String) throws -> [String] {
+    private func makeCheckout(named name: String) throws -> (root: URL, files: [String]) {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("deadwood-fp-\(name)-\(UUID().uuidString)")
+        var completed = false
+        defer {
+            if !completed { try? FileManager.default.removeItem(at: root) }
+        }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         // A `.git` entry is what marks the anchor; its contents are irrelevant.
         try Data().write(to: root.appendingPathComponent(".git"))
         let file = root.appendingPathComponent("Sample.swift")
         try "private func unusedHelper() {}\nfinal class Widget {}\n".write(to: file, atomically: true, encoding: .utf8)
-        return [file.path]
+        completed = true
+        return (root, [file.path])
     }
 
     @Test("The same code in two checkouts fingerprints identically")
     func portableAcrossCheckouts() async throws {
-        let here = await Analyzer().analyze(files: try makeCheckout(named: "here"))
-        let there = await Analyzer().analyze(files: try makeCheckout(named: "there"))
+        let hereCheckout = try makeCheckout(named: "here")
+        defer { try? FileManager.default.removeItem(at: hereCheckout.root) }
+        let thereCheckout = try makeCheckout(named: "there")
+        defer { try? FileManager.default.removeItem(at: thereCheckout.root) }
+        let here = await Analyzer().analyze(files: hereCheckout.files)
+        let there = await Analyzer().analyze(files: thereCheckout.files)
         #expect(!here.findings.isEmpty)
         #expect(here.findings.map(\.fingerprint) == there.findings.map(\.fingerprint))
         #expect(here.findings[0].path != there.findings[0].path)
@@ -36,7 +45,9 @@ import Testing
 
     @Test("Fingerprints hash the repository-relative path")
     func anchoredToRepositoryRoot() async throws {
-        let report = await Analyzer().analyze(files: try makeCheckout(named: "anchor"))
+        let checkout = try makeCheckout(named: "anchor")
+        defer { try? FileManager.default.removeItem(at: checkout.root) }
+        let report = await Analyzer().analyze(files: checkout.files)
         let finding = try #require(report.findings.first)
         #expect(finding.fingerprintPath == "Sample.swift")
     }

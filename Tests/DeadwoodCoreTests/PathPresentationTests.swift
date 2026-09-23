@@ -47,8 +47,8 @@ import Testing
         let relocated = FileManager.default.temporaryDirectory
             .appending(path: "relocated-\(ProcessInfo.processInfo.processIdentifier)")
         try? FileManager.default.removeItem(at: relocated)
-        try FileManager.default.copyItem(at: Self.fixtureRoot, to: relocated)
         defer { try? FileManager.default.removeItem(at: relocated) }
+        try FileManager.default.copyItem(at: Self.fixtureRoot, to: relocated)
 
         let movedCorpus = corpus.map {
             relocated.appending(path: URL(fileURLWithPath: $0).lastPathComponent).path

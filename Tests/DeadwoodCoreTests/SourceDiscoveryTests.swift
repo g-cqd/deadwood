@@ -14,9 +14,14 @@ import Testing
     private func makeScratch() throws -> (scratch: URL, root: URL) {
         let scratch = FileManager.default.temporaryDirectory.appending(path: "deadwood-walk-\(UUID().uuidString)")
         let root = scratch.appending(path: "root")
+        var completed = false
+        defer {
+            if !completed { try? FileManager.default.removeItem(at: scratch) }
+        }
         try write("A.swift", in: root)
         try write("Sources/B.swift", in: root)
         try write("outside/Shared.swift", in: scratch)
+        completed = true
         return (scratch, root)
     }
 
