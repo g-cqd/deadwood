@@ -88,12 +88,14 @@ public struct Analyzer: Sendable {
                 )
                 continue
             }
-            sources.append(
-                (
-                    path,
-                    String(decoding: data, as: UTF8.self),
-                    FactsCache.fingerprint(of: data, salt: salt)
-                ))
+            // Swift sources are UTF-8. Repairing invalid bytes would analyze
+            // text that is not in the file, and hide the file from the count
+            // of skipped files.
+            guard let source = String(validating: data, as: UTF8.self) else {
+                report.degradedFiles.append(.init(path: path, detail: "not valid UTF-8"))
+                continue
+            }
+            sources.append((path, source, FactsCache.fingerprint(of: data, salt: salt)))
         }
 
         // Parse + collect facts + scan directives per file, in parallel;
