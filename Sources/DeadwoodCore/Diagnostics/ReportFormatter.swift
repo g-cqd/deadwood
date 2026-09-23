@@ -89,6 +89,7 @@ public enum ReportFormatter {
 
     private struct SarifRun: Encodable {
         let tool: SarifTool
+        let invocations: [SarifInvocation]
         /// The absolute URI of ``ArtifactURI/baseID``, which relative uris
         /// resolve against (nil without a root — optionals are omitted).
         let originalUriBaseIds: [String: SarifArtifactLocation]?
@@ -99,6 +100,35 @@ public enum ReportFormatter {
 
     private struct SarifTool: Encodable {
         let driver: SarifDriver
+    }
+
+    /// Whether the run produced a result a consumer may trust. A run that
+    /// analyzed nothing carries an error notification, which SARIF defines as
+    /// a failed run whose results are incomplete (SARIF 2.1.0 §3.20.21).
+    private struct SarifInvocation: Encodable {
+        let executionSuccessful: Bool
+        let toolExecutionNotifications: [SarifNotification]?
+
+        init(_ report: AnalysisReport) {
+            let failure: String? =
+                if report.wasCancelled {
+                    "the run was cancelled before the corpus was complete; no findings reported"
+                } else if report.everyFileSkipped {
+                    "every file in the corpus was skipped (unreadable, non-UTF8, or over the size cap); "
+                        + "nothing was analyzed"
+                } else {
+                    nil
+                }
+            executionSuccessful = failure == nil
+            toolExecutionNotifications = failure.map {
+                [SarifNotification(level: "error", message: SarifText(text: $0))]
+            }
+        }
+    }
+
+    private struct SarifNotification: Encodable {
+        let level: String
+        let message: SarifText
     }
 
     private struct SarifDriver: Encodable {
@@ -215,6 +245,7 @@ public enum ReportFormatter {
                             )
                         }
                     )),
+                invocations: [SarifInvocation(report)],
                 originalUriBaseIds: root.map {
                     [ArtifactURI.baseID: SarifArtifactLocation(uri: ArtifactURI.baseURI(of: $0))]
                 },

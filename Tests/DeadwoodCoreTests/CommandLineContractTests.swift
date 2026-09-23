@@ -13,6 +13,35 @@ import Testing
 
     // MARK: - Exit status
 
+    @Test("A run that skipped every file prints its report, then exits 70")
+    func everyFileSkippedPrintsItsReport() throws {
+        let root = try Workspace.make([:])
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data([0x6C, 0x65, 0x74, 0x20, 0xFF]).write(to: root.appending(path: "Bad.swift"))
+        let run = try BuiltTool.analyze(root.path, relativeTo: root.path, in: root)
+
+        #expect(run.status == 70)
+        let log = try JSONDecoder().decode(SarifLog.self, from: run.standardOutput)
+        #expect(log.results.map(\.ruleId) == ["deadwood/degraded-file"])
+        #expect(log.artifactLocations.map(\.uri) == ["Bad.swift"])
+        let invocation = try #require(log.runs.first?.invocations?.first)
+        #expect(!invocation.executionSuccessful)
+        #expect(invocation.toolExecutionNotifications?.map(\.level) == ["error"])
+    }
+
+    @Test("A run that analyzed its files records a successful invocation")
+    func analyzedRunSucceeds() throws {
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let run = try BuiltTool.analyze(root.path, relativeTo: root.path, in: root)
+
+        #expect(run.status == 0)
+        let log = try JSONDecoder().decode(SarifLog.self, from: run.standardOutput)
+        let invocation = try #require(log.runs.first?.invocations?.first)
+        #expect(invocation.executionSuccessful)
+        #expect(invocation.toolExecutionNotifications == nil)
+    }
+
     /// A function over the dead-branch statement bound skips that pass for the
     /// function, not the file. Counting each such note as a skipped file made a
     /// corpus with as many oversized functions as files exit 70, as if nothing
@@ -289,8 +318,19 @@ enum Workspace {
 struct SarifLog: Decodable {
     struct Run: Decodable {
         let columnKind: String?
+        let invocations: [Invocation]?
         let originalUriBaseIds: [String: ArtifactLocation]?
         let results: [Result]
+    }
+
+    struct Invocation: Decodable {
+        let executionSuccessful: Bool
+        let toolExecutionNotifications: [Notification]?
+    }
+
+    struct Notification: Decodable {
+        let level: String
+        let message: Message
     }
 
     struct Result: Decodable {
