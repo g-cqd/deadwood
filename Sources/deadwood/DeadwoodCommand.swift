@@ -174,22 +174,33 @@ struct Analyze: AsyncParsableCommand {
         }
 
         // A cancelled run analysed a partial corpus and therefore reports nothing.
-        // That must never read as a clean gate — exit as an internal failure.
-        // A corpus where EVERY file degraded analyzed nothing; exiting 0 would be
-        // a green gate over unscanned code. Partial degradation stays a warning —
-        // single unreadable files are reported per-file — but total failure is a
-        // broken gate.
+        // That must never read as a clean gate — exit as an internal failure,
+        // with nothing on stdout.
+        if report.wasCancelled {
+            standardError.write(
+                Data("deadwood: run cancelled before the corpus was complete; no findings reported\n".utf8))
+            throw ExitCode(ExitStatus.internalFailure)
+        }
+
+        // A corpus where EVERY file was skipped analyzed nothing; exiting 0
+        // would be a green gate over unscanned code. Partial degradation stays a
+        // warning — single unreadable files are reported per-file — but total
+        // failure is a broken gate. The report is still printed: it names every
+        // skipped file and why, and its SARIF marks the run failed. So exit 70
+        // with a report means "nothing analyzed", and exit 70 with empty stdout
+        // means the run itself failed.
         if report.everyFileSkipped {
+            if let relativeTo {
+                report = report.relativized(to: relativeTo)
+            }
+            let output = ReportFormatter.format(report, as: format, relativeTo: relativeTo)
+            if !output.isEmpty {
+                print(output)
+            }
             standardError.write(
                 Data(
                     "deadwood: every file in the corpus was skipped (unreadable, non-UTF8, or over the size cap); nothing was analyzed\n"
                         .utf8))
-            throw ExitCode(ExitStatus.internalFailure)
-        }
-
-        if report.wasCancelled {
-            standardError.write(
-                Data("deadwood: run cancelled before the corpus was complete; no findings reported\n".utf8))
             throw ExitCode(ExitStatus.internalFailure)
         }
 
@@ -337,7 +348,9 @@ struct Analyze: AsyncParsableCommand {
     /// `1` means findings and nothing else: a script that posts a review comment
     /// on `1` must not also fire on a typo in the config file. `sysexits.h`
     /// supplies the rest — `64` usage (already used for bad paths), `70` an
-    /// internal failure, `78` a bad configuration.
+    /// internal failure, `78` a bad configuration or baseline. `70` prints the
+    /// report when every file was skipped, and nothing when the run was
+    /// cancelled, so a caller tells the two apart by whether stdout is empty.
     enum ExitStatus {
         static let findings: Int32 = 1
         static let internalFailure: Int32 = 70

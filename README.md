@@ -323,13 +323,22 @@ reporting nothing.
 | `0` | no findings |
 | `1` | findings — and nothing else |
 | `64` | usage error (a path that does not exist) |
-| `70` | internal failure, including a run cancelled before the corpus was complete |
+| `70` | nothing was analyzed: every file was skipped, and the report on stdout says which and why; or the run failed or was cancelled, and stdout is empty |
 | `78` | invalid configuration |
 
 `1` means findings *only*, so a step that posts a review comment on `1` will
 not fire on a typo in the config file. A cancelled run reports **no** findings
 and exits `70` rather than looking clean: a whole-program analysis over a
 partial corpus does not report less, it reports wrongly.
+
+When every file is skipped (unreadable, not UTF-8, or over the 10 MiB cap),
+deadwood still prints the report in the requested format — one
+`deadwood/degraded-file` note per file in SARIF, whose invocation records
+`"executionSuccessful": false` with an error notification — and then exits
+`70`. A file whose analysis was only cut short, such as one function over the
+dead-branch statement bound, does not count as skipped. A caller tells the
+two `70`s apart by standard output: a report there means nothing could be
+analyzed; empty means the run itself failed.
 
 ## License
 
