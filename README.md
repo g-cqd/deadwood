@@ -200,21 +200,23 @@ Every finding's note carries its confidence:
 ## Facts cache
 
 Corpus runs reuse per-file artifacts (facts, directives, dataflow findings)
-through a fail-open cache keyed by content fingerprint (FNV-1a), salted by the
-active dataflow passes, version-gated, and rebuilt from only the current run's
-files (absent files are pruned). Detection always re-runs, so findings can
-never go stale relative to rules or configuration.
+through a fail-open cache. Each entry is keyed by its file content and the full
+configuration; the cache also records the executable's file identity and tool
+version. Rebuilding or replacing the executable starts a cold cache, even if
+the version string stays the same. The cache is rebuilt from the current run's
+files, so absent files are pruned. Detection always re-runs.
 
 On by default (default location `~/Library/Caches/deadwood/<workspace>/facts.json`,
 one file per repository; `--cache-path` sets an explicit file, best kept
 outside the analyzed repository, where writing it would change the working
-tree on every run; `--no-cache` disables it). The cache
-serializes through [AemiJSON](https://github.com/g-cqd/AemiJSON)'s reflection-free
-JSON fast path, and a full-hit re-analysis skips both the re-parse and the
-redundant re-encode+write, so a warm run now beats a cold parse rather than
-losing to it: on SwiftStaticAnalysis/Sources (156 files, release) a warm run
-is ~263 ms against a ~282 ms cold `--no-cache` parse (0.93x). A corrupt or
-mismatched cache behaves as empty.
+tree on every run; `--no-cache` disables it). The cache serializes through
+[AemiJSON](https://github.com/g-cqd/AemiJSON)'s reflection-free JSON path.
+References keep only the fields corpus-wide analysis reads, so repeated file
+paths and unused source positions do not fill the cache. A cache over the
+64 MiB read cap is not written. A full-hit run skips parsing, per-file
+extraction, and the redundant cache write. A mismatched header is a
+silent miss. A corrupt body under a matching header is reported once on
+stderr and replaced after a complete analysis.
 
 ## CLI
 

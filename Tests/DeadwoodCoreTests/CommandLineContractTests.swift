@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 
+@testable import DeadwoodCore
+
 /// What a host sees when it runs the `deadwood` executable: the SARIF on
 /// standard output. GitHub code scanning and diagnostics hosts consume exactly
 /// this, so it is checked on the built executable, not inferred from the
@@ -40,6 +42,69 @@ import Testing
         let invocation = try #require(log.runs.first?.invocations?.first)
         #expect(invocation.executionSuccessful)
         #expect(invocation.toolExecutionNotifications == nil)
+    }
+
+    @Test("`A cache without this build's header is a miss`")
+    func cacheWithoutHeaderDoesNotCrash() throws {
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appending(path: "facts.json")
+        try Data("\"x\"".utf8).write(to: cache)
+
+        let run = try BuiltTool.run(
+            ["analyze", root.path, "--format", "sarif", "--relative-to", root.path, "--cache-path", cache.path],
+            in: root)
+
+        #expect(run.status == 0)
+        _ = try JSONDecoder().decode(SarifLog.self, from: run.standardOutput)
+    }
+
+    @Test("`A cache with a valid header and corrupt body is reported once`")
+    func corruptCurrentCacheIsRewritten() throws {
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appending(path: "facts.json")
+        let arguments = [
+            "analyze", root.path, "--format", "sarif", "--relative-to", root.path, "--cache-path", cache.path,
+        ]
+        let cold = try BuiltTool.run(arguments, in: root)
+        #expect(cold.status == 0)
+        let written = try Data(contentsOf: cache)
+        let headerEnd = try #require(written.firstIndex(of: UInt8(ascii: "\n")))
+        var corrupt = Data(written[...headerEnd])
+        corrupt.append(Data("\"x\"".utf8))
+        try corrupt.write(to: cache)
+
+        let recovered = try BuiltTool.run(arguments, in: root)
+        let warm = try BuiltTool.run(arguments, in: root)
+        #expect(recovered.status == 0)
+        #expect(recovered.standardOutput == cold.standardOutput)
+        #expect(recovered.standardError.components(separatedBy: "ignored the facts cache").count == 2)
+        #expect(!warm.standardError.contains("ignored the facts cache"))
+    }
+
+    @Test("`A copied executable does not reuse another build's cache`")
+    func cacheIsScopedToExecutableIdentity() throws {
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = try #require(BuiltTool.executable)
+        let copy = root.appending(path: "other-deadwood")
+        try FileManager.default.copyItem(at: original, to: copy)
+        let cache = root.appending(path: "facts.json")
+        let arguments = ["analyze", root.path, "--format", "json", "--cache-path", cache.path]
+
+        let first = try BuiltTool.run(arguments, in: root)
+        let second = try BuiltTool.run(arguments, in: root, executable: copy)
+        let third = try BuiltTool.run(arguments, in: root, executable: copy)
+        #expect(first.status == 0)
+        #expect(second.status == 0)
+        #expect(third.status == 0)
+        let firstReport = try JSONDecoder().decode(AnalysisReport.self, from: first.standardOutput)
+        let secondReport = try JSONDecoder().decode(AnalysisReport.self, from: second.standardOutput)
+        let thirdReport = try JSONDecoder().decode(AnalysisReport.self, from: third.standardOutput)
+        #expect(firstReport.cacheMisses == 1)
+        #expect(secondReport.cacheHits == 0)
+        #expect(thirdReport.cacheHits == 1)
     }
 
     /// A function over the dead-branch statement bound skips that pass for the
@@ -207,6 +272,7 @@ enum BuiltTool {
     struct Run {
         let status: Int32
         let standardOutput: Data
+        let standardError: String
     }
 
     /// SwiftPM puts every product of a build in one directory. The test
@@ -239,26 +305,38 @@ enum BuiltTool {
     /// The executable's exit status and standard output. Output goes to a file
     /// rather than a pipe, so a large report cannot fill a pipe buffer and
     /// stall the child while the test waits for it to exit.
-    static func run(_ arguments: [String], in directory: URL) throws -> Run {
+    static func run(_ arguments: [String], in directory: URL, executable override: URL? = nil) throws -> Run {
         let executable = try #require(
-            executable, "no deadwood executable near \(Bundle.module.bundleURL.path); build the package first")
+            override ?? Self.executable,
+            "no deadwood executable near \(Bundle.module.bundleURL.path); build the package first")
         let scratch = FileManager.default.temporaryDirectory.appending(path: "deadwood-run-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: scratch) }
         let outputURL = scratch.appending(path: "stdout")
+        let errorURL = scratch.appending(path: "stderr")
         try Data().write(to: outputURL)
+        try Data().write(to: errorURL)
         let output = try FileHandle(forWritingTo: outputURL)
+        let error = try FileHandle(forWritingTo: errorURL)
+        defer {
+            try? output.close()
+            try? error.close()
+        }
 
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
         process.currentDirectoryURL = directory
         process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
+        process.standardError = error
         try process.run()
         process.waitUntilExit()
         try output.close()
-        return Run(status: process.terminationStatus, standardOutput: try Data(contentsOf: outputURL))
+        try error.close()
+        return Run(
+            status: process.terminationStatus,
+            standardOutput: try Data(contentsOf: outputURL),
+            standardError: try String(contentsOf: errorURL, encoding: .utf8))
     }
 }
 
@@ -267,6 +345,10 @@ enum Workspace {
     /// Writes each `relative path: contents` pair under a fresh directory.
     static func make(_ files: [String: String]) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(path: "deadwood-cli-\(UUID().uuidString)")
+        var completed = false
+        defer {
+            if !completed { try? FileManager.default.removeItem(at: root) }
+        }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         for (path, contents) in files {
             // fileURLWithPath, not appending(path:): the names under test carry
@@ -276,6 +358,7 @@ enum Workspace {
                 at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try contents.write(to: url, atomically: true, encoding: .utf8)
         }
+        completed = true
         return root
     }
 

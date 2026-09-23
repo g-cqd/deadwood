@@ -58,13 +58,15 @@ public struct Analyzer: Sendable {
 
         let deadBranchesEnabled = configuration.isEnabled(.deadBranch)
         let deadStoresEnabled = configuration.isEnabled(.deadStore)
-        // Cached artifacts depend on which CFG passes ran — salt the
-        // fingerprint so a rule toggle can never serve stale dataflow
-        // findings. `utf8=strict` marks caches written since invalid UTF-8
-        // is skipped rather than repaired: a hit is served before the bytes
-        // are validated, so an older cache must not match.
-        let salt = "branches=\(deadBranchesEnabled);stores=\(deadStoresEnabled);utf8=strict"
-        let snapshot = cacheURL.map(FactsCache.load(url:)) ?? FactsCache()
+        // The entire configuration and rule settings participate in the key.
+        // A cache hit precedes UTF-8 validation, so that policy is keyed too.
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let configurationData = try? encoder.encode(configuration)
+        let cacheURL = configurationData == nil ? nil : cacheURL
+        let salt = "utf8=strict;config=\(configurationData.map { FactsCache.fingerprint(of: $0) } ?? "")"
+        let snapshot = cacheURL.map { FactsCache.load(url: $0) } ?? FactsCache()
+        report.cacheLoadFailure = snapshot.loadFailure
 
         // Read, fingerprint, and parse or reuse each file in parallel,
         // bounded; skipped files are reported, never silently dropped. A
@@ -157,16 +159,17 @@ public struct Analyzer: Sendable {
             // Persist-skip guard: on a full-hit run that pruned nothing, the
             // rebuilt cache is byte-identical to what is already on disk (every
             // entry came from the snapshot, unchanged, and the sorted encode is
-            // deterministic), so the re-encode+write is pure cost. Skipping it is
-            // what lets a warm run beat a cold one — the eval measured
-            // warm − encode < cold. A changed or added file is a miss
+            // deterministic), so the re-encode+write is pure cost. A changed or added file is a miss
             // (cacheMisses > 0); a deleted file leaves the snapshot holding more
             // entries than the rebuild — either case still persists (and prunes).
             let unchanged =
-                report.cacheMisses == 0
+                snapshot.loadFailure == nil
+                && report.cacheMisses == 0
                 && freshCache.entries.count == snapshot.entries.count
             if !unchanged {
-                freshCache.persist(url: cacheURL)
+                if let warning = freshCache.persist(url: cacheURL) {
+                    report.notes.append(warning)
+                }
             }
         }
 
