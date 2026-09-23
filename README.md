@@ -320,14 +320,16 @@ reporting nothing.
 
 | Code | Meaning |
 |---|---|
-| `0` | no findings |
-| `1` | findings — and nothing else |
-| `64` | usage error (a path that does not exist) |
+| `0` | the gate passed: no error-severity finding, so warnings alone pass; with `--strict`, no finding at all. Also after `--write-baseline` |
+| `1` | the gate failed on findings: an error-severity finding, or with `--strict` any finding — and nothing else |
+| `64` | usage error: a bad argument, a path that does not exist, an unreadable `--only-from` file |
 | `70` | nothing was analyzed: every file was skipped, and the report on stdout says which and why; or the run failed or was cancelled, and stdout is empty |
-| `78` | invalid configuration |
+| `78` | invalid configuration, or a missing or malformed baseline |
 
 `1` means findings *only*, so a step that posts a review comment on `1` will
-not fire on a typo in the config file. A cancelled run reports **no** findings
+not fire on a typo in the config file. Every rule defaults to warning, so
+findings are always reported, but only an `error` severity or `--strict`
+makes them fail the gate. A cancelled run reports **no** findings
 and exits `70` rather than looking clean: a whole-program analysis over a
 partial corpus does not report less, it reports wrongly.
 
