@@ -382,59 +382,35 @@ struct Analyze: AsyncParsableCommand {
         return .default
     }
 
-    /// Deterministic discovery: directories are walked recursively, skipping
-    /// build products and VCS internals. Every path — explicit file argument or
-    /// walked entry — is normalized to absolute, because `Finding.path` feeds
-    /// the fingerprint, and a fingerprint that depends on how the corpus was
-    /// spelled on the command line makes baselines unusable across invocation
-    /// styles.
+    /// Deterministic discovery: directories are walked by `SourceDiscovery`,
+    /// which skips build products and VCS internals and keeps symlinks from
+    /// looping or leaving the directory. Every path — explicit file argument
+    /// or walked entry — is normalized to absolute, because `Finding.path`
+    /// feeds the fingerprint, and a fingerprint that depends on how the corpus
+    /// was spelled on the command line makes baselines unusable across
+    /// invocation styles.
+    ///
+    /// Excluded files stay IN the corpus: deadwood decides "unused" by finding
+    /// no reference anywhere, so removing e.g. Generated/ here removes its
+    /// *references* and reports the handwritten helpers it calls as dead.
+    /// Exclusion is applied to the report instead.
     private func discoverSwiftFiles(configuration: Configuration) throws -> [String] {
-        let skippedComponents: Set<String> = [".build", ".git", "DerivedData", ".swiftpm", "checkouts"]
         var files: Set<String> = []
-        let manager = FileManager.default
-
         for path in paths {
             guard
                 // Resolved first: attributesOfItem does not traverse a final symlink,
                 // so a linked Sources/ would classify as a "file", degrade, and
                 // exit 0 over zero analyzed code.
-                let attributes = try? manager.attributesOfItem(
+                let attributes = try? FileManager.default.attributesOfItem(
                     atPath: URL(fileURLWithPath: path).resolvingSymlinksInPath().path),
                 let type = attributes[.type] as? FileAttributeType
             else {
                 throw ValidationError("no such file or directory: \(path)")
             }
-            if type != .typeDirectory {
+            if type == .typeDirectory {
+                files.formUnion(SourceDiscovery.swiftFiles(in: path))
+            } else {
                 files.insert(URL(fileURLWithPath: path).path)
-                continue
-            }
-            // Explicit worklist rather than FileManager.enumerator, which is
-            // corelibs-only. Preserves both old behaviours — skipsHiddenFiles and
-            // the skipDescendants prune — and seeds from an absolute path,
-            // because finding paths are part of the output contract.
-            var stack = [URL(fileURLWithPath: path).path]
-            while let directory = stack.popLast() {
-                guard let entries = try? manager.contentsOfDirectory(atPath: directory) else { continue }
-                for entry in entries {
-                    if entry.hasPrefix(".") { continue }
-                    if skippedComponents.contains(entry) { continue }
-                    let full = directory + "/" + entry
-                    // Resolve so symlinked subtrees and files are walked too.
-                    let entryType =
-                        (try? manager.attributesOfItem(
-                            atPath: URL(fileURLWithPath: full).resolvingSymlinksInPath().path))?[
-                            .type] as? FileAttributeType
-                    if entryType == .typeDirectory {
-                        stack.append(full)
-                    } else if full.hasSuffix(".swift") {
-                        // Excluded files stay IN the corpus: deadwood decides
-                        // "unused" by finding no reference anywhere, so removing
-                        // e.g. Generated/ here removes its *references* and
-                        // reports the handwritten helpers it calls as dead.
-                        // Exclusion is applied to the report, below.
-                        files.insert(full)
-                    }
-                }
             }
         }
         return files.sorted()
