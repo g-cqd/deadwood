@@ -270,6 +270,33 @@ re-anchors fingerprints to that directory, which from the repository root is
 the same anchor). SARIF uris must be repository-relative for code scanning to
 link them, so pass it when uploading SARIF.
 
+### SARIF locations
+
+Every `artifactLocation.uri` in `--format sarif` is an RFC 3986 URI
+reference, in one of two forms, the convention arcleak and dolly share:
+
+- **Relative**, when `--relative-to <dir>` is given, the file lies inside
+  `<dir>`, and its path below `<dir>` is made only of `A–Z a–z 0–9`,
+  `- . _ ~ ! $ & ' ( ) * + , = @` and `/`: the uri is that path, unescaped
+  (`Sources/App/Box.swift`), with `"uriBaseId": "SRCROOT"`. The run's
+  `originalUriBaseIds.SRCROOT.uri` is `<dir>` as a `file://` URI ending in `/`.
+- **Absolute** otherwise: `file://` and the absolute path, every other byte
+  percent-encoded as UTF-8 (`file:///Users/me/My%20Repo/Sources/Box%231.swift`),
+  with no `uriBaseId`. Without `--relative-to`, every location takes this form.
+
+Degraded-file notes follow the same rules. Paths are canonical — absolute,
+symlinks resolved, and on macOS without `/private` (`/var/folders/…`,
+`/tmp/…`) — whichever spelling of `<dir>` or of the analyzed paths the command
+line used: through a symlink, or with `/private`.
+
+A relative uri is never percent-encoded, so a reader that takes it as a plain
+path still finds the file. A path that would need escapes — a space, a `#`,
+any non-ASCII letter — is written as an absolute `file://` URI instead, which
+every reader decodes. Those uris name the checkout, so they are the one part
+of a `--relative-to` report that depends on where the repository lives;
+GitHub code scanning converts absolute uris under the checkout directory to
+relative ones.
+
 ### Scope-file hygiene
 
 Scope lines tolerate CRLF endings and strip git's simple C-quoting, but paths
