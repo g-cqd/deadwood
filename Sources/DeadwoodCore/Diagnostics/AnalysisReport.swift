@@ -7,8 +7,10 @@ public struct AnalysisReport: Sendable, Codable {
     /// ``ReportScope``. Empty when no scope was set. Kept rather than dropped
     /// so a scoped run never looks like a clean one.
     public var outOfScope: [Finding] = []
-    /// Files that failed to read or parse cleanly (analysis continued on the error-tolerant tree
-    /// or skipped the file; either way the run is marked degraded, never silently complete).
+    /// Files that failed to read, or whose analysis was cut short (a function
+    /// over the dead-branch statement bound); either way the run is marked
+    /// degraded, never silently complete. ``DegradedFile/skipped`` tells the
+    /// two apart.
     public var degradedFiles: [DegradedFile]
     public var analyzedFileCount: Int
     /// Facts served from the incremental cache vs freshly parsed (0/0 when no
@@ -42,6 +44,14 @@ public struct AnalysisReport: Sendable, Codable {
 
     public var maxSeverity: Severity? { findings.map(\.severity).max() }
 
+    /// Set when every file the run was given was skipped — unreadable, not
+    /// UTF-8, or over the size cap — so it analyzed nothing. A file whose
+    /// analysis was only cut short does not count.
+    public var everyFileSkipped: Bool {
+        analyzedFileCount > 0
+            && Set(degradedFiles.lazy.filter(\.skipped).map(\.path)).count >= analyzedFileCount
+    }
+
     public struct SuppressedFinding: Sendable, Codable {
         public let finding: Finding
         /// The reason text from `-- reason`, if the author gave one.
@@ -56,10 +66,14 @@ public struct AnalysisReport: Sendable, Codable {
     public struct DegradedFile: Sendable, Codable {
         public let path: String
         public let detail: String
+        /// Whether the whole file went unanalyzed; false when only part of its
+        /// analysis was skipped, such as one function over the statement bound.
+        public let skipped: Bool
 
-        public init(path: String, detail: String) {
+        public init(path: String, detail: String, skipped: Bool = true) {
             self.path = path
             self.detail = detail
+            self.skipped = skipped
         }
     }
 }

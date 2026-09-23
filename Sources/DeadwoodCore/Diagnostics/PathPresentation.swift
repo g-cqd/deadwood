@@ -59,7 +59,7 @@ extension AnalysisReport {
             SuppressedFinding(finding: relativize($0.finding), reason: $0.reason)
         }
         copy.degradedFiles = degradedFiles.map {
-            DegradedFile(path: strip($0.path), detail: stripInText($0.detail))
+            DegradedFile(path: strip($0.path), detail: stripInText($0.detail), skipped: $0.skipped)
         }
         return copy
     }

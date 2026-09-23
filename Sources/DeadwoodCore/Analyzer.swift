@@ -189,10 +189,11 @@ public struct Analyzer: Sendable {
         unused.append(contentsOf: perFile.flatMap(\.deadBranches))
 
         // Surface per-file degraded-analysis notes (e.g. over-bound
-        // functions the dead-branch pass skipped).
+        // functions the dead-branch pass skipped): the rest of the file was
+        // analyzed, so none of them marks the file skipped.
         for artifacts in perFile {
             for note in artifacts.degraded {
-                report.degradedFiles.append(.init(path: artifacts.path, detail: note))
+                report.degradedFiles.append(.init(path: artifacts.path, detail: note, skipped: false))
             }
         }
 
@@ -524,7 +525,7 @@ public struct Analyzer: Sendable {
         var report = AnalysisReport()
         report.analyzedFileCount = 1
         for note in artifacts.degraded {
-            report.degradedFiles.append(.init(path: path, detail: note))
+            report.degradedFiles.append(.init(path: path, detail: note, skipped: false))
         }
         let table = SuppressionTable(directives: artifacts.directives)
         for finding in findings {
