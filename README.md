@@ -205,8 +205,10 @@ active dataflow passes, version-gated, and rebuilt from only the current run's
 files (absent files are pruned). Detection always re-runs, so findings can
 never go stale relative to rules or configuration.
 
-On by default (default location `~/Library/Caches/deadwood/facts.json`;
-`--cache-path` sets an explicit file; `--no-cache` disables it). The cache
+On by default (default location `~/Library/Caches/deadwood/<workspace>/facts.json`,
+one file per repository; `--cache-path` sets an explicit file, best kept
+outside the analyzed repository, where writing it would change the working
+tree on every run; `--no-cache` disables it). The cache
 serializes through [AemiJSON](https://github.com/g-cqd/AemiJSON)'s reflection-free
 JSON fast path, and a full-hit re-analysis skips both the re-parse and the
 redundant re-encode+write, so a warm run now beats a cold parse rather than
