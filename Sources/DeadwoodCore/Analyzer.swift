@@ -54,74 +54,79 @@ public struct Analyzer: Sendable {
         let files = SourcePath.canonicalized(files)
 
         var report = AnalysisReport()
+        report.analyzedFileCount = files.count
 
         let deadBranchesEnabled = configuration.isEnabled(.deadBranch)
         let deadStoresEnabled = configuration.isEnabled(.deadStore)
         // Cached artifacts depend on which CFG passes ran — salt the
         // fingerprint so a rule toggle can never serve stale dataflow
-        // findings.
-        let salt = "branches=\(deadBranchesEnabled);stores=\(deadStoresEnabled)"
+        // findings. `utf8=strict` marks caches written since invalid UTF-8
+        // is skipped rather than repaired: a hit is served before the bytes
+        // are validated, so an older cache must not match.
+        let salt = "branches=\(deadBranchesEnabled);stores=\(deadStoresEnabled);utf8=strict"
         let snapshot = cacheURL.map(FactsCache.load(url:)) ?? FactsCache()
 
-        // Read every file up front (bounded); degraded files are reported,
-        // never silently skipped.
-        var sources: [(path: String, source: String, fingerprint: String)] = []
-        sources.reserveCapacity(files.count)
-        for path in files {
+        // Read, fingerprint, and parse or reuse each file in parallel,
+        // bounded; skipped files are reported, never silently dropped. A
+        // cache hit never decodes the file's text: its artifacts are what the
+        // parse would produce.
+        let engineConfig = engineConfiguration(mode: .reachability)
+        let concurrency = ParallelMode.safe.concurrencyConfiguration
+        let outcomes = await ParallelProcessor.map(
+            files,
+            maxConcurrency: concurrency.maxConcurrentFiles
+        ) { path -> FileOutcome in
             // Abort, never truncate: deadwood decides "unused" by finding no
             // reference anywhere, so continuing with a partial corpus turns
-            // live declarations into false positives. Report nothing instead.
-            if Task.isCancelled {
-                report.findings = []
-                report.outOfScope = []
-                report.suppressed = []
-                report.wasCancelled = true
-                return report
-            }
-            report.analyzedFileCount += 1
+            // live declarations into false positives. The check below the
+            // parallel phase reports nothing instead.
+            if Task.isCancelled { return .cancelled }
             let data: Data
             do {
                 data = try BoundedFileReader.read(path: path, cap: Self.sourceByteCap)
             } catch {
-                report.degradedFiles.append(
-                    .init(path: path, detail: "read failed or exceeds size cap: \(error)")
-                )
-                continue
+                return .skipped(.init(path: path, detail: "read failed or exceeds size cap: \(error)"))
+            }
+            let fingerprint = FactsCache.fingerprint(of: data, salt: salt)
+            if let cached = snapshot.artifacts(for: path, fingerprint: fingerprint) {
+                return .analyzed(FileArtifacts(path: path, cached: cached), fingerprint: fingerprint, cacheHit: true)
             }
             // Swift sources are UTF-8. Repairing invalid bytes would analyze
             // text that is not in the file, and hide the file from the count
             // of skipped files.
             guard let source = String(validating: data, as: UTF8.self) else {
-                report.degradedFiles.append(.init(path: path, detail: "not valid UTF-8"))
-                continue
-            }
-            sources.append((path, source, FactsCache.fingerprint(of: data, salt: salt)))
-        }
-
-        // Parse + collect facts + scan directives per file, in parallel;
-        // fingerprint-matched files come from the cache snapshot instead.
-        let engineConfig = engineConfiguration(mode: .reachability)
-        let concurrency = ParallelMode.safe.concurrencyConfiguration
-        let outcomes = await ParallelProcessor.map(
-            sources,
-            maxConcurrency: concurrency.maxConcurrentFiles
-        ) { entry -> (artifacts: FileArtifacts, cacheHit: Bool) in
-            if let cached = snapshot.artifacts(for: entry.path, fingerprint: entry.fingerprint) {
-                return (FileArtifacts(path: entry.path, cached: cached), true)
+                return .skipped(.init(path: path, detail: "not valid UTF-8"))
             }
             let artifacts = Self.collectArtifacts(
-                path: entry.path,
-                source: entry.source,
+                path: path,
+                source: source,
                 deadBranchesEnabled: deadBranchesEnabled,
                 deadStoresEnabled: deadStoresEnabled
             )
-            return (artifacts, false)
+            return .analyzed(artifacts, fingerprint: fingerprint, cacheHit: false)
         }
-        let perFile = outcomes.map(\.artifacts)
+
+        var perFile: [FileArtifacts] = []
+        var fingerprints: [String] = []
+        var cacheHits = 0
+        var observedCancellation = false
+        for outcome in outcomes {
+            switch outcome {
+            case .analyzed(let artifacts, let fingerprint, let cacheHit):
+                perFile.append(artifacts)
+                fingerprints.append(fingerprint)
+                if cacheHit { cacheHits += 1 }
+            case .skipped(let file):
+                report.degradedFiles.append(file)
+            case .cancelled:
+                observedCancellation = true
+            }
+        }
         if cacheURL != nil {
-            report.cacheHits = outcomes.count(where: \.cacheHit)
-            report.cacheMisses = outcomes.count - report.cacheHits
+            report.cacheHits = cacheHits
+            report.cacheMisses = perFile.count - cacheHits
         }
+        let analyzedPaths = perFile.map(\.path)
 
         // Cancellation may have landed *inside* the parallel phase: SCCP,
         // liveness and frontier expansion cooperate by breaking out of their
@@ -130,7 +135,7 @@ public struct Analyzer: Sendable {
         // reads live code as dead) and, worse, would be persisted below keyed by
         // the file's *content* fingerprint — replayed as cache hits on every
         // later clean run. Abort before either can happen.
-        if Task.isCancelled {
+        if Task.isCancelled || observedCancellation {
             report.findings = []
             report.outOfScope = []
             report.suppressed = []
@@ -142,11 +147,11 @@ public struct Analyzer: Sendable {
         // are pruned, and the cache stays shaped to the project.
         if let cacheURL {
             var freshCache = FactsCache()
-            for (source, outcome) in zip(sources, outcomes) {
+            for (artifacts, fingerprint) in zip(perFile, fingerprints) {
                 freshCache.update(
-                    path: source.path,
-                    fingerprint: source.fingerprint,
-                    artifacts: CachedFileArtifacts(outcome.artifacts)
+                    path: artifacts.path,
+                    fingerprint: fingerprint,
+                    artifacts: CachedFileArtifacts(artifacts)
                 )
             }
             // Persist-skip guard: on a full-hit run that pruned nothing, the
@@ -166,7 +171,7 @@ public struct Analyzer: Sendable {
         }
 
         // Aggregate the corpus and run detection.
-        let result = StaticAnalyzer.aggregate(perFile.map(\.facts), files: sources.map(\.path))
+        let result = StaticAnalyzer.aggregate(perFile.map(\.facts), files: analyzedPaths)
         let context = CorpusContext(result: result)
         let detector = UnusedCodeDetector(configuration: engineConfig)
 
@@ -177,7 +182,7 @@ public struct Analyzer: Sendable {
             result: result,
             context: context,
             engineConfig: engineConfig,
-            files: sources.map(\.path),
+            files: analyzedPaths,
             detector: detector,
             indexStore: indexStore
         )
@@ -225,8 +230,7 @@ public struct Analyzer: Sendable {
         if embeddingConfidence {
             report = await annotateEmbeddingConfidence(
                 report, unused: unused,
-                sourcesByPath: Dictionary(
-                    sources.map { ($0.path, $0.source) }, uniquingKeysWith: { first, _ in first }),
+                sourcesByPath: Self.sources(of: report.findings),
                 bundlePath: embeddingBundle)
         }
 
@@ -244,7 +248,7 @@ public struct Analyzer: Sendable {
         // Anchor fingerprints to the repository, not to this machine's checkout path
         // or to whether the caller remembered --relative-to. Display is a separate
         // concern, handled by PathPresentation.
-        if let root = RepositoryRoot.common(of: sources.map(\.path)) {
+        if let root = RepositoryRoot.common(of: analyzedPaths) {
             report = report.fingerprintsAnchored(to: root)
         }
         return report
@@ -542,6 +546,32 @@ public struct Analyzer: Sendable {
     }
 
     // MARK: - Shared plumbing
+
+    /// One file's result from the parallel read-and-parse phase.
+    private enum FileOutcome: Sendable {
+        /// The file's artifacts, from the cache or a fresh parse, and the
+        /// content fingerprint they are cached under.
+        case analyzed(FileArtifacts, fingerprint: String, cacheHit: Bool)
+        /// The file could not be analyzed: unreadable, over the size cap, or
+        /// not UTF-8.
+        case skipped(AnalysisReport.DegradedFile)
+        /// Cancellation was observed before the file was read.
+        case cancelled
+    }
+
+    /// The text of each file a finding lies in, read again for the opt-in
+    /// embedding pass rather than held for the whole run. A file that can no
+    /// longer be read is left out, and its findings go unscored.
+    private static func sources(of findings: [Finding]) -> [String: String] {
+        var sources: [String: String] = [:]
+        for path in Set(findings.map(\.path)) {
+            guard let data = try? BoundedFileReader.read(path: path, cap: sourceByteCap),
+                let source = String(validating: data, as: UTF8.self)
+            else { continue }
+            sources[path] = source
+        }
+        return sources
+    }
 
     /// Everything derived from one file in a single parse: facts for the
     /// corpus, the suppression directives, per-function dead branches, and

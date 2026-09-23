@@ -129,6 +129,31 @@ import Testing
         #expect(rerun.cacheMisses == 2)
     }
 
+    /// A cache hit is served before the file's bytes are validated as UTF-8.
+    /// Builds that repaired invalid UTF-8 cached such files; their entries sit
+    /// under the fingerprint salt of that time, so they must never match now.
+    @Test func cacheFromBeforeUTF8ValidationCannotServeAnInvalidFile() async throws {
+        let (dir, cache, files) = try makeWorkspace()
+        _ = await Analyzer().analyze(files: files, cacheURL: cache)
+
+        let bad = dir.appending(path: "Bad.swift")
+        let bytes = Data(Array("func broken() { _ = \"".utf8) + [0xFF] + Array("\" }\n".utf8))
+        try bytes.write(to: bad)
+        // What such a build cached for the file: artifacts under the fingerprint
+        // it computed, salted as it salted them.
+        var stale = FactsCache.load(url: cache)
+        let artifacts = try #require(stale.entries[SourcePath.canonical(files[0])]?.artifacts)
+        stale.update(
+            path: SourcePath.canonical(bad.path),
+            fingerprint: FactsCache.fingerprint(of: bytes, salt: "branches=true;stores=false"),
+            artifacts: artifacts)
+        stale.persist(url: cache)
+
+        let report = await Analyzer().analyze(files: [bad.path], cacheURL: cache)
+        #expect(report.cacheHits == 0)
+        #expect(report.degradedFiles.map(\.detail) == ["not valid UTF-8"])
+    }
+
     /// Round-trip structural equality on a REAL analyzed payload: persisting
     /// the cache, reloading it, and re-persisting must reproduce byte-identical
     /// output. That proves the JSON coder (AemiJSON) is a lossless, deterministic
