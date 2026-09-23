@@ -62,13 +62,6 @@ struct Analyze: AsyncParsableCommand {
     @Option(name: .long, help: "Write the current findings as a new baseline, then exit 0.")
     var writeBaseline: String?
 
-    @Flag(
-        name: .long,
-        help:
-            "Incremental facts cache (default location: ~/Library/Caches/deadwood/facts.json). ON by default — a warm re-analysis beats a cold parse — so this flag is a redundant explicit opt-in; use --no-cache to disable."
-    )
-    var cache = false
-
     @Option(
         name: .long,
         help: ArgumentHelp(
@@ -97,7 +90,7 @@ struct Analyze: AsyncParsableCommand {
     @Option(name: .long, help: "Facts-cache file (default location otherwise; --no-cache still disables).")
     var cachePath: String?
 
-    @Flag(name: .long, help: "Disable the facts cache (on by default; overrides --cache and --cache-path).")
+    @Flag(name: .long, help: "Disable the facts cache (on by default; overrides --cache-path).")
     var noCache = false
 
     @Flag(
