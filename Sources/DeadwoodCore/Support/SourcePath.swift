@@ -26,12 +26,12 @@ enum SourcePath {
     /// against itself), the reader's "regular file" check sees the target, and
     /// a scope entry spelled through /tmp matches a corpus under /private/tmp.
     ///
-    /// `.standardized` is lexical on purpose: it collapses `.` and `..` without
-    /// touching the filesystem, so canonicalizing a 2600-file corpus costs
-    /// ~8 ms rather than 2600 `realpath` syscalls. The trade is that `..` is
-    /// not resolved through a symlinked directory (`a/link/../b` standardizes
-    /// to `a/b` even when `link` points elsewhere) — the same trade SwiftPM and
-    /// SwiftLint make, and one no `git diff` output can trigger.
+    /// `.standardized` collapses `.` and `..` lexically, before the symlinks
+    /// are resolved, so `..` is not resolved through a symlinked directory
+    /// (`a/link/../b` becomes `a/b` even when `link` points elsewhere) — the
+    /// same trade SwiftPM and SwiftLint make, and one no `git diff` output can
+    /// trigger. Resolving the symlinks then looks every path up on the file
+    /// system.
     static func canonical(_ path: String) -> String {
         URL(fileURLWithPath: path).standardized.resolvingSymlinksInPath().path
     }

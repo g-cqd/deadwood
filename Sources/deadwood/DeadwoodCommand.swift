@@ -87,7 +87,11 @@ struct Analyze: AsyncParsableCommand {
                 + "directory as the uriBaseId SRCROOT. Use `--relative-to .` in CI."))
     var relativeTo: String?
 
-    @Option(name: .long, help: "Facts-cache file (default location otherwise; --no-cache still disables).")
+    @Option(
+        name: .long,
+        help:
+            "Facts-cache file (default: deadwood/<workspace>/facts.json in the user caches directory; --no-cache still disables)."
+    )
     var cachePath: String?
 
     @Flag(name: .long, help: "Disable the facts cache (on by default; overrides --cache-path).")
