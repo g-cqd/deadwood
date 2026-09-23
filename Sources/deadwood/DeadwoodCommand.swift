@@ -182,7 +182,7 @@ struct Analyze: AsyncParsableCommand {
         // a green gate over unscanned code. Partial degradation stays a warning —
         // single unreadable files are reported per-file — but total failure is a
         // broken gate.
-        if report.analyzedFileCount > 0, report.degradedFiles.count >= report.analyzedFileCount {
+        if report.everyFileSkipped {
             standardError.write(
                 Data(
                     "deadwood: every file in the corpus was skipped (unreadable, non-UTF8, or over the size cap); nothing was analyzed\n"
