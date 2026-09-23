@@ -41,7 +41,10 @@ let package = Package(
         // The published JSON package uses Aemi's kernel and runtime products.
         // The repository identity remains ADJSON; select its AemiJSON product.
         // Only the internal facts cache uses this codec; report byte formats stay stable.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", branch: "main"),
+        .package(
+            url: "https://github.com/g-cqd/AemiJSON.git",
+            revision: "efb0a35746e17db0cc519bc8f6fa23887f7105aa"
+        ),
     ],
     targets: [
         .target(
