@@ -13,9 +13,13 @@ import Testing
 @testable import DeadwoodCore
 
 @Suite struct CancellationTests {
-    private func makeWorkspace() throws -> [String] {
+    private func makeWorkspace() throws -> (root: URL, files: [String]) {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("deadwood-cancel-\(UUID().uuidString)")
+        var completed = false
+        defer {
+            if !completed { try? FileManager.default.removeItem(at: root) }
+        }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         var files: [String] = []
         for index in 0..<3 {
@@ -24,13 +28,15 @@ import Testing
                 .write(to: file, atomically: true, encoding: .utf8)
             files.append(file.path)
         }
-        return files
+        completed = true
+        return (root, files)
     }
 
     @Test("A cancelled run reports nothing and says so")
     func cancelledRunReportsNothing() async throws {
-        let files = try makeWorkspace()
-        let task = Task { await Analyzer().analyze(files: files) }
+        let workspace = try makeWorkspace()
+        defer { try? FileManager.default.removeItem(at: workspace.root) }
+        let task = Task { await Analyzer().analyze(files: workspace.files) }
         task.cancel()
         let report = await task.value
         #expect(report.wasCancelled)
@@ -40,8 +46,9 @@ import Testing
 
     @Test("An uncancelled run over the same corpus is unaffected")
     func uncancelledRunIsNormal() async throws {
-        let files = try makeWorkspace()
-        let report = await Analyzer().analyze(files: files)
+        let workspace = try makeWorkspace()
+        defer { try? FileManager.default.removeItem(at: workspace.root) }
+        let report = await Analyzer().analyze(files: workspace.files)
         #expect(!report.wasCancelled)
     }
 }

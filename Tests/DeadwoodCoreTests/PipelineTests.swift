@@ -12,6 +12,7 @@ import Testing
     @Test func unknownConfigRuleFailsClosed() throws {
         let path = FileManager.default.temporaryDirectory
             .appending(path: "deadwood-cfg-\(UUID().uuidString).json").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
         try #"{"rules": {"no-such-rule": {}}, "exclude": []}"#
             .write(toFile: path, atomically: true, encoding: .utf8)
         #expect(throws: DeadwoodError.self) {
@@ -23,6 +24,7 @@ import Testing
         let dir = FileManager.default.temporaryDirectory
             .appending(path: "deadwood-big-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
         let big = dir.appending(path: "Big.swift")
         #expect(FileManager.default.createFile(atPath: big.path, contents: nil))
         let handle = try FileHandle(forWritingTo: big)
@@ -59,11 +61,13 @@ import Testing
     }
 
     @Test func baselineRoundTrips() throws {
+        let rule = try #require(RuleID.allCases.first)
         let finding = Finding(
-            rule: RuleID.allCases.first!, severity: .warning,
+            rule: rule, severity: .warning,
             path: "a.swift", line: 1, column: 1, message: "m")
         let path = FileManager.default.temporaryDirectory
             .appending(path: "deadwood-bl-\(UUID().uuidString).json").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
         try Baseline(findings: [finding]).write(path: path)
         let loaded = try Baseline.load(path: path)
         #expect(loaded.contains(finding))

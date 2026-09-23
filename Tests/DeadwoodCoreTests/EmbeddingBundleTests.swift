@@ -17,6 +17,10 @@
         ) throws -> (root: URL, execDir: URL, overrideDir: URL) {
             let manager = FileManager.default
             let root = manager.temporaryDirectory.appending(path: "dw-discovery-\(UUID().uuidString)")
+            var completed = false
+            defer {
+                if !completed { try? manager.removeItem(at: root) }
+            }
             let execDir = root.appending(path: "bin")
             let overrideDir = root.appending(path: "custom")
             try manager.createDirectory(at: execDir, withIntermediateDirectories: true)
@@ -27,6 +31,7 @@
             if adjacentModel { try plantModel(in: execDir.appending(path: "Models/MiniLM")) }
             if shareModel { try plantModel(in: root.appending(path: "share/deadwood/Models/MiniLM")) }
             if overrideModel { try plantModel(in: overrideDir) }
+            completed = true
             return (root, execDir, overrideDir)
         }
 
@@ -154,6 +159,10 @@
         private static func stageUnusedCorpus() throws -> (dir: URL, file: URL) {
             let dir = FileManager.default.temporaryDirectory
                 .appending(path: "dw-bundle-\(UUID().uuidString)")
+            var completed = false
+            defer {
+                if !completed { try? FileManager.default.removeItem(at: dir) }
+            }
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let file = dir.appending(path: "Sample.swift")
             try """
@@ -162,6 +171,7 @@
             private struct UnusedThree {}
             public func entry() { print("x") }
             """.write(to: file, atomically: true, encoding: .utf8)
+            completed = true
             return (dir, file)
         }
 
