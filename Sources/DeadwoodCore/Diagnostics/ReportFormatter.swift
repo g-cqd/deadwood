@@ -37,7 +37,7 @@ public enum ReportFormatter {
             line += "; \(report.suppressed.count) suppressed"
         }
         if !report.degradedFiles.isEmpty {
-            line += "; \(report.degradedFiles.count) file(s) degraded"
+            line += "; \(Set(report.degradedFiles.map(\.path)).count) file(s) degraded"
         }
         return line
     }
@@ -53,9 +53,15 @@ public enum ReportFormatter {
             lines.append(text)
         }
         for degraded in report.degradedFiles {
-            lines.append("\(degraded.path):1:1: warning: [deadwood] file skipped: \(degraded.detail)")
+            lines.append("\(degraded.path):1:1: warning: [deadwood] \(degradedText(degraded))")
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// What a degraded-file note says: that the file was skipped, or that part
+    /// of its analysis was, and why.
+    private static func degradedText(_ file: AnalysisReport.DegradedFile) -> String {
+        (file.skipped ? "file skipped: " : "analysis degraded: ") + file.detail
     }
 
     private static func json(_ report: AnalysisReport) -> String {
@@ -179,7 +185,7 @@ public enum ReportFormatter {
             SarifResult(
                 ruleId: "deadwood/degraded-file",
                 level: "note",
-                message: SarifText(text: "file skipped: \(file.detail)"),
+                message: SarifText(text: degradedText(file)),
                 locations: [
                     SarifLocation(
                         physicalLocation: SarifPhysicalLocation(

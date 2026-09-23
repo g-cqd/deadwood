@@ -744,6 +744,8 @@ struct DeadBranchPassTests {
         // dead branch is still found.
         #expect(report.degradedFiles.count == 1)
         #expect(report.degradedFiles.first?.detail.contains("megamorph") == true)
+        #expect(report.degradedFiles.first?.skipped == false)
+        #expect(!report.everyFileSkipped)
         #expect(report.findings.map(\.rule) == [.deadBranch])
     }
 }
