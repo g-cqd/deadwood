@@ -20,41 +20,10 @@ struct DependencyEdge: Hashable, Sendable {
     /// Target declaration index.
     let to: Int32
 
-    /// Kind of dependency.
-    let kind: DependencyKind
-
-    init(from: Int32, to: Int32, kind: DependencyKind) {
+    init(from: Int32, to: Int32) {
         self.from = from
         self.to = to
-        self.kind = kind
     }
-}
-
-// MARK: - DependencyKind
-
-/// Kinds of dependencies between declarations.
-enum DependencyKind: String, Sendable {
-    /// Direct function/method call.
-    case call
-
-    /// Type reference (variable type, parameter type, return type).
-    case typeReference
-
-    /// Inheritance or protocol conformance.
-    case inheritance
-
-    /// Property access.
-    case propertyAccess
-
-    /// Generic constraint.
-    case genericConstraint
-
-    /// Key path reference.
-    case keyPath
-
-    /// Protocol requirement kept alive by its protocol, or witness kept
-    /// alive by its requirement.
-    case protocolRequirement
 }
 
 // MARK: - ReachabilityGraph
@@ -69,12 +38,9 @@ actor ReachabilityGraph {
     /// Number of declarations (nodes are `0..<nodeCount`).
     private(set) var nodeCount = 0
 
-    /// Adjacency lists indexed by declaration index.
+    /// Adjacency lists indexed by declaration index; no list repeats a
+    /// target.
     private var adjacency: ContiguousArray<[Int32]> = []
-
-    /// Deduplication set for inserted (from, to) pairs, packed into one
-    /// 64-bit key so batch insert never hashes more than an integer.
-    private var seenEdges: Set<UInt64> = []
 
     /// Root declaration indices (entry points).
     private var roots: Set<Int32> = []
@@ -95,27 +61,45 @@ actor ReachabilityGraph {
     func prepare(declarationCount count: Int, roots rootIndices: Set<Int32> = []) {
         nodeCount = count
         adjacency = ContiguousArray(repeating: [], count: count)
-        seenEdges = []
         roots = rootIndices.filter { $0 >= 0 && Int($0) < count }
+        invalidateCaches()
+    }
+
+    /// Add each source's targets in a single batch (one actor hop). Every
+    /// `targets` list must be free of repeats, as the extractor builds them;
+    /// a target a source already has is not added again. Out-of-range
+    /// endpoints are ignored defensively.
+    /// - Complexity: O(*t*) for *t* targets into sources with no edges yet,
+    ///   plus O(*d*) per target into a source that already has *d*.
+    func addTargets(_ targetsBySource: [(source: Int32, targets: [Int32])]) {
+        guard !targetsBySource.isEmpty else { return }
+
+        for (source, targets) in targetsBySource where source >= 0 && Int(source) < nodeCount {
+            let existing = adjacency[Int(source)]
+            for target in targets where target >= 0 && Int(target) < nodeCount {
+                if existing.isEmpty || !existing.contains(target) {
+                    adjacency[Int(source)].append(target)
+                }
+            }
+        }
+
         invalidateCaches()
     }
 
     /// Add multiple edges in a single batch (one actor hop per worker).
     /// Duplicate (from, to) pairs are dropped; out-of-range endpoints are
     /// ignored defensively.
+    /// - Complexity: O(*d*) per edge, for a source that already has *d*
+    ///   targets.
     func addEdges(_ newEdges: [DependencyEdge]) {
         guard !newEdges.isEmpty else { return }
 
         for edge in newEdges {
             guard edge.from >= 0, Int(edge.from) < nodeCount,
-                edge.to >= 0, Int(edge.to) < nodeCount
+                edge.to >= 0, Int(edge.to) < nodeCount,
+                !adjacency[Int(edge.from)].contains(edge.to)
             else { continue }
-            let key =
-                (UInt64(UInt32(bitPattern: edge.from)) << 32)
-                | UInt64(UInt32(bitPattern: edge.to))
-            if seenEdges.insert(key).inserted {
-                adjacency[Int(edge.from)].append(edge.to)
-            }
+            adjacency[Int(edge.from)].append(edge.to)
         }
 
         invalidateCaches()

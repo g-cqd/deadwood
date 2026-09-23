@@ -30,7 +30,7 @@ struct ReachabilityGraphTests {
     func edgeReachability() async {
         let graph = ReachabilityGraph()
         await graph.prepare(declarationCount: 2, roots: [0])
-        await graph.addEdges([DependencyEdge(from: 0, to: 1, kind: .call)])
+        await graph.addEdges([DependencyEdge(from: 0, to: 1)])
 
         let unreachable = await graph.computeUnreachable()
         #expect(unreachable.isEmpty)
@@ -50,8 +50,8 @@ struct ReachabilityGraphTests {
         let graph = ReachabilityGraph()
         await graph.prepare(declarationCount: 4, roots: [0])
         await graph.addEdges([
-            DependencyEdge(from: 0, to: 1, kind: .call),
-            DependencyEdge(from: 1, to: 2, kind: .call),
+            DependencyEdge(from: 0, to: 1),
+            DependencyEdge(from: 1, to: 2),
         ])
 
         let unreachable = await graph.computeUnreachable()
@@ -63,12 +63,22 @@ struct ReachabilityGraphTests {
         let graph = ReachabilityGraph()
         await graph.prepare(declarationCount: 2, roots: [0])
         await graph.addEdges([
-            DependencyEdge(from: 0, to: 1, kind: .call),
-            DependencyEdge(from: 0, to: 1, kind: .call),
-            DependencyEdge(from: 0, to: 1, kind: .propertyAccess),
+            DependencyEdge(from: 0, to: 1),
+            DependencyEdge(from: 0, to: 1),
         ])
 
         #expect(await graph.computeUnreachable().isEmpty)
+    }
+
+    @Test("Reference targets make each target reachable; out-of-range ones are ignored")
+    func referenceTargets() async {
+        let graph = ReachabilityGraph()
+        await graph.prepare(declarationCount: 5, roots: [0])
+        await graph.addTargets([(source: 0, targets: [1, 2, 9]), (source: 7, targets: [3])])
+        // A later edge into a source that already has targets merges with them.
+        await graph.addEdges([DependencyEdge(from: 0, to: 1), DependencyEdge(from: 2, to: 4)])
+
+        #expect(await graph.computeUnreachable() == [3])
     }
 
     @Test("Out-of-range edges and roots are ignored")
@@ -76,8 +86,8 @@ struct ReachabilityGraphTests {
         let graph = ReachabilityGraph()
         await graph.prepare(declarationCount: 2, roots: [9, -1])
         await graph.addEdges([
-            DependencyEdge(from: 0, to: 9, kind: .call),
-            DependencyEdge(from: -3, to: 1, kind: .call),
+            DependencyEdge(from: 0, to: 9),
+            DependencyEdge(from: -3, to: 1),
         ])
 
         // No roots inside range: everything is unreachable, nothing traps.
@@ -91,7 +101,7 @@ struct ReachabilityGraphTests {
 
         #expect(await graph.computeUnreachable().count == 1)
 
-        await graph.addEdges([DependencyEdge(from: 0, to: 1, kind: .call)])
+        await graph.addEdges([DependencyEdge(from: 0, to: 1)])
 
         #expect(await graph.computeUnreachable().isEmpty)
     }
@@ -114,7 +124,7 @@ struct ReachabilityGraphTests {
         await graph.prepare(declarationCount: 50, roots: [0])
         var edges: [DependencyEdge] = []
         for index in 1..<40 {
-            edges.append(DependencyEdge(from: Int32(index - 1), to: Int32(index), kind: .call))
+            edges.append(DependencyEdge(from: Int32(index - 1), to: Int32(index)))
         }
         await graph.addEdges(edges)
 

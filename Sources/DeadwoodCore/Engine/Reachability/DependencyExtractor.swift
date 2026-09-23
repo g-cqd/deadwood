@@ -27,6 +27,11 @@
 /// Edge computation is parallel (pure per-declaration work joined by a
 /// single batch insert into the graph actor); BFS itself is delegated to
 /// the graph.
+///
+/// A reference points at every declaration sharing its name, so each
+/// declaration's targets are deduplicated as they are collected. Emitting one
+/// edge per reference and same-named declaration and deduplicating in the
+/// graph afterwards held all of those edges for the whole corpus at once.
 struct DependencyExtractor: Sendable {
     /// Configuration for extraction.
     let configuration: DependencyExtractionConfiguration
@@ -52,7 +57,8 @@ struct DependencyExtractor: Sendable {
 
     // MARK: - Edge building
 
-    /// Compute reference edges in parallel and batch-insert them.
+    /// Compute each declaration's reference targets in parallel and
+    /// batch-insert them.
     private func buildEdges(
         graph: ReachabilityGraph,
         result: AnalysisResult,
@@ -81,20 +87,19 @@ struct DependencyExtractor: Sendable {
 
         let maxConcurrency = ProcessInfo.processInfo.activeProcessorCount
 
-        let computedEdges = await ParallelProcessor.compactMap(
+        let targetsBySource = await ParallelProcessor.compactMap(
             Array(allDeclarations.enumerated()),
             maxConcurrency: maxConcurrency
-        ) { entry -> [DependencyEdge]? in
-            let edges = self.computeEdgesForDeclaration(
-                entry.element,
-                index: Int32(entry.offset),
+        ) { entry -> (source: Int32, targets: [Int32])? in
+            let targets = self.referenceTargets(
+                of: entry.element,
                 sortedRefsByFile: sortedRefsByFile,
                 declByName: declByName
             )
-            return edges.isEmpty ? nil : edges
+            return targets.isEmpty ? nil : (Int32(entry.offset), targets)
         }
 
-        await graph.addEdges(computedEdges.flatMap { $0 })
+        await graph.addTargets(targetsBySource)
 
         if configuration.trackProtocolWitnesses {
             let witnessEdges = computeProtocolEdges(
@@ -106,38 +111,38 @@ struct DependencyExtractor: Sendable {
         }
     }
 
-    /// Compute edges for a single declaration (pure function): every
-    /// reference inside the declaration's line range points at every
-    /// same-named declaration (name-level over-approximation).
-    private func computeEdgesForDeclaration(
-        _ declaration: Declaration,
-        index: Int32,
+    /// The declarations one declaration may depend on, each once, ascending
+    /// (pure function): every declaration named like a reference inside the
+    /// declaration's line range, or like that reference's qualifier
+    /// (name-level over-approximation), and the types its annotation names.
+    /// - Complexity: O(*r* + *t* log *t*) for *r* matches among the
+    ///   references and *t* distinct targets.
+    private func referenceTargets(
+        of declaration: Declaration,
         sortedRefsByFile: [String: [Reference]],
         declByName: [String: [Int32]]
-    ) -> [DependencyEdge] {
-        var edges: [DependencyEdge] = []
+    ) -> [Int32] {
+        var targets = Set<Int32>()
 
-        let scopeRefs = findReferencesInScope(
-            declaration: declaration, sortedRefsByFile: sortedRefsByFile)
-
-        for ref in scopeRefs {
-            for target in findTargetDeclarations(for: ref, declarations: declByName) {
-                let kind = mapReferenceContextToEdgeKind(ref.context)
-                edges.append(DependencyEdge(from: index, to: target, kind: kind))
+        for reference in findReferencesInScope(declaration: declaration, sortedRefsByFile: sortedRefsByFile) {
+            if let matches = declByName[reference.identifier] {
+                targets.formUnion(matches)
+            }
+            if let qualifier = reference.qualifier, let matches = declByName[qualifier] {
+                targets.formUnion(matches)
             }
         }
 
         // Type annotations reference their type names.
         if let typeAnnotation = declaration.typeAnnotation {
             for typeName in extractTypeNames(from: typeAnnotation) {
-                for typeIndex in declByName[typeName] ?? [] {
-                    edges.append(
-                        DependencyEdge(from: index, to: typeIndex, kind: .typeReference))
+                if let matches = declByName[typeName] {
+                    targets.formUnion(matches)
                 }
             }
         }
 
-        return edges
+        return targets.sorted()
     }
 
     /// References inside a declaration's file and line range: two binary
@@ -156,46 +161,6 @@ struct DependencyExtractor: Sendable {
         let lower = fileRefs.partitionPoint { $0.location.line >= startLine }
         let upper = fileRefs.partitionPoint { $0.location.line > endLine }
         return fileRefs[lower..<upper]
-    }
-
-    /// Declaration indices a reference might be pointing to (by name, plus
-    /// the qualifier of qualified references).
-    private func findTargetDeclarations(
-        for reference: Reference,
-        declarations: [String: [Int32]]
-    ) -> [Int32] {
-        var targets: [Int32] = []
-
-        if let matches = declarations[reference.identifier] {
-            targets.append(contentsOf: matches)
-        }
-
-        if let qualifier = reference.qualifier,
-            let qualifierDecls = declarations[qualifier]
-        {
-            targets.append(contentsOf: qualifierDecls)
-        }
-
-        return targets
-    }
-
-    private func mapReferenceContextToEdgeKind(_ context: ReferenceContext) -> DependencyKind {
-        switch context {
-        case .call:
-            .call
-        case .read, .write, .memberAccessBase, .memberAccessMember:
-            .propertyAccess
-        case .typeAnnotation:
-            .typeReference
-        case .inheritance:
-            .inheritance
-        case .genericConstraint:
-            .genericConstraint
-        case .keyPath:
-            .keyPath
-        case .attribute, .import, .pattern, .unknown:
-            .typeReference
-        }
     }
 
     /// Extract type names from a type annotation string.
@@ -278,9 +243,7 @@ struct DependencyExtractor: Sendable {
 
             if configuration.treatProtocolRequirementsAsRoot {
                 for requirement in requirements {
-                    edges.append(
-                        DependencyEdge(
-                            from: protoIndex, to: requirement, kind: .protocolRequirement))
+                    edges.append(DependencyEdge(from: protoIndex, to: requirement))
                 }
             }
 
@@ -291,9 +254,7 @@ struct DependencyExtractor: Sendable {
                         isWitness(
                             allDeclarations[Int(witness)], ofProtocol: proto.name, context: context)
                     else { continue }
-                    edges.append(
-                        DependencyEdge(
-                            from: requirement, to: witness, kind: .protocolRequirement))
+                    edges.append(DependencyEdge(from: requirement, to: witness))
                 }
             }
         }
