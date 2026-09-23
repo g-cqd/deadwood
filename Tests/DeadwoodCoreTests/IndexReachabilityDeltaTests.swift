@@ -46,6 +46,10 @@
         static func create() throws -> IndexDeltaFixture {
             let root = FileManager.default.temporaryDirectory
                 .appending(path: "dw-idx-delta-\(UUID().uuidString)")
+            var completed = false
+            defer {
+                if !completed { try? FileManager.default.removeItem(at: root) }
+            }
             let sources = root.appending(path: "Sources/IndexDeltaFixture")
             try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
 
@@ -85,6 +89,7 @@
             }
             """.write(to: entry, atomically: true, encoding: .utf8)
 
+            completed = true
             return IndexDeltaFixture(
                 root: root, shapesFile: shapes.path, entryFile: entry.path)
         }

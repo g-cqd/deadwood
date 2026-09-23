@@ -11,6 +11,7 @@ import Testing
         let dir = FileManager.default.temporaryDirectory
             .appending(path: "deadwood-optin-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
         let file = dir.appending(path: "Opt.swift")
         try? source.write(to: file, atomically: true, encoding: .utf8)
         let analyzer = Analyzer(configuration: Configuration(rules: rules))
