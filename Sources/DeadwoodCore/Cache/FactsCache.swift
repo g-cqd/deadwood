@@ -1,9 +1,8 @@
 //  Modeled on arcleak's FactsCache: fail-open per-file cache.
 
 // Fast, reflection-free JSON coders for the cache payload. `AemiJSON.JSONEncoder`/
-// `.JSONDecoder` are structs, have no `.outputFormatting` OptionSet, and no
-// AemiJSON type escapes this file — only the two seam functions below use it — so
-// a plain (internal) import is enough.
+// `.JSONDecoder` are structs and have no `.outputFormatting` OptionSet.
+// AemiJSON is confined to cache payload types, so an internal import suffices.
 import AemiJSON
 
 #if canImport(FoundationEssentials)
@@ -19,7 +18,6 @@ import AemiJSON
 /// computes, so a cache hit skips the parse and every per-file walk. The
 /// corpus-wide graph/BFS and every rule always re-run: findings can never
 /// go stale relative to rules or configuration.
-@JSONCodable
 struct CachedFileArtifacts: Sendable, Codable {
     let facts: FileAnalysisResult
     let directives: [SuppressionDirective]
@@ -29,16 +27,16 @@ struct CachedFileArtifacts: Sendable, Codable {
 
 // MARK: - FactsCache
 
-/// Per-file facts cache. Parsing + extraction dominate runtime; detection
-/// is cheap and always re-runs, so only per-file artifacts are cached.
+/// Per-file facts cache. Cache hits skip parsing and per-file extraction;
+/// graph construction and detection still run on every analysis.
 ///
 /// The cache is an optimization, so unlike configuration it FAILS OPEN: an
-/// unreadable, corrupt, or version-mismatched cache behaves as empty and is
+/// unreadable, corrupt, or mismatched cache behaves as empty and is
 /// overwritten on persist. Entries are keyed by absolute path and validated
 /// by a content fingerprint (FNV-1a 64 over bytes + length — identity, not
 /// security; a collision merely serves stale facts for one file until its
-/// next real change). A tool-version mismatch discards the whole cache, so
-/// a facts-schema change can never deserialize into wrong shapes. The
+/// next real change), salted with configuration. A version or build-identity
+/// mismatch discards the whole cache before decoding. The
 /// persisted cache is rebuilt from ONLY the current run's files, so absent
 /// files are pruned and the cache never grows without bound.
 struct FactsCache: Sendable {
@@ -87,9 +85,11 @@ struct FactsCache: Sendable {
     }
 
     private(set) var entries: [String: Entry]
+    private(set) var loadFailure: String?
 
-    init(entries: [String: Entry] = [:]) {
+    init(entries: [String: Entry] = [:], loadFailure: String? = nil) {
         self.entries = entries
+        self.loadFailure = loadFailure
     }
 
     static func fingerprint(of data: Data, salt: String = "") -> String {
@@ -130,34 +130,56 @@ struct FactsCache: Sendable {
     /// empty cache (the cache is an optimization, never a trust boundary).
     static let maxCacheBytes = 64 * 1024 * 1024
 
-    static func load(url: URL) -> FactsCache {
-        guard
-            let data = try? BoundedFileReader.read(path: url.path, cap: maxCacheBytes),
-            let payload = try? decodePayload(from: data),
-            payload.tool == ToolInfo.name,
-            payload.version == ToolInfo.version
-        else {
-            return FactsCache()
+    private static func header(build: String) -> Data {
+        Data("deadwood facts 2 \(ToolInfo.version) \(build) json\n".utf8)
+    }
+
+    static func load(url: URL, build: String? = BuildIdentity.current) -> FactsCache {
+        guard let build, FileManager.default.fileExists(atPath: url.path) else { return FactsCache() }
+        let data: Data
+        do {
+            data = try BoundedFileReader.read(path: url.path, cap: maxCacheBytes)
+        } catch {
+            return FactsCache(loadFailure: "ignored the facts cache at \(url.path): \(error)")
         }
-        return FactsCache(entries: payload.entries)
+        let prefix = header(build: build)
+        guard data.starts(with: prefix) else { return FactsCache() }
+        do {
+            let payload = try decodePayload(from: Data(data.dropFirst(prefix.count)))
+            guard payload.tool == ToolInfo.name, payload.version == ToolInfo.version else { return FactsCache() }
+            return FactsCache(entries: payload.entries)
+        } catch {
+            return FactsCache(loadFailure: "ignored the facts cache at \(url.path): \(error)")
+        }
     }
 
     /// Best-effort persist: creates the directory, writes atomically, and
-    /// swallows failures — a read-only cache location must never fail a run.
-    func persist(url: URL) {
+    /// reports an over-cap payload without failing the analysis.
+    @discardableResult
+    func persist(url: URL, build: String? = BuildIdentity.current) -> String? {
+        guard let build else { return nil }
         let payload = Payload(tool: ToolInfo.name, version: ToolInfo.version, entries: entries)
-        guard let data = try? Self.encodePayload(payload) else { return }
+        guard let data = try? Self.encodePayload(payload) else { return nil }
+        let prefix = Self.header(build: build)
+        guard data.count <= Self.maxCacheBytes - prefix.count else {
+            try? FileManager.default.removeItem(at: url)
+            return "deadwood: note: skipped facts cache larger than 64 MiB"
+        }
+        var file = Data(capacity: prefix.count + data.count)
+        file.append(prefix)
+        file.append(data)
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try? data.write(to: url, options: .atomic)
+        try? file.write(to: url, options: .atomic)
+        return nil
     }
 }
 
 // MARK: - Fast AemiJSON coding (payload root)
 
-// `CachedFileArtifacts` and the whole nested model graph get their fast
+// The nested model graph gets its fast
 // `ADJSONFast{Encodable,Decodable}` conformance from `@JSONCodable` (the structs)
 // and `FactsFastCoding.swift` (the enums + `ScopeID`). `Entry` and `Payload` are
 // hand-written here so the root stays nested/`fileprivate` and — crucially — so
@@ -165,6 +187,33 @@ struct FactsCache: Sendable {
 // makes the persisted cache byte-stable across a decode -> re-encode WITHOUT
 // paying AemiJSON's `.sorted` whole-tape re-emit (it is the only hash-ordered
 // container in the payload; every other collection is an array).
+
+extension CachedFileArtifacts: AemiJSONFastEncodable, AemiJSONFastDecodable {
+    func __adjsonEncode(into w: inout _JSONByteWriter) throws {
+        w.beginObject()
+        w.key("facts")
+        try CachedFileFacts(facts).__adjsonEncode(into: &w)
+        w.comma()
+        w.key("directives")
+        try w.encode(directives)
+        w.comma()
+        w.key("deadBranches")
+        try w.encode(deadBranches)
+        w.comma()
+        w.key("degraded")
+        try w.encode(degraded)
+        w.endObject()
+    }
+
+    static func __adjsonDecode(_ c: _FastDecodeCursor) throws -> Self {
+        Self(
+            facts: try c.decode(CachedFileFacts.self, "facts").restored(),
+            directives: try c.decode([SuppressionDirective].self, "directives"),
+            deadBranches: try c.decode([UnusedCode].self, "deadBranches"),
+            degraded: try c.decode([String].self, "degraded")
+        )
+    }
+}
 
 extension FactsCache.Entry: AemiJSONFastEncodable, AemiJSONFastDecodable {
     func __adjsonEncode(into w: inout _JSONByteWriter) throws {

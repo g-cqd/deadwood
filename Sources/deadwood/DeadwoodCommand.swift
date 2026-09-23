@@ -166,6 +166,9 @@ struct Analyze: AsyncParsableCommand {
                 embeddingBundle: embeddingBundle,
                 reportScope: reportScope
             )
+        if let failure = report.cacheLoadFailure {
+            standardError.write(Data(("deadwood: note: \(failure)\n").utf8))
+        }
 
         // Exclusion scopes the report, never the corpus (see the walker above).
         if !configuration.exclude.isEmpty {

@@ -17,6 +17,8 @@ public struct AnalysisReport: Sendable, Codable {
     /// cache was configured).
     public var cacheHits = 0
     public var cacheMisses = 0
+    /// A single diagnostic for a cache that could not be read or decoded.
+    public var cacheLoadFailure: String?
 
     /// Set when the run was cancelled before the corpus was complete.
     ///
