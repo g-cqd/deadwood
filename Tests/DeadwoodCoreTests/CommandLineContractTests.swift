@@ -37,6 +37,23 @@ import Testing
         #expect(notes.allSatisfy { $0.message.text.hasPrefix("analysis degraded: ") })
     }
 
+    // MARK: - SARIF regions
+
+    @Test("SARIF columns count UTF-16 code units, and the run says so")
+    func columnsCountUTF16CodeUnits() throws {
+        // Text before the finding that UTF-8 and UTF-16 count differently.
+        let line = #"let marker = "😀é"; private func unusedHelper() {}"#
+        let root = try Workspace.make(["Sources/A.swift": line + "\n"])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let log = try BuiltTool.sarif(analyzing: root.path, relativeTo: root.path, in: root)
+
+        #expect(log.runs.first?.columnKind == "utf16CodeUnits")
+        let result = try #require(log.results.first { $0.ruleId == "unused-function" })
+        #expect(
+            result.locations.map(\.physicalLocation.region.startColumn)
+                == [try Workspace.utf16Column(of: "private func", in: line)])
+    }
+
     // MARK: - SARIF artifact locations
 
     @Test("Locations under --relative-to are relative to a base the log declares")
@@ -239,6 +256,12 @@ enum Workspace {
         URL(fileURLWithPath: url.path).standardized.resolvingSymlinksInPath().path
     }
 
+    /// The 1-based UTF-16 column at which `needle` first starts in `line`.
+    static func utf16Column(of needle: String, in line: String) throws -> Int {
+        let range = try #require(line.range(of: needle))
+        return line.utf16.distance(from: line.startIndex, to: range.lowerBound) + 1
+    }
+
     /// Whether `uri` is made only of what RFC 3986 allows in a URI reference
     /// with no query or fragment: unreserved and reserved characters (less `?`,
     /// `#`, `[` and `]`) and well-formed percent escapes.
@@ -265,6 +288,7 @@ enum Workspace {
 /// the formatter that wrote it.
 struct SarifLog: Decodable {
     struct Run: Decodable {
+        let columnKind: String?
         let originalUriBaseIds: [String: ArtifactLocation]?
         let results: [Result]
     }
@@ -285,6 +309,12 @@ struct SarifLog: Decodable {
 
     struct PhysicalLocation: Decodable {
         let artifactLocation: ArtifactLocation
+        let region: Region
+    }
+
+    struct Region: Decodable {
+        let startLine: Int
+        let startColumn: Int
     }
 
     struct ArtifactLocation: Decodable {
