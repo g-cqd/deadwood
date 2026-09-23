@@ -11,6 +11,32 @@ import Testing
         "private func \(name)() {}\n"
     }
 
+    // MARK: - Exit status
+
+    /// A function over the dead-branch statement bound skips that pass for the
+    /// function, not the file. Counting each such note as a skipped file made a
+    /// corpus with as many oversized functions as files exit 70, as if nothing
+    /// had been analyzed.
+    @Test("Oversized functions do not count as skipped files")
+    func oversizedFunctionsAreNotSkippedFiles() throws {
+        let filler = (0...DeadBranchLimit.statements).map { "    value += \($0)" }.joined(separator: "\n")
+        let oversized = ["first", "second"].map { name in
+            "func \(name)() -> Int {\n    var value = 0\n\(filler)\n    return value\n}\n"
+        }
+        let root = try Workspace.make([
+            "Sources/Generated.swift": oversized.joined(separator: "\n"),
+            "Sources/Plain.swift": Self.unusedHelper("unusedPlain"),
+        ])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let run = try BuiltTool.analyze(root.path, relativeTo: root.path, in: root)
+
+        #expect(run.status == 0)
+        let log = try JSONDecoder().decode(SarifLog.self, from: run.standardOutput)
+        let notes = log.results.filter { $0.ruleId == "deadwood/degraded-file" }
+        #expect(notes.count == 2)
+        #expect(notes.allSatisfy { $0.message.text.hasPrefix("analysis degraded: ") })
+    }
+
     // MARK: - SARIF artifact locations
 
     @Test("Locations under --relative-to are relative to a base the log declares")
@@ -121,6 +147,12 @@ import Testing
 }
 
 // MARK: - Harness
+
+/// The dead-branch pass's statement bound, restated: the executable is tested
+/// from outside, so the test does not reach into the library for it.
+enum DeadBranchLimit {
+    static let statements = 5000
+}
 
 /// Runs the `deadwood` executable that `swift build` and `swift test` place
 /// next to this test bundle.
