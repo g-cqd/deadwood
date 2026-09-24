@@ -43,7 +43,7 @@ let package = Package(
         // Only the internal facts cache uses this codec; report byte formats stay stable.
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
-            revision: "efb0a35746e17db0cc519bc8f6fa23887f7105aa"
+            revision: "6b8e5b9fb14b6c835d0dca13ba15f5bb1f3831de"
         ),
     ],
     targets: [
