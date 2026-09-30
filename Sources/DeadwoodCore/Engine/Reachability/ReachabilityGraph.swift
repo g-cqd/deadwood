@@ -157,6 +157,19 @@ actor ReachabilityGraph {
     /// Reachable indices from an EXPLICIT root set over the same edges —
     /// production mode's second pass (without test roots). Uncached: the
     /// root set is the caller's, not the graph's.
+    /// For each node of `dead`, the nodes of `dead` it has an edge to.
+    /// - Complexity: O(D + E_D) for the dead nodes and their edges.
+    func deadSuccessors(of dead: Set<Int>) -> [Int: [Int]] {
+        var successors: [Int: [Int]] = [:]
+        for node in dead where node < nodeCount {
+            let targets = adjacency[node].map(Int.init).filter { dead.contains($0) }
+            if !targets.isEmpty {
+                successors[node] = targets
+            }
+        }
+        return successors
+    }
+
     func computeReachable(fromRoots rootIndices: Set<Int32>) -> Set<Int> {
         denseGraph().computeReachableSequential(from: rootIndices.map(Int.init))
     }
