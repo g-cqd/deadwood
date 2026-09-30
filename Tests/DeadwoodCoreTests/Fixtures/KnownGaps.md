@@ -63,10 +63,22 @@ always rooted, so writing a custom wrapper never flags its own contract.
 name cannot be proven statically. The SCARF token set (identifier-shaped
 tokens inside string literals) demotes matching findings to low confidence
 with a note — the finding still fires, because suppressing on a substring
-match would let any comment-adjacent string hide real dead code.
+match would let any comment-adjacent string hide real dead code. Only a
+literal outside the declaration's own lines, in a file that is not
+generated, demotes: a log message naming its own type is no lookup.
 
 - Pinned by: `Fixtures/Findings/StringLiteralDemotion.swift` (fires,
   demoted) and `ConfidenceTests/stringLiteralNameDemotes`.
+
+## Region notes and file-scope code are syntax-mode only
+
+`preview-only` and `debug-only` come from two extra reachability passes over
+the syntax graph, and `#Preview` bodies and script statements are rooted as
+synthesized nodes of that graph. With `--index-store`, neither is computed
+yet: the notes do not fire, and file-scope code keeps only what the index
+itself connects.
+
+- Pinned by: `RegionReachabilityTests`, `TopLevelCodeTests`.
 
 ## Member-access reads and writes are indistinguishable
 

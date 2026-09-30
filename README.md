@@ -25,6 +25,8 @@ incremental fail-open facts cache.
 | `unused-enum-case` | on | cases never constructed or matched (raw-value/Codable/CaseIterable enums exempt, including conformances added via extension) |
 | `dead-branch` | on | branches whose condition provably folds to a constant |
 | `referenced-only-by-tests` | on (fires only under `--production`) | declarations reachable with test roots but unreachable without them |
+| `preview-only` | on, note | production code only `#Preview` bodies and `PreviewProvider` types use: it ships in release builds for nothing |
+| `debug-only` | on, note | production code only `#if DEBUG` code uses: it ships in release builds for nothing |
 | `unused-import` | off | imports with no referenced symbol in the file (syntax-level heuristic; `@_exported` is never flagged) |
 | `unused-public-api` | off | public declarations unreferenced inside the corpus (public API is a root otherwise) |
 | `assign-only-property` | off | stored properties whose every reference is a write |
@@ -65,11 +67,23 @@ through a path the source-only graph can't see. Configure accordingly:
   operator usage (it over-reports — hundreds of findings on a real corpus),
   and public API is a library's *surface*, not dead code. Enable them only on
   application targets, and treat them as review prompts, not deletion lists.
-- **OS-discovered and preview entry points.** Types the system instantiates by
-  conformance (`AppShortcutsProvider`, App Intents, Widgets) are rooted
-  automatically. Declarations referenced *only* inside a top-level `#Preview`
-  body are a known gap in syntax mode — exclude preview files
-  (`"exclude": ["+Previews.swift"]`) or use `--index-store`, which sees them.
+- **OS-discovered, project-file, preview and script entry points.** Types
+  the system instantiates by conformance (`AppShortcutsProvider`, App Intents,
+  Widgets) are rooted automatically, and so are the types project files name:
+  an Info.plist's `NSExtensionPrincipalClass`, `NSPrincipalClass` or scene
+  delegate, their `INFOPLIST_KEY_` build settings, and storyboard or xib
+  `customClass` attributes. Point deadwood at directories, which it searches
+  for these files, or pass the files explicitly. Code at file scope, such as a
+  `#Preview` body or a script's top-level statements, is an entry point too.
+  Code only previews or `#if DEBUG` code use counts as used; when it is
+  production code, `preview-only` and `debug-only` notes suggest moving it
+  under `#if DEBUG`.
+- **Test suites.** `@Suite` types, types holding `@Test` functions at any
+  depth, and `XCTestCase` subclasses are entry points, whatever their names.
+- **Generated code.** A file whose header names a generator ("Generated
+  using", "@generated", "DO NOT EDIT"), or that sits in a `Generated`
+  directory, is never reported on; what it uses stays used. A note per such
+  file counts the declarations nothing outside it names.
 - **Accept intentional scaffolding** (author-your-own template stubs, debug
   helpers) with `// @dw:accept -- reason` so the decision is on record rather
   than re-flagged every run.
@@ -187,15 +201,19 @@ broken, can change which findings fire or the exit code.
 
 Every finding's note carries its confidence:
 
-- **certain** — dataflow proofs (dead branches).
+- **certain** — dataflow proofs on literal conditions (`if false`); a dead
+  branch proven by propagating a variable is **high**.
 - **high / medium / low** — by *effective* visibility: private/fileprivate
   high, internal medium, package/public/open low (a member of a private
   type is effectively private).
-- **Demotions** for dynamic-reference risk: a name appearing inside any
-  string literal in the corpus (NSClassFromString-style lookup) forces low
-  with a note; members of NSObject subclasses without `@objc` demote one
-  step (selector machinery may reach them). Demoted findings still fire —
-  risk lowers confidence, it never hides dead code.
+- **Demotions** for dynamic-reference risk: a name appearing inside a
+  string literal outside the declaration itself and outside generated files
+  (NSClassFromString-style lookup) forces low with a note; members of
+  NSObject subclasses without `@objc` demote one step (selector machinery may
+  reach them). Demoted findings still fire — risk lowers confidence, it
+  never hides dead code.
+- A name that a comment still mentions, as commented-out code does, adds a
+  note but never lowers the confidence.
 
 ## Facts cache
 
@@ -223,7 +241,7 @@ stderr and replaced after a complete analysis.
 ```sh
 deadwood analyze Sources            # xcode-format diagnostics, exit 1 on errors
 deadwood analyze --format sarif .   # SARIF 2.1.0 (also: --format json)
-deadwood analyze --strict Sources   # exit 1 on any finding
+deadwood analyze --strict Sources   # exit 1 on any warning or error; notes never fail
 deadwood analyze --production .     # split "only tests reach this" findings
 deadwood analyze --no-cache .       # disable the (default-on) facts cache
 deadwood analyze --index-store .    # USR-precise cross-module reachability (macOS; needs `swift build`)
@@ -322,16 +340,17 @@ reporting nothing.
 
 | Code | Meaning |
 |---|---|
-| `0` | the gate passed: no error-severity finding, so warnings alone pass; with `--strict`, no finding at all. Also after `--write-baseline` |
-| `1` | the gate failed on findings: an error-severity finding, or with `--strict` any finding — and nothing else |
+| `0` | the gate passed: no error-severity finding, so warnings and notes alone pass; with `--strict`, no warning or error. Also after `--write-baseline` |
+| `1` | the gate failed on findings: an error-severity finding, or with `--strict` any warning or error — and nothing else |
 | `64` | usage error: a bad argument, a path that does not exist, an unreadable `--only-from` file |
 | `70` | nothing was analyzed: every file was skipped, and the report on stdout says which and why; or the run failed or was cancelled, and stdout is empty |
 | `78` | invalid configuration, or a missing or malformed baseline |
 
 `1` means findings *only*, so a step that posts a review comment on `1` will
-not fire on a typo in the config file. Every rule defaults to warning, so
-findings are always reported, but only an `error` severity or `--strict`
-makes them fail the gate. A cancelled run reports **no** findings
+not fire on a typo in the config file. Every rule defaults to warning, except
+`preview-only` and `debug-only`, which default to note, so findings are always
+reported, but only an `error` severity or `--strict` makes them fail the gate,
+and a note never does. A cancelled run reports **no** findings
 and exits `70` rather than looking clean: a whole-program analysis over a
 partial corpus does not report less, it reports wrongly.
 
