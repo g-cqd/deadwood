@@ -163,6 +163,12 @@ struct RootDetectionConfiguration: Sendable {
     /// (single-file analysis).
     var treatVisibleOutsideFileAsRoot: Bool
 
+    /// Treat every declaration in a generated file as a root. `--include
+    /// generated` turns this off so a genuinely unused declaration in a
+    /// generator's own template can be found, same as `dropGenerated`
+    /// stops withholding it as a finding.
+    var treatGeneratedCodeAsRoot: Bool
+
     init(
         treatPublicAsRoot: Bool = true,
         treatObjcAsRoot: Bool = true,
@@ -170,7 +176,8 @@ struct RootDetectionConfiguration: Sendable {
         treatSwiftUIViewsAsRoot: Bool = true,
         treatSwiftUIPropertyWrappersAsRoot: Bool = true,
         treatPreviewProvidersAsRoot: Bool = true,
-        treatVisibleOutsideFileAsRoot: Bool = false
+        treatVisibleOutsideFileAsRoot: Bool = false,
+        treatGeneratedCodeAsRoot: Bool = true
     ) {
         self.treatPublicAsRoot = treatPublicAsRoot
         self.treatObjcAsRoot = treatObjcAsRoot
@@ -179,6 +186,7 @@ struct RootDetectionConfiguration: Sendable {
         self.treatSwiftUIPropertyWrappersAsRoot = treatSwiftUIPropertyWrappersAsRoot
         self.treatPreviewProvidersAsRoot = treatPreviewProvidersAsRoot
         self.treatVisibleOutsideFileAsRoot = treatVisibleOutsideFileAsRoot
+        self.treatGeneratedCodeAsRoot = treatGeneratedCodeAsRoot
     }
 }
 
@@ -276,7 +284,7 @@ struct RootDetector: Sendable {
             }
             return .topLevelCode
         }
-        if context.isGeneratedFile(declaration.location.file) {
+        if configuration.treatGeneratedCodeAsRoot && context.isGeneratedFile(declaration.location.file) {
             return .generatedCode
         }
         if hasAttribute(declaration, named: "main") {

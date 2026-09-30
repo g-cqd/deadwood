@@ -2,6 +2,8 @@
 //  `Finding` contract (rule ids, severities, messages), collapsing member
 //  findings into their flagged enclosing type.
 
+import ProjectModel
+
 // MARK: - FindingMapper
 
 /// Maps `UnusedCode` results to `Finding`s per the deadwood configuration.
@@ -207,6 +209,10 @@ struct FindingMapper: Sendable {
         }
         for demotion in assessment.demotionNotes {
             note += "; \(demotion)"
+        }
+        let region = CodeRegion(rawValue: item.regionTag)
+        if !region.isEmpty {
+            note += "; region: \(region.names)"
         }
         return note
     }
