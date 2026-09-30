@@ -47,9 +47,28 @@ let package = Package(
         ),
     ],
     targets: [
+        // The shared model of a Swift project: entry points, code regions,
+        // generated files. Self-contained (it imports nothing from
+        // DeadwoodCore) so it can move to its own package unchanged.
+        .target(
+            name: "ProjectModel",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax")
+            ],
+            swiftSettings: strictSwiftSettings
+        ),
+        .testTarget(
+            name: "ProjectModelTests",
+            dependencies: [
+                "ProjectModel",
+                .product(name: "SwiftParser", package: "swift-syntax"),
+            ],
+            swiftSettings: strictSwiftSettings
+        ),
         .target(
             name: "DeadwoodCore",
             dependencies: [
+                "ProjectModel",
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftOperators", package: "swift-syntax"),
