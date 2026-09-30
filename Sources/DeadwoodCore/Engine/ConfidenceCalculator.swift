@@ -47,8 +47,9 @@ struct ConfidenceCalculator: Sendable {
     func assess(_ item: UnusedCode) -> Assessment {
         switch item.reason {
         case .deadBranch:
-            // SCCP proved the branch cannot execute — not a heuristic.
-            return Assessment(confidence: .certain, demotionNotes: [])
+            // SCCP proved it: certain for a literal condition, high when the
+            // proof rests on seeing every write to a variable.
+            return Assessment(confidence: item.confidence, demotionNotes: [])
         case .deadStore:
             // Dataflow-backed but conservative around aliasing/inout.
             return Assessment(confidence: .high, demotionNotes: [])
