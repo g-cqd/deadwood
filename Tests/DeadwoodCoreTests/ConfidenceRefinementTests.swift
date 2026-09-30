@@ -63,16 +63,16 @@ import Testing
             import XCTest
 
             final class SampleTests: XCTestCase {
-                private let sampleParticipant = 1
+                private let sampleFixture = 1
 
-                // func testParticipant() {
-                //     XCTAssertEqual(sampleParticipant, 1)
+                // func testFixture() {
+                //     XCTAssertEqual(sampleFixture, 1)
                 // }
             }
             """
         ]).analyze()
 
-        let note = note(for: "sampleParticipant", in: report)
+        let note = note(for: "sampleFixture", in: report)
         #expect(note?.hasPrefix("confidence high") == true)
         #expect(note?.contains("also named in a comment") == true)
     }
