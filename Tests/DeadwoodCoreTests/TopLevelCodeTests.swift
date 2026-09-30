@@ -44,17 +44,17 @@ import Testing
             }
 
             #Preview {
-                @Previewable var sampleDuration = 3600.0
-                let sessions = [sampleDuration, sampleDuration * 2]
-                let sampleSession = sessions.first ?? 0
-                SampleRow(duration: sampleSession)
+                @Previewable var secondsPerHour = 3600.0
+                let sessions = [secondsPerHour, secondsPerHour * 2]
+                let firstSample = sessions.first ?? 0
+                SampleRow(duration: firstSample)
             }
             """
         ]).analyze()
 
-        #expect(!report.flags("sampleDuration"))
+        #expect(!report.flags("secondsPerHour"))
         #expect(!report.flags("sessions"))
-        #expect(!report.flags("sampleSession"))
+        #expect(!report.flags("firstSample"))
     }
 
     @Test func `a script's top-level statements use its declarations`() async throws {
@@ -70,8 +70,8 @@ import Testing
 
             Task {
                 let files = loadFiles()
-                let sampleFile = files[0]
-                print(sampleFile.path)
+                let firstFile = files[0]
+                print(firstFile.path)
             }
             """
         ]).analyze()
@@ -79,7 +79,7 @@ import Testing
         #expect(!report.flags("StringsFile"))
         #expect(!report.flags("loadFiles"))
         #expect(!report.flags("files"))
-        #expect(!report.flags("sampleFile"))
+        #expect(!report.flags("firstFile"))
         // Rooting top-level code must not root the whole file.
         #expect(report.flags("unusedHelper"))
     }
