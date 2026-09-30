@@ -142,10 +142,20 @@ enum DeadBranchPass {
         return UnusedCode(
             declaration: declaration,
             reason: .deadBranch,
-            confidence: .certain,
+            confidence: literalOnly(condition) ? .certain : .high,
             suggestion:
                 "condition '\(condition)' is provably \(dead.conditionValue) — the \(branchWord) branch never executes"
         )
+    }
+
+    /// Whether a condition is made of literals only (`false`, `1 > 2`): its
+    /// value is certain. A condition naming a variable rests on the
+    /// propagation having seen every write to it, so it is only high.
+    private static func literalOnly(_ condition: String) -> Bool {
+        let words = condition.split { !($0.isLetter || $0.isNumber || $0 == "_") }
+        return words.allSatisfy { word in
+            word == "true" || word == "false" || word.first.map { !$0.isLetter && $0 != "_" } == true
+        }
     }
 
     /// Wrap a dead store in the declaration-centric `UnusedCode` shape
