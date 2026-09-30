@@ -30,9 +30,12 @@ public enum ReportFormatter {
     /// One human summary line (for stderr, so stdout stays machine-parseable).
     public static func summary(_ report: AnalysisReport) -> String {
         let errors = report.findings.count(where: { $0.severity == .error })
-        let warnings = report.findings.count - errors
+        let notes = report.findings.count(where: { $0.severity == .note })
+        let warnings = report.findings.count - errors - notes
         var line = "\(ToolInfo.name): \(report.findings.count) finding(s) "
-        line += "(\(errors) error(s), \(warnings) warning(s)) in \(report.analyzedFileCount) file(s)"
+        line += "(\(errors) error(s), \(warnings) warning(s)"
+        line += notes > 0 ? ", \(notes) note(s))" : ")"
+        line += " in \(report.analyzedFileCount) file(s)"
         if !report.suppressed.isEmpty {
             line += "; \(report.suppressed.count) suppressed"
         }

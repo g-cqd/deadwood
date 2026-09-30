@@ -24,17 +24,19 @@ struct FindingMapper: Sendable {
         // Collapse: when a type is flagged, its members are implied — one
         // finding on the type reads better than one per member. Dataflow
         // findings (dead branches/stores) are locations, not members.
+        // A member only collapses into a type flagged for the same reason:
+        // an unused member of a preview-only type is still unused.
         let flaggedTypeKeys = Set(
             unused
                 .filter { Self.typeKinds.contains($0.declaration.kind) }
-                .map { key(of: $0.declaration) }
+                .map { "\($0.reason.rawValue)|\(key(of: $0.declaration))" }
         )
         let dataflowReasons: Set<UnusedReason> = [.deadBranch, .deadStore]
 
         var findings: [Finding] = []
         for item in unused {
             if !dataflowReasons.contains(item.reason),
-                isInsideFlaggedType(item.declaration, flaggedTypeKeys, context)
+                isInsideFlaggedType(item.declaration, reason: item.reason, flaggedTypeKeys, context)
             {
                 continue
             }
@@ -83,6 +85,12 @@ struct FindingMapper: Sendable {
         if item.reason == .referencedOnlyByTests {
             return .referencedOnlyByTests
         }
+        if item.reason == .referencedOnlyByPreviews {
+            return .previewOnly
+        }
+        if item.reason == .referencedOnlyByDebugCode {
+            return .debugOnly
+        }
         if item.reason == .importNotUsed || item.declaration.kind == .import {
             return .unusedImport
         }
@@ -116,12 +124,13 @@ struct FindingMapper: Sendable {
 
     private func isInsideFlaggedType(
         _ declaration: Declaration,
+        reason: UnusedReason,
         _ flaggedTypeKeys: Set<String>,
         _ context: CorpusContext
     ) -> Bool {
         guard !flaggedTypeKeys.isEmpty else { return false }
         return context.enclosingTypeDeclarations(of: declaration)
-            .contains { flaggedTypeKeys.contains(key(of: $0)) }
+            .contains { flaggedTypeKeys.contains("\(reason.rawValue)|\(key(of: $0))") }
     }
 
     // MARK: - Text
@@ -148,6 +157,10 @@ struct FindingMapper: Sendable {
             return "\(subject) is assigned but never read"
         case .referencedOnlyByTests:
             return "\(subject) is reachable only from test code"
+        case .referencedOnlyByPreviews:
+            return "\(subject) is used only by previews but ships in release builds"
+        case .referencedOnlyByDebugCode:
+            return "\(subject) is used only by #if DEBUG code but ships in release builds"
         default:
             switch mode {
             case .simple:
@@ -167,6 +180,8 @@ struct FindingMapper: Sendable {
             case .deadBranch: "sparse conditional constant propagation"
             case .deadStore: "liveness + reaching definitions"
             case .referencedOnlyByTests: "reachable with test roots, unreachable without them"
+            case .referencedOnlyByPreviews: "move it under #if DEBUG next to the previews"
+            case .referencedOnlyByDebugCode: "move it under #if DEBUG with its callers"
             }
         var note = "confidence \(assessment.confidence.rawValue) — \(reasonText)"
         for demotion in assessment.demotionNotes {

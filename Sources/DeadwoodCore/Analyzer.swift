@@ -703,7 +703,7 @@ public struct Analyzer: Sendable {
     /// Derive the engine configuration from the user-facing rule toggles.
     private func engineConfiguration(mode: DetectionMode) -> UnusedCodeConfiguration {
         let wantsPublicApi = configuration.isEnabled(.unusedPublicApi)
-        return UnusedCodeConfiguration(
+        var engine = UnusedCodeConfiguration(
             detectVariables: configuration.isEnabled(.unusedProperty) || wantsPublicApi,
             detectFunctions: configuration.isEnabled(.unusedFunction) || wantsPublicApi,
             detectTypes: configuration.isEnabled(.unusedType) || wantsPublicApi,
@@ -719,6 +719,10 @@ public struct Analyzer: Sendable {
             treatPublicAsRoot: !wantsPublicApi,
             treatVisibleOutsideFileAsRoot: mode == .simple
         )
+        // Region reachability needs the whole corpus, like production mode.
+        engine.detectPreviewOnly = mode == .reachability && configuration.isEnabled(.previewOnly)
+        engine.detectDebugOnly = mode == .reachability && configuration.isEnabled(.debugOnly)
+        return engine
     }
 }
 

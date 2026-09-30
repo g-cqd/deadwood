@@ -50,8 +50,31 @@ struct DependencyExtractor: Sendable {
             configuration: configuration.rootDetection
         )
 
-        await buildEdges(graph: graph, result: result, context: context)
+        await buildEdges(graph: graph, result: result, context: context, upTo: nil)
 
+        return graph
+    }
+
+    /// The graph of what a build at `level` compiles: only the roots and
+    /// the references whose region level is at most `level` count. At
+    /// `.production` it leaves out previews and `#if DEBUG` code.
+    func buildGraph(
+        from result: AnalysisResult,
+        context: CorpusContext,
+        upTo level: RegionLevel
+    ) async -> ReachabilityGraph {
+        let graph = ReachabilityGraph()
+        let declarations = result.declarations.declarations
+        let detector = RootDetector(configuration: configuration.rootDetection)
+        var roots: Set<Int32> = []
+        for (index, declaration) in declarations.enumerated()
+        where context.regionLevel(ofLine: declaration.location.line, inFile: declaration.location.file) <= level
+            && detector.rootReason(for: declaration, context: context) != nil
+        {
+            roots.insert(Int32(index))
+        }
+        await graph.prepare(declarationCount: declarations.count, roots: roots)
+        await buildEdges(graph: graph, result: result, context: context, upTo: level)
         return graph
     }
 
@@ -59,10 +82,13 @@ struct DependencyExtractor: Sendable {
 
     /// Compute each declaration's reference targets in parallel and
     /// batch-insert them.
+    /// - Parameter level: when set, references in code above this region
+    ///   level draw no edge.
     private func buildEdges(
         graph: ReachabilityGraph,
         result: AnalysisResult,
-        context: CorpusContext
+        context: CorpusContext,
+        upTo level: RegionLevel?
     ) async {
         let allDeclarations = result.declarations.declarations
 
@@ -81,7 +107,13 @@ struct DependencyExtractor: Sendable {
         var sortedRefsMutable: [String: [Reference]] = [:]
         sortedRefsMutable.reserveCapacity(result.references.byFile.count)
         for (file, refs) in result.references.byFile {
-            sortedRefsMutable[file] = refs.sorted { $0.location.line < $1.location.line }
+            let kept =
+                if let level {
+                    refs.filter { context.regionLevel(ofLine: $0.location.line, inFile: file) <= level }
+                } else {
+                    refs
+                }
+            sortedRefsMutable[file] = kept.sorted { $0.location.line < $1.location.line }
         }
         let sortedRefsByFile = sortedRefsMutable
 
@@ -373,6 +405,55 @@ struct ReachabilityBasedDetector: Sendable {
                 ))
         }
 
+        if configuration.detectPreviewOnly || configuration.detectDebugOnly, context.hasCodeRegions {
+            results.append(
+                contentsOf: await regionOnlyResults(
+                    result: result, context: context, reachableWithTests: reachableWithTests))
+        }
+
+        return results
+    }
+
+    // MARK: - Region reachability
+
+    /// Production code that only previews or `#if DEBUG` code reach. Two
+    /// more passes, over the graphs a release build and a debug build
+    /// compile; a declaration the full pass reaches but the release pass
+    /// does not is debug-only when the debug pass reaches it, preview-only
+    /// otherwise. Code declared in a preview or `#if DEBUG` is never the
+    /// subject: it already sits where it belongs.
+    /// - Complexity: O(V + E) per pass, two passes.
+    private func regionOnlyResults(
+        result: AnalysisResult,
+        context: CorpusContext,
+        reachableWithTests: Set<Int>
+    ) async -> [UnusedCode] {
+        let extractor = DependencyExtractor(configuration: extractionConfiguration)
+        let reachableInRelease = await extractor.buildGraph(from: result, context: context, upTo: .production)
+            .computeReachable()
+        let reachableInDebug = await extractor.buildGraph(from: result, context: context, upTo: .debugOnly)
+            .computeReachable()
+
+        let declarations = result.declarations.declarations
+        var results: [UnusedCode] = []
+        for index in reachableWithTests.sorted() where !reachableInRelease.contains(index) {
+            let declaration = declarations[index]
+            let level = context.regionLevel(ofLine: declaration.location.line, inFile: declaration.location.file)
+            guard level == .production else { continue }
+            let onlyDebug = reachableInDebug.contains(index)
+            guard onlyDebug ? configuration.detectDebugOnly : configuration.detectPreviewOnly,
+                let confidence = reportableConfidence(of: declaration, context: context)
+            else { continue }
+            results.append(
+                UnusedCode(
+                    declaration: declaration,
+                    reason: onlyDebug ? .referencedOnlyByDebugCode : .referencedOnlyByPreviews,
+                    confidence: confidence,
+                    suggestion: onlyDebug
+                        ? "Only #if DEBUG code reaches '\(declaration.name)' — move it under #if DEBUG"
+                        : "Only previews reach '\(declaration.name)' — move it under #if DEBUG"
+                ))
+        }
         return results
     }
 

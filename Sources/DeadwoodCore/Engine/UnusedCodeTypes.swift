@@ -27,6 +27,10 @@ enum UnusedReason: String, Sendable, Codable {
     /// Reachable with test entry points, unreachable without them —
     /// production mode only.
     case referencedOnlyByTests
+    /// Production code reachable only from previews.
+    case referencedOnlyByPreviews
+    /// Production code reachable only from `#if DEBUG` code.
+    case referencedOnlyByDebugCode
 }
 
 // MARK: - Confidence
