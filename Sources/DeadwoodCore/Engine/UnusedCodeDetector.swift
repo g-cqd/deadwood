@@ -117,7 +117,7 @@ struct UnusedCodeDetector: Sendable {
             true
         case .import,
             .parameter, .initializer, .deinitializer, .subscript,
-            .operator, .extension, .associatedtype:
+            .operator, .extension, .associatedtype, .topLevelCode:
             // Imports have their own rule; the rest have no rule —
             // name-level reference tracking cannot judge them reliably.
             false
