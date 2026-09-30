@@ -24,7 +24,11 @@ final class ReferenceCollector: ScopeTrackingVisitor {
     /// ("SCARF" set): a declaration whose name appears here may be reached
     /// dynamically (NSClassFromString, selector strings, key paths by
     /// name), so unused findings on it get demoted, never suppressed.
-    private(set) var stringLiteralTokens: Set<String> = []
+    private(set) var stringLiteralTokens: Set<TokenLine> = []
+
+    /// Identifier-shaped tokens found in `//` and `/* */` comments (doc
+    /// comments excluded): commented-out code keeps naming what it used.
+    private(set) var commentTokens: Set<String> = []
 
     /// Stack tracking the current reference context.
     private var contextStack: [ReferenceContext] = [.unknown]
@@ -37,23 +41,41 @@ final class ReferenceCollector: ScopeTrackingVisitor {
 
     override func visit(_ node: StringLiteralExprSyntax) -> SyntaxVisitorContinueKind {
         for segment in node.segments {
-            guard let text = segment.as(StringSegmentSyntax.self)?.content.text else {
+            guard let content = segment.as(StringSegmentSyntax.self)?.content else {
                 continue
             }
-            collectIdentifierTokens(in: text)
+            let line = converter.location(for: content.positionAfterSkippingLeadingTrivia).line
+            for token in Self.identifierTokens(in: content.text) {
+                stringLiteralTokens.insert(TokenLine(token: token, line: line))
+            }
         }
         // Interpolation segments contain expressions; the default child walk
         // still collects their references.
         return .visitChildren
     }
 
-    /// Split segment text on non-identifier characters and record every
-    /// identifier-shaped token ("com.app.LegacyMigrator" yields all three).
-    private func collectIdentifierTokens(in text: String) {
+    override func visit(_ token: TokenSyntax) -> SyntaxVisitorContinueKind {
+        for trivia in [token.leadingTrivia, token.trailingTrivia] {
+            for piece in trivia {
+                switch piece {
+                case .lineComment(let text), .blockComment(let text):
+                    commentTokens.formUnion(Self.identifierTokens(in: text))
+                default:
+                    break
+                }
+            }
+        }
+        return .visitChildren
+    }
+
+    /// Split text on non-identifier characters into its identifier-shaped
+    /// tokens ("com.app.LegacyMigrator" yields all three).
+    private static func identifierTokens(in text: String) -> [String] {
+        var tokens: [String] = []
         var current = ""
         func flush() {
             if let first = current.first, first.isLetter || first == "_" {
-                stringLiteralTokens.insert(current)
+                tokens.append(current)
             }
             current.removeAll(keepingCapacity: true)
         }
@@ -65,6 +87,7 @@ final class ReferenceCollector: ScopeTrackingVisitor {
             }
         }
         flush()
+        return tokens
     }
 
     // MARK: - Identifier expressions
