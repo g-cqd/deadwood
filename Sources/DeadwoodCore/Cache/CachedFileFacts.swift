@@ -8,19 +8,22 @@ struct CachedFileFacts: Sendable, Codable {
     let references: [CachedReference]
     let scopes: [Scope]
     let stringLiteralTokens: Set<String>
+    let isGenerated: Bool
 
     init(
         file: String,
         declarations: [Declaration],
         references: [CachedReference],
         scopes: [Scope],
-        stringLiteralTokens: Set<String>
+        stringLiteralTokens: Set<String>,
+        isGenerated: Bool
     ) {
         self.file = file
         self.declarations = declarations
         self.references = references
         self.scopes = scopes
         self.stringLiteralTokens = stringLiteralTokens
+        self.isGenerated = isGenerated
     }
 
     init(_ facts: FileAnalysisResult) {
@@ -29,6 +32,7 @@ struct CachedFileFacts: Sendable, Codable {
         references = facts.references.map(CachedReference.init)
         scopes = facts.scopes
         stringLiteralTokens = facts.stringLiteralTokens
+        isGenerated = facts.isGenerated
     }
 
     func restored() -> FileAnalysisResult {
@@ -37,7 +41,8 @@ struct CachedFileFacts: Sendable, Codable {
             declarations: declarations,
             references: references.map { $0.restored(in: file) },
             scopes: scopes,
-            stringLiteralTokens: stringLiteralTokens
+            stringLiteralTokens: stringLiteralTokens,
+            isGenerated: isGenerated
         )
     }
 }

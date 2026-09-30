@@ -25,18 +25,24 @@ struct AnalysisResult: Sendable {
     /// in the corpus (dynamic-reference demotion set).
     let stringLiteralTokens: Set<String>
 
+    /// Files a generator wrote: their code counts as uses, but nothing in
+    /// them is reported.
+    let generatedFiles: Set<String>
+
     init(
         files: [String],
         declarations: DeclarationIndex,
         references: ReferenceIndex,
         scopes: ScopeTree,
-        stringLiteralTokens: Set<String> = []
+        stringLiteralTokens: Set<String> = [],
+        generatedFiles: Set<String> = []
     ) {
         self.files = files
         self.declarations = declarations
         self.references = references
         self.scopes = scopes
         self.stringLiteralTokens = stringLiteralTokens
+        self.generatedFiles = generatedFiles
     }
 }
 
@@ -59,18 +65,22 @@ struct FileAnalysisResult: Sendable, Codable {
 
     /// Identifier-shaped tokens inside this file's string literals.
     let stringLiteralTokens: Set<String>
+    /// Whether a generator wrote this file.
+    let isGenerated: Bool
 
     init(
         file: String,
         declarations: [Declaration],
         references: [Reference],
         scopes: [Scope],
-        stringLiteralTokens: Set<String> = []
+        stringLiteralTokens: Set<String> = [],
+        isGenerated: Bool = false
     ) {
         self.file = file
         self.declarations = declarations
         self.references = references
         self.scopes = scopes
         self.stringLiteralTokens = stringLiteralTokens
+        self.isGenerated = isGenerated
     }
 }
