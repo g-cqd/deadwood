@@ -471,8 +471,10 @@ struct ReachabilityBasedDetector: Sendable {
         // Map indices back through the declaration array only here, at the
         // findings boundary — the graph never carries declarations.
         let declarations = result.declarations.declarations
-        var results = await deadGroupResults(
-            graph: graph, declarations: declarations, reachable: reachableWithTests, context: context)
+        let own = deadCandidates(declarations: declarations, reachable: reachableWithTests, context: context)
+        let successors = await graph.deadSuccessors(of: Set(own.keys))
+        var results = deadGroupResults(
+            declarations: declarations, own: own, successors: successors, context: context)
 
         if configuration.productionMode {
             let classifier = TestScopeClassifier(testsGlob: configuration.testsGlob)
@@ -500,18 +502,17 @@ struct ReachabilityBasedDetector: Sendable {
 
     // MARK: - Dead-code groups
 
-    /// The unreachable declarations, grouped: a declaration nothing names
-    /// heads its group, and the ones only dead code uses follow it as
-    /// `onlyUsedByDeadCode`, their confidence the weakest along the path
-    /// from the root. A cycle nothing live reaches is one group headed by
-    /// its first member (``DeadCodeGroups``).
-    /// - Complexity: O(D + E_D) beyond the search that found them dead.
-    private func deadGroupResults(
-        graph: ReachabilityGraph,
+    /// The declarations ``reportableConfidence`` accepts among those
+    /// `reachable` does not cover: the candidates for dead-code grouping,
+    /// each with its own (ungrouped) confidence, before a graph resolves
+    /// which of them use each other. Shared by the syntax graph and the
+    /// index bridge, which differ only in how they compute `successors` for
+    /// ``deadGroupResults(declarations:own:successors:context:)``.
+    func deadCandidates(
         declarations: [Declaration],
         reachable: Set<Int>,
         context: CorpusContext
-    ) async -> [UnusedCode] {
+    ) -> [Int: Confidence] {
         let calculator = ConfidenceCalculator(context: context)
         var own: [Int: Confidence] = [:]
         for index in 0..<declarations.count where !reachable.contains(index) {
@@ -520,8 +521,27 @@ struct ReachabilityBasedDetector: Sendable {
             let provisional = UnusedCode(declaration: declaration, reason: .neverReferenced, confidence: base)
             own[index] = calculator.assess(provisional).confidence
         }
+        return own
+    }
+
+    /// The unreachable declarations, grouped: a declaration nothing names
+    /// heads its group, and the ones only dead code uses follow it as
+    /// `onlyUsedByDeadCode`, their confidence the weakest along the path
+    /// from the root. A cycle nothing live reaches is one group headed by
+    /// its first member (``DeadCodeGroups``).
+    /// - Parameter own: ``deadCandidates(declarations:reachable:context:)``'s
+    ///   result.
+    /// - Parameter successors: for each key of `own`, the other keys of
+    ///   `own` it has an edge to.
+    /// - Complexity: O(D + E_D) beyond the search that found them dead.
+    func deadGroupResults(
+        declarations: [Declaration],
+        own: [Int: Confidence],
+        successors: [Int: [Int]],
+        context: CorpusContext
+    ) -> [UnusedCode] {
         let dead = Set(own.keys)
-        let groups = DeadCodeGroups(dead: dead.sorted(), successors: await graph.deadSuccessors(of: dead))
+        let groups = DeadCodeGroups(dead: dead.sorted(), successors: successors)
 
         var chain: [Int: Confidence] = [:]
         var results: [UnusedCode] = []
@@ -573,7 +593,7 @@ struct ReachabilityBasedDetector: Sendable {
     /// or preview (``LeveledReachability``). Code declared in a preview or
     /// `#if DEBUG` is never the subject: it already sits where it belongs.
     /// - Complexity: O(V + E).
-    private func regionOnlyResults(
+    func regionOnlyResults(
         edges: LeveledEdges,
         declarations: [Declaration],
         context: CorpusContext

@@ -199,4 +199,148 @@
             #expect(mismatched.findings.contains { $0.message.contains("strayDead") })
         }
     }
+
+    // MARK: - Fixture: index-specific false positives
+
+    /// A fixture exercising three index-specific mapping gaps in one build:
+    /// a computed property calling another from within its own accessor, a
+    /// `@Test` function named with backtick-quoted raw identifier syntax, and
+    /// a macro-conforming type whose synthesized conformance extension
+    /// shares the type's own name and line.
+    struct IndexFalsePositiveFixture {
+        let root: URL
+        let sourceFile: String
+        let testFile: String
+
+        static func create() throws -> IndexFalsePositiveFixture {
+            let root = FileManager.default.temporaryDirectory
+                .appending(path: "dw-idx-fp-\(UUID().uuidString)")
+            var completed = false
+            defer {
+                if !completed { try? FileManager.default.removeItem(at: root) }
+            }
+            let sources = root.appending(path: "Sources/IndexFPFixture")
+            try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+            let tests = root.appending(path: "Tests/IndexFPFixtureTests")
+            try FileManager.default.createDirectory(at: tests, withIntermediateDirectories: true)
+
+            try """
+            // swift-tools-version: 6.0
+            import PackageDescription
+            let package = Package(
+                name: "IndexFPFixture",
+                platforms: [.macOS(.v14)],
+                targets: [
+                    .target(name: "IndexFPFixture"),
+                    .testTarget(name: "IndexFPFixtureTests", dependencies: ["IndexFPFixture"]),
+                ]
+            )
+            """.write(to: root.appending(path: "Package.swift"), atomically: true, encoding: .utf8)
+
+            // A computed property (`summary`) whose own accessor calls
+            // another computed property (`detail`): the index gives each its
+            // own accessor symbol, distinct from the property. A macro
+            // ("Observable")-conforming class whose synthesized conformance
+            // extension shares the class's own name at the class's own line.
+            let source = sources.appending(path: "Sample.swift")
+            try """
+            import Observation
+
+            @Observable
+            public final class SampleEngine {
+                public func run() -> String { "ran" }
+            }
+
+            public struct SampleReport {
+                public let engine = SampleEngine()
+
+                public var summary: String { detail }
+
+                private var detail: String { engine.run() }
+            }
+            """.write(to: source, atomically: true, encoding: .utf8)
+
+            // A Swift Testing raw-identifier (backtick) test name, using a
+            // `sut`-shaped property from its own body — the pervasive
+            // convention the backtick-stripping fix targets.
+            let test = tests.appending(path: "SampleReportTests.swift")
+            try """
+            import Testing
+            @testable import IndexFPFixture
+
+            struct SampleReportTests {
+                private let sut = SampleReport()
+
+                @Test
+                func `summary reads the private detail`() {
+                    #expect(sut.summary == "ran")
+                }
+            }
+            """.write(to: test, atomically: true, encoding: .utf8)
+
+            completed = true
+            return IndexFalsePositiveFixture(root: root, sourceFile: source.path, testFile: test.path)
+        }
+
+        var sourceFiles: [String] { [sourceFile, testFile] }
+
+        func buildIndex(swiftPath: String) async -> String? {
+            do {
+                let result = try await ProcessExecutor.run(
+                    executable: URL(fileURLWithPath: swiftPath),
+                    arguments: ["build", "--build-tests"],
+                    currentDirectory: root,
+                    timeout: .seconds(300)
+                )
+                guard result.succeeded else { return nil }
+                return IndexStorePathFinder.findIndexStorePath(in: root.path)
+            } catch {
+                return nil
+            }
+        }
+    }
+
+    @Suite struct IndexFalsePositiveTests {
+        @Test(
+            "Index mode roots computed-property chains, backtick test names, and macro-conforming types",
+            .enabled(
+                if: IndexTestToolchain.isAvailable
+                    && ProcessInfo.processInfo.environment["CI"] == nil)
+        )
+        func indexAvoidsMappingFalsePositives() async throws {
+            guard let swiftPath = IndexTestToolchain.swiftPath else { return }
+
+            let fixture = try IndexFalsePositiveFixture.create()
+            defer { try? FileManager.default.removeItem(at: fixture.root) }
+
+            guard let storePath = await fixture.buildIndex(swiftPath: swiftPath) else {
+                print("IndexFalsePositiveTests: swift build did not produce a readable index; skipping")
+                return
+            }
+            let canonicalSource = IndexBasedDependencyGraph.canonicalPath(fixture.sourceFile)
+            guard
+                let reader = try? IndexStoreReader(indexStorePath: storePath, allowsDirectoryCreation: true),
+                !reader.rawOccurrences(inFile: canonicalSource).isEmpty
+            else {
+                print("IndexFalsePositiveTests: index opened empty (toolchain mismatch); skipping")
+                return
+            }
+
+            let report = await Analyzer().analyze(
+                files: fixture.sourceFiles,
+                indexStore: IndexStoreOptions(enabled: true, explicitPath: storePath)
+            )
+            #expect(report.notes.contains { $0.contains("--index-store active") })
+
+            // A computed property reached only from within another
+            // computed property's own accessor is used.
+            #expect(!report.findings.contains { $0.message.contains("'detail'") })
+            // A backtick-named @Test function roots what it calls, `sut`
+            // included.
+            #expect(!report.findings.contains { $0.message.contains("'sut'") })
+            // The macro-conforming class is not confused with its
+            // synthesized conformance extension.
+            #expect(!report.findings.contains { $0.message.contains("SampleEngine") })
+        }
+    }
 #endif
