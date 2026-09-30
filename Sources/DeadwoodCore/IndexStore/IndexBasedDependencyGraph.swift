@@ -95,12 +95,9 @@
     struct IndexGraphConfiguration: Sendable {
         /// Include cross-module edges (references into other modules).
         var includeCrossModuleEdges: Bool
-        /// Track protocol witnesses (requirement → implementation edges).
-        var trackProtocolWitnesses: Bool
 
-        init(includeCrossModuleEdges: Bool = true, trackProtocolWitnesses: Bool = true) {
+        init(includeCrossModuleEdges: Bool = true) {
             self.includeCrossModuleEdges = includeCrossModuleEdges
-            self.trackProtocolWitnesses = trackProtocolWitnesses
         }
 
         static let `default` = Self()
@@ -128,6 +125,15 @@
         /// Files included in the analysis scope (standardized).
         private let analysisFiles: Set<String>
 
+        /// Maps an accessor's own USR (a getter or setter) to the USR of the
+        /// property or subscript it belongs to. Swift's index gives every
+        /// accessor its own symbol, distinct from the property, so a use
+        /// recorded from inside the accessor's body — the common case, since
+        /// that is where a computed property's code lives — would otherwise
+        /// attach to a node nothing ever roots or reaches. Canonicalizing
+        /// through this map folds the accessor back into its property.
+        private var accessorAliases: [String: String] = [:]
+
         init(analysisFiles: [String], configuration: IndexGraphConfiguration = .default) {
             self.analysisFiles = Set(
                 analysisFiles.map { Self.canonicalPath($0) })
@@ -146,16 +152,30 @@
         func build(from reader: IndexStoreReader) {
             nodes.removeAll()
             edges.removeAll()
+            accessorAliases.removeAll()
             collectDefinitions(from: reader)
             buildEdges(from: reader)
-            if configuration.trackProtocolWitnesses {
-                resolveProtocolWitnesses(from: reader)
-            }
         }
 
         /// Definition nodes located inside the analysis scope.
         var definitionNodes: [IndexSymbolNode] {
             nodes.values.filter { !$0.isExternal && $0.definitionFile != nil }
+        }
+
+        /// For each USR of `dead`, the USRs of `dead` it has an edge to —
+        /// the same shape as the syntax graph's dead-code grouping, so one
+        /// declaration only dead code uses can be reported grouped under
+        /// the declaration that heads its chain.
+        /// - Complexity: O(D + E_D) for the dead USRs and their edges.
+        func deadSuccessors(of dead: Set<String>) -> [String: [String]] {
+            var successors: [String: [String]] = [:]
+            for usr in dead {
+                let targets = (edges[usr] ?? []).map(\.toUSR).filter { dead.contains($0) }
+                if !targets.isEmpty {
+                    successors[usr] = targets
+                }
+            }
+            return successors
         }
 
         // MARK: - Reachability
@@ -202,23 +222,48 @@
 
         // MARK: - Definition + edge collection
 
-        /// Collect all symbol definitions from files in scope, and the
-        /// member→enclosing-type containment edges those definitions carry.
+        /// Collect all symbol definitions from files in scope: the
+        /// member→enclosing-type containment edges and the protocol/override
+        /// witness edges those definitions carry, and the accessor→property
+        /// aliases that let a computed property's own body count as its use.
         private func collectDefinitions(from reader: IndexStoreReader) {
             for filePath in analysisFiles {
                 for occurrence in reader.rawOccurrences(inFile: filePath) {
                     guard isDefinitionLike(occurrence.roles) else { continue }
+
+                    // A getter or setter is defined as its own symbol, related
+                    // to its property/subscript by `.accessorOf`. Alias it and
+                    // stop: the property's own definition occurrence supplies
+                    // the node, so nothing here should shadow it.
+                    if let owner = occurrence.relations.first(where: { $0.roles.contains(.accessorOf) }) {
+                        accessorAliases[occurrence.symbol.usr] = owner.symbol.usr
+                        continue
+                    }
+
                     let usr = occurrence.symbol.usr
 
-                    // A member's definition carries a `.containedBy` relation to
-                    // its enclosing type. The edge member→type means a reachable
-                    // member (e.g. a called `init`) keeps the type alive — the
-                    // common case where `Foo()` references the initializer, not
-                    // the type name. (Inheritance is handled conservatively in
-                    // the bridge via deadwood's parsed conformance lists, which
-                    // are more reliable than the index's structural relations.)
-                    for relation in occurrence.relations where relation.roles.contains(.containedBy) {
-                        addEdge(from: usr, to: relation.symbol.usr, kind: .containedBy)
+                    for relation in occurrence.relations {
+                        // A member's definition carries a `.childOf` relation
+                        // to its enclosing type. The edge member→type means a
+                        // reachable member (e.g. a called `init`) keeps the
+                        // type alive — the common case where `Foo()`
+                        // references the initializer, not the type name.
+                        // (Inheritance is handled conservatively in the
+                        // bridge via deadwood's parsed conformance lists,
+                        // which are more reliable than the index's
+                        // structural relations.)
+                        if relation.roles.contains(.childOf) {
+                            addEdge(from: usr, to: canonical(relation.symbol.usr), kind: .containedBy)
+                        }
+                        // An override or protocol witness carries an
+                        // `.overrideOf` relation straight to the base member
+                        // or protocol requirement it satisfies, by USR — no
+                        // by-name matching needed. Using the base through
+                        // dynamic dispatch must be able to reach every
+                        // conformer, so the edge runs base → override.
+                        if relation.roles.contains(.overrideOf) {
+                            addEdge(from: canonical(relation.symbol.usr), to: usr, kind: .override)
+                        }
                     }
 
                     guard nodes[usr] == nil else { continue }
@@ -234,6 +279,13 @@
             }
         }
 
+        /// The USR a declaration keeps in the graph: a property or
+        /// subscript's own USR, or the property/subscript an accessor's USR
+        /// belongs to.
+        private func canonical(_ usr: String) -> String {
+            accessorAliases[usr] ?? usr
+        }
+
         /// Build edges from all references in scope.
         private func buildEdges(from reader: IndexStoreReader) {
             for filePath in analysisFiles {
@@ -246,11 +298,11 @@
         /// Extract edges from one occurrence via its containment relations.
         private func processOccurrence(_ occurrence: SymbolOccurrence) {
             let roles = occurrence.roles
-            let targetUSR = occurrence.symbol.usr
+            let targetUSR = canonical(occurrence.symbol.usr)
             guard indicatesUsage(roles) else { return }
 
             for relation in occurrence.relations {
-                let relatedUSR = relation.symbol.usr
+                let relatedUSR = canonical(relation.symbol.usr)
                 let relatedRoles = relation.roles
 
                 // The containing symbol references the target.
@@ -272,45 +324,6 @@
             }
 
             ensureNodeExists(usr: targetUSR, symbol: occurrence.symbol, isExternal: true)
-        }
-
-        /// Resolve protocol-witness relationships: a used protocol's
-        /// requirements keep their conforming implementations alive.
-        private func resolveProtocolWitnesses(from reader: IndexStoreReader) {
-            let protocols = nodes.values.filter { $0.kind == .protocol }
-            for proto in protocols {
-                reader.forEachRelatedOccurrence(byUSR: proto.usr, roles: .baseOf) { occurrence in
-                    self.linkProtocolWitnesses(
-                        protocolUSR: proto.usr,
-                        conformingTypeUSR: occurrence.symbol.usr,
-                        reader: reader
-                    )
-                    return true
-                }
-            }
-        }
-
-        /// Link protocol requirements to their implementations in a conformer.
-        private func linkProtocolWitnesses(
-            protocolUSR: String,
-            conformingTypeUSR: String,
-            reader: IndexStoreReader
-        ) {
-            reader.forEachRelatedOccurrence(byUSR: protocolUSR, roles: .containedBy) { protoMember in
-                let memberName = protoMember.symbol.name
-                reader.forEachRelatedOccurrence(byUSR: conformingTypeUSR, roles: .containedBy) {
-                    typeMember in
-                    if typeMember.symbol.name == memberName {
-                        self.addEdge(
-                            from: protoMember.symbol.usr,
-                            to: typeMember.symbol.usr,
-                            kind: .protocolWitness
-                        )
-                    }
-                    return true
-                }
-                return true
-            }
         }
 
         private func ensureNodeExists(usr: String, symbol: Symbol, isExternal: Bool) {

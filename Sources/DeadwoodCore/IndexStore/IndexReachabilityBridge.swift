@@ -30,6 +30,12 @@
             let resolvedCount: Int
             /// One-line index summary (symbol counts, resolution rate).
             let summary: String
+            /// Declarations unreachable from any root, grouped exactly as
+            /// the syntax graph groups them (``DependencyExtractor/deadGroupResults``):
+            /// a declaration nothing names heads its group, and a
+            /// declaration only dead code uses is reported apart, naming
+            /// its dead users, at the weakest confidence along the chain.
+            let deadGroupResults: [UnusedCode]
         }
 
         /// Compute index-backed reachability. Throws only if the index cannot
@@ -37,6 +43,7 @@
         func computeReachability(
             result: AnalysisResult,
             context: CorpusContext,
+            configuration: UnusedCodeConfiguration,
             rootConfiguration: RootDetectionConfiguration,
             productionMode: Bool,
             testScoped: [Bool],
@@ -116,12 +123,59 @@
                 + "\(zeroReference) with zero index references; "
                 + "\(declToUSR.count)/\(declarations.count) declarations resolved to USRs"
 
+            // Dead-code grouping shares its confidence and kind-gating logic
+            // with the syntax graph; only the successor lookup differs,
+            // resolved here (in USR space) and mapped back to declaration
+            // indices, since the graph and the USR map live only in this
+            // function.
+            let detector = ReachabilityBasedDetector(
+                configuration: configuration,
+                extractionConfiguration: DependencyExtractionConfiguration(
+                    rootDetection: rootConfiguration, treatProtocolRequirementsAsRoot: true)
+            )
+            let own = detector.deadCandidates(
+                declarations: declarations, reachable: reachableWithTests, context: context)
+            let deadGroupResults = detector.deadGroupResults(
+                declarations: declarations,
+                own: own,
+                successors: Self.declarationSuccessors(
+                    of: own.keys, declToUSR: declToUSR, graph: graph),
+                context: context
+            )
+
             return Result(
                 reachableWithTests: reachableWithTests,
                 reachableInProduction: reachableInProduction,
                 resolvedCount: declToUSR.count,
-                summary: summary
+                summary: summary,
+                deadGroupResults: deadGroupResults
             )
+        }
+
+        /// The index graph's edges among `indices`, translated from USR
+        /// space to declaration indices via `declToUSR`. Every key of
+        /// `indices` has a USR (the caller draws them from a USR-mapped
+        /// set), so only the targets need the reverse lookup.
+        private static func declarationSuccessors(
+            of indices: some Sequence<Int>,
+            declToUSR: [Int: String],
+            graph: IndexBasedDependencyGraph
+        ) -> [Int: [Int]] {
+            var usrToIndex: [String: Int] = [:]
+            usrToIndex.reserveCapacity(declToUSR.count)
+            for (index, usr) in declToUSR {
+                usrToIndex[usr] = index
+            }
+            let usrs = Set(indices.compactMap { declToUSR[$0] })
+            var successors: [Int: [Int]] = [:]
+            for (fromUSR, toUSRs) in graph.deadSuccessors(of: usrs) {
+                guard let fromIndex = usrToIndex[fromUSR] else { continue }
+                let targets = toUSRs.compactMap { usrToIndex[$0] }
+                if !targets.isEmpty {
+                    successors[fromIndex] = targets
+                }
+            }
+            return successors
         }
 
         // MARK: - Mapping
@@ -138,19 +192,30 @@
             declarations: [Declaration],
             definitionNodes: [IndexSymbolNode]
         ) -> [Int: String] {
-            var byNameFile: [String: [(line: Int, usr: String)]] = [:]
+            var byNameFile: [String: [(line: Int, usr: String, kind: IndexedSymbolKind)]] = [:]
             for node in definitionNodes {
                 guard let file = node.definitionFile, let line = node.definitionLine else { continue }
                 byNameFile[nameKey(file: file, name: baseName(node.name)), default: []]
-                    .append((line, node.usr))
+                    .append((line, node.usr, node.kind))
             }
+
+            // A type conforming via a macro (`@Observable`, `@Model`, ...) gets
+            // a compiler-synthesized `extension Type: Protocol {}` indexed
+            // under the type's own name, often at the type's own line — a
+            // same-name, same-line rival for the type's own declaration. A
+            // nominal type never means that extension.
+            let nominalTypeKinds: Set<DeclarationKind> = [.class, .struct, .enum, .protocol, .actor]
 
             var declToUSR: [Int: String] = [:]
             declToUSR.reserveCapacity(declarations.count)
             for (index, declaration) in declarations.enumerated() {
                 let file = IndexBasedDependencyGraph.canonicalPath(declaration.location.file)
-                let key = nameKey(file: file, name: declaration.name)
-                guard let candidates = byNameFile[key], !candidates.isEmpty else { continue }
+                let key = nameKey(file: file, name: unquoted(declaration.name))
+                guard var candidates = byNameFile[key], !candidates.isEmpty else { continue }
+                if nominalTypeKinds.contains(declaration.kind) {
+                    let ownDeclarations = candidates.filter { $0.kind != .extension }
+                    if !ownDeclarations.isEmpty { candidates = ownDeclarations }
+                }
                 let declLine = declaration.location.line
                 guard
                     let best = candidates.min(by: {
@@ -288,6 +353,18 @@
         /// match. Line disambiguation still separates same-base overloads.
         private static func baseName(_ name: String) -> String {
             String(name.prefix { $0 != "(" })
+        }
+
+        /// A raw identifier keeps its surrounding backticks in
+        /// `Declaration.name` (`` `a role is granted` ``), a spelling Swift
+        /// Testing favors for sentence-style test names; the index records
+        /// the identifier itself, without them. Strip a matched pair before
+        /// building the lookup key, or every backtick-quoted declaration —
+        /// the test method most of all — fails to map, taking its whole
+        /// reachable subtree down with it.
+        private static func unquoted(_ name: String) -> String {
+            guard name.count >= 2, name.hasPrefix("`"), name.hasSuffix("`") else { return name }
+            return String(name.dropFirst().dropLast())
         }
 
         private static func nameKey(file: String, name: String) -> String {
