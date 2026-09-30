@@ -45,30 +45,18 @@ let package = Package(
             url: "https://github.com/g-cqd/AemiJSON.git",
             revision: "6b8e5b9fb14b6c835d0dca13ba15f5bb1f3831de"
         ),
+        // The project model the analyzers share: entry points project files
+        // and test frameworks create, code regions, generated files.
+        .package(
+            url: "https://github.com/g-cqd/analyzerkit.git",
+            revision: "100c139cd366df60f8934c2c254ad2545941a9cd"
+        ),
     ],
     targets: [
-        // The shared model of a Swift project: entry points, code regions,
-        // generated files. Self-contained (it imports nothing from
-        // DeadwoodCore) so it can move to its own package unchanged.
-        .target(
-            name: "ProjectModel",
-            dependencies: [
-                .product(name: "SwiftSyntax", package: "swift-syntax")
-            ],
-            swiftSettings: strictSwiftSettings
-        ),
-        .testTarget(
-            name: "ProjectModelTests",
-            dependencies: [
-                "ProjectModel",
-                .product(name: "SwiftParser", package: "swift-syntax"),
-            ],
-            swiftSettings: strictSwiftSettings
-        ),
         .target(
             name: "DeadwoodCore",
             dependencies: [
-                "ProjectModel",
+                .product(name: "ProjectModel", package: "analyzerkit"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftOperators", package: "swift-syntax"),
