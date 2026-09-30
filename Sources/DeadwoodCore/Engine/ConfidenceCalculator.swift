@@ -53,7 +53,8 @@ struct ConfidenceCalculator: Sendable {
         case .deadStore:
             // Dataflow-backed but conservative around aliasing/inout.
             return Assessment(confidence: .high, demotionNotes: [])
-        case .neverReferenced, .onlyAssigned, .importNotUsed, .referencedOnlyByTests:
+        case .neverReferenced, .onlyAssigned, .importNotUsed, .referencedOnlyByTests,
+            .referencedOnlyByPreviews, .referencedOnlyByDebugCode:
             break
         }
 
