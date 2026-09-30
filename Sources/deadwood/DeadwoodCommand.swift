@@ -43,7 +43,7 @@ struct Analyze: AsyncParsableCommand {
     @Option(name: .long, help: "Output format: xcode, json, or sarif.")
     var format: OutputFormat = .xcode
 
-    @Flag(name: .long, help: "Exit 1 on any finding, not just errors.")
+    @Flag(name: .long, help: "Exit 1 on any warning or error finding; notes never fail a run.")
     var strict = false
 
     @Flag(
@@ -250,7 +250,9 @@ struct Analyze: AsyncParsableCommand {
         }
         standardError.write(Data((summary + "\n").utf8))
 
-        let failed = strict ? !report.findings.isEmpty : report.maxSeverity == .error
+        // Notes inform; they never fail a run, not even a strict one.
+        let failed =
+            strict ? report.findings.contains { $0.severity > .note } : report.maxSeverity == .error
         if failed {
             throw ExitCode(1)
         }

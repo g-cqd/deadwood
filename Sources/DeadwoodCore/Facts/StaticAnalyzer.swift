@@ -44,7 +44,8 @@ struct StaticAnalyzer: Sendable {
             references: refCollector.references,
             scopes: Array(declCollector.tracker.tree.scopes.values),
             stringLiteralTokens: refCollector.stringLiteralTokens,
-            isGenerated: GeneratedCode.isGenerated(path: file, tree: tree)
+            isGenerated: GeneratedCode.isGenerated(path: file, tree: tree),
+            regionSpans: CodeRegionScanner.scan(tree, converter: converter).map(CodeRegionSpan.init)
         )
     }
 
@@ -105,6 +106,7 @@ struct StaticAnalyzer: Sendable {
         var scopeTree = ScopeTree()
         var stringTokens: Set<String> = []
         var generatedFiles: Set<String> = []
+        var regionSpansByFile: [String: [CodeRegionSpan]] = [:]
 
         for result in results {
             for declaration in result.declarations {
@@ -120,6 +122,9 @@ struct StaticAnalyzer: Sendable {
             if result.isGenerated {
                 generatedFiles.insert(result.file)
             }
+            if !result.regionSpans.isEmpty {
+                regionSpansByFile[result.file] = result.regionSpans
+            }
         }
 
         return AnalysisResult(
@@ -128,7 +133,8 @@ struct StaticAnalyzer: Sendable {
             references: referenceIndex,
             scopes: scopeTree,
             stringLiteralTokens: stringTokens,
-            generatedFiles: generatedFiles
+            generatedFiles: generatedFiles,
+            regionSpansByFile: regionSpansByFile
         )
     }
 }

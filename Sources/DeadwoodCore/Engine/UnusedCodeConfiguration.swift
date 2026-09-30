@@ -31,6 +31,13 @@ struct UnusedCodeConfiguration: Sendable {
     /// `referenced-only-by-tests` rule.
     var productionMode: Bool
 
+    /// Report production code that only previews reach (`preview-only`).
+    var detectPreviewOnly: Bool = false
+
+    /// Report production code that only `#if DEBUG` code reaches
+    /// (`debug-only`).
+    var detectDebugOnly: Bool = false
+
     /// Glob deciding which files are test files in production mode; nil
     /// uses the built-in heuristics (`**/Tests/**`, `**/*Tests.swift`).
     var testsGlob: String?
