@@ -35,6 +35,12 @@ public enum SourceDiscovery {
     /// - Complexity: O(*n* log *n*) in the number of entries under
     ///   `directory`; each directory is read once.
     public static func swiftFiles(in directory: String) -> [String] {
+        files(in: directory) { $0.hasSuffix(".swift") }
+    }
+
+    /// The files under `directory` whose path `isIncluded` accepts, sorted,
+    /// walked as ``swiftFiles(in:)`` walks.
+    static func files(in directory: String, where isIncluded: (String) -> Bool) -> [String] {
         let manager = FileManager.default
         let root = SourcePath.canonical(directory)
         let rootPrefix = root.hasSuffix("/") ? root : root + "/"
@@ -65,7 +71,7 @@ public enum SourceDiscovery {
                     guard visited.insert(DirectoryIdentity(attributes: attributes, resolvedPath: resolved)).inserted
                     else { continue }
                     stack.append((spelled, resolved))
-                } else if spelled.hasSuffix(".swift") {
+                } else if isIncluded(spelled) {
                     files.append(spelled)
                 }
             }
