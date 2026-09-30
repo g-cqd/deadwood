@@ -2,6 +2,7 @@
 //  Trimmed: `UnusedCodeReport` (deadwood reports through `AnalysisReport`).
 
 import AemiJSON
+import ProjectModel
 
 // MARK: - UnusedReason
 
@@ -86,18 +87,38 @@ struct UnusedCode: Sendable, Codable {
     /// For dead-code groups: the dead users of a member, or the size of a
     /// root's group.
     let detail: String?
+    /// `CodeRegion.rawValue` of an `--include`d region this finding exists
+    /// only because of (a generated declaration, or a preview/debug-only
+    /// use promoted from a note): the note names it, so it can be filtered.
+    /// Zero for an ordinary finding.
+    let regionTag: UInt8
 
     init(
         declaration: Declaration,
         reason: UnusedReason,
         confidence: Confidence,
         suggestion: String = "Consider removing this declaration",
-        detail: String? = nil
+        detail: String? = nil,
+        regionTag: UInt8 = 0
     ) {
         self.declaration = declaration
         self.reason = reason
         self.confidence = confidence
         self.suggestion = suggestion
         self.detail = detail
+        self.regionTag = regionTag
+    }
+
+    init(
+        declaration: Declaration,
+        reason: UnusedReason,
+        confidence: Confidence,
+        suggestion: String = "Consider removing this declaration",
+        detail: String? = nil,
+        regionTag: CodeRegion
+    ) {
+        self.init(
+            declaration: declaration, reason: reason, confidence: confidence, suggestion: suggestion,
+            detail: detail, regionTag: regionTag.rawValue)
     }
 }

@@ -3,6 +3,8 @@
 //  stale-index switches), incremental-cache fields, and the AnalysisLogger —
 //  none of that surface exists in deadwood.
 
+import ProjectModel
+
 // MARK: - UnusedCodeConfiguration
 
 /// Configuration for unused code detection.
@@ -37,6 +39,11 @@ struct UnusedCodeConfiguration: Sendable {
     /// Report production code that only `#if DEBUG` code reaches
     /// (`debug-only`).
     var detectDebugOnly: Bool = false
+
+    /// Regions to treat as first-class code: dead code inside them is
+    /// reported, and a preview/debug-only note is promoted to a normal
+    /// finding. A root never becomes a finding regardless.
+    var regionSelection: RegionSelection = .none
 
     /// Glob deciding which files are test files in production mode; nil
     /// uses the built-in heuristics (`**/Tests/**`, `**/*Tests.swift`).
@@ -140,7 +147,8 @@ struct UnusedCodeConfiguration: Sendable {
             treatSwiftUIViewsAsRoot: treatSwiftUIViewsAsRoot,
             treatSwiftUIPropertyWrappersAsRoot: ignoreSwiftUIPropertyWrappers,
             treatPreviewProvidersAsRoot: ignorePreviewProviders,
-            treatVisibleOutsideFileAsRoot: treatVisibleOutsideFileAsRoot
+            treatVisibleOutsideFileAsRoot: treatVisibleOutsideFileAsRoot,
+            treatGeneratedCodeAsRoot: !regionSelection.isIncluded(.generated)
         )
     }
 }

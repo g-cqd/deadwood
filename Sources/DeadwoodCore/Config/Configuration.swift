@@ -1,3 +1,5 @@
+public import ProjectModel
+
 #if canImport(FoundationEssentials)
     import FoundationEssentials
 #else
@@ -32,6 +34,15 @@ public struct Configuration: Sendable, Codable, Equatable {
     /// absent uses the built-in `**/Tests/**` + `**/*Tests.swift`
     /// heuristics.
     public var testsGlob: String?
+    /// Regions (comma-separated: `preview,debug,test,mock,generated,script`,
+    /// or `all`) to treat as first-class code: dead code inside them is
+    /// reported like any other, and a preview/debug-only note is promoted to
+    /// a normal finding — never a root, which stays rooted regardless. The
+    /// same key, with the same values, in deadwood, arcleak and dolly.
+    public var includeRegions: String?
+    /// Regions to keep out of scope even if `includeRegions` (or `all`)
+    /// names them; wins where the two disagree about the same region.
+    public var excludeRegions: String?
 
     /// Decodes a partial configuration.
     ///
@@ -48,22 +59,34 @@ public struct Configuration: Sendable, Codable, Equatable {
         self.exclude = try container.decodeIfPresent([String].self, forKey: .exclude) ?? []
         self.production = try container.decodeIfPresent(Bool.self, forKey: .production)
         self.testsGlob = try container.decodeIfPresent(String.self, forKey: .testsGlob)
+        self.includeRegions = try container.decodeIfPresent(String.self, forKey: .includeRegions)
+        self.excludeRegions = try container.decodeIfPresent(String.self, forKey: .excludeRegions)
     }
 
     public init(
         rules: [String: RuleSettings] = [:],
         exclude: [String] = [],
         production: Bool? = nil,
-        testsGlob: String? = nil
+        testsGlob: String? = nil,
+        includeRegions: String? = nil,
+        excludeRegions: String? = nil
     ) {
         self.rules = rules
         self.exclude = exclude
         self.production = production
         self.testsGlob = testsGlob
+        self.includeRegions = includeRegions
+        self.excludeRegions = excludeRegions
     }
 
     /// Whether production mode is on.
     public var isProductionMode: Bool { production ?? false }
+
+    /// The parsed region selection; throws on an unknown region name from
+    /// either key.
+    public func regionSelection() throws(UnknownRegionName) -> RegionSelection {
+        try RegionSelection(include: includeRegions, exclude: excludeRegions)
+    }
 
     public static let `default` = Configuration()
 
@@ -77,6 +100,11 @@ public struct Configuration: Sendable, Codable, Equatable {
         }
         if let bogus = config.rules.keys.first(where: { RuleID(rawValue: $0) == nil }) {
             throw .configurationInvalid(path: path, detail: "unknown rule id \"\(bogus)\"")
+        }
+        do {
+            _ = try config.regionSelection()
+        } catch {
+            throw .configurationInvalid(path: path, detail: error.description)
         }
         return config
     }
