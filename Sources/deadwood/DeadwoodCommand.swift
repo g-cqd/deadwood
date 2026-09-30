@@ -138,7 +138,7 @@ struct Analyze: AsyncParsableCommand {
             configuration.production = true
         }
         let reportScope = try resolveReportScope()
-        let files = try discoverSwiftFiles(configuration: configuration)
+        let (files, projectFiles) = try discoverInputs(configuration: configuration)
         guard !files.isEmpty else { throw ValidationError(DeadwoodError.noInputs.description) }
         // A non-empty scope that intersects zero corpus files is almost always a
         // misconfiguration (paths relative to the wrong directory, wrong workdir),
@@ -160,6 +160,7 @@ struct Analyze: AsyncParsableCommand {
         var report = await Analyzer(configuration: configuration)
             .analyze(
                 files: files,
+                projectFiles: projectFiles,
                 cacheURL: cacheURL(),
                 indexStore: indexOptions,
                 embeddingConfidence: experimentalEmbeddingConfidence,
@@ -408,8 +409,15 @@ struct Analyze: AsyncParsableCommand {
     /// no reference anywhere, so removing e.g. Generated/ here removes its
     /// *references* and reports the handwritten helpers it calls as dead.
     /// Exclusion is applied to the report instead.
-    private func discoverSwiftFiles(configuration: Configuration) throws -> [String] {
+    ///
+    /// Project files (Info.plists, storyboards, xibs, Xcode projects) found
+    /// the same way, or given explicitly, name entry points; they are read,
+    /// never parsed as Swift.
+    private func discoverInputs(
+        configuration: Configuration
+    ) throws -> (swiftFiles: [String], projectFiles: [String]) {
         var files: Set<String> = []
+        var projectFiles: Set<String> = []
         for path in paths {
             guard
                 // Resolved first: attributesOfItem does not traverse a final symlink,
@@ -423,11 +431,14 @@ struct Analyze: AsyncParsableCommand {
             }
             if type == .typeDirectory {
                 files.formUnion(SourceDiscovery.swiftFiles(in: path))
+                projectFiles.formUnion(SourceDiscovery.projectFiles(in: path))
+            } else if SourceDiscovery.isProjectFile(path) {
+                projectFiles.insert(URL(fileURLWithPath: path).path)
             } else {
                 files.insert(URL(fileURLWithPath: path).path)
             }
         }
-        return files.sorted()
+        return (files.sorted(), projectFiles.sorted())
     }
 }
 

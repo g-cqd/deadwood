@@ -16,6 +16,7 @@ struct CorpusFixture {
             .appending(path: "deadwood-corpus-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         var swiftPaths: [String] = []
+        var projectPaths: [String] = []
         for (relativePath, contents) in files {
             let url = root.appending(path: relativePath)
             try FileManager.default.createDirectory(
@@ -23,9 +24,12 @@ struct CorpusFixture {
             try Data(contents.utf8).write(to: url)
             if url.pathExtension == "swift" {
                 swiftPaths.append(url.path)
+            } else if SourceDiscovery.isProjectFile(url.path) {
+                projectPaths.append(url.path)
             }
         }
-        return await Analyzer(configuration: configuration).analyze(files: swiftPaths.sorted())
+        return await Analyzer(configuration: configuration)
+            .analyze(files: swiftPaths.sorted(), projectFiles: projectPaths.sorted())
     }
 }
 

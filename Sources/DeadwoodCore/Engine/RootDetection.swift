@@ -122,6 +122,10 @@ enum RootReason: String, Sendable {
     /// File-scope statements or a freestanding macro: executed or expanded
     /// without any declaration naming them.
     case topLevelCode
+
+    /// A type a project file names for the system to instantiate: an
+    /// Info.plist principal or delegate class, a storyboard custom class.
+    case systemEntryPoint
 }
 
 // MARK: - RootDetectionConfiguration
@@ -271,6 +275,14 @@ struct RootDetector: Sendable {
         }
         if hasAttribute(declaration, named: "main") {
             return .mainAttribute
+        }
+        switch declaration.kind {
+        case .class, .struct, .enum, .actor:
+            if context.isSystemEntryPoint(declaration.name) {
+                return .systemEntryPoint
+            }
+        default:
+            break
         }
         if hasAttribute(declaration, named: "UIApplicationMain") {
             return .uiApplicationMain

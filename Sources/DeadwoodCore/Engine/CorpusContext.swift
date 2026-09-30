@@ -39,7 +39,12 @@ struct CorpusContext: Sendable {
     /// function, at any depth: the test framework instantiates them.
     private let testContainerKeys: Set<String>
 
-    init(result: AnalysisResult) {
+    /// Type names that project files (Info.plist, storyboards, xibs, build
+    /// settings) tell the system to instantiate.
+    private let systemEntryPointNames: Set<String>
+
+    init(result: AnalysisResult, systemEntryPoints: Set<String> = []) {
+        systemEntryPointNames = systemEntryPoints
         scopes = result.scopes
         stringLiteralTokens = result.stringLiteralTokens
 
@@ -93,6 +98,14 @@ struct CorpusContext: Sendable {
     static func baseName(ofConformance conformance: String) -> String {
         let unqualified = conformance.split(separator: ".").last.map(String.init) ?? conformance
         return unqualified.split(separator: "<").first.map(String.init) ?? unqualified
+    }
+
+    // MARK: - System entry points
+
+    /// Whether a project file names `typeName` as a class the system
+    /// instantiates.
+    func isSystemEntryPoint(_ typeName: String) -> Bool {
+        systemEntryPointNames.contains(typeName)
     }
 
     // MARK: - Test containers

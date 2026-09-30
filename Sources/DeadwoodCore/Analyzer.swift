@@ -1,3 +1,4 @@
+import ProjectModel
 import SwiftParser
 import SwiftSyntax
 
@@ -40,8 +41,12 @@ public struct Analyzer: Sendable {
     /// - Parameter reportScope: narrows the *report* to a set of files; nil
     ///   reports everything. Reachability is corpus-level either way — see
     ///   ``ReportScope``.
+    /// - Parameter projectFiles: Info.plists, storyboards, xibs and Xcode
+    ///   project files; the types they name are entry points (see
+    ///   ``SourceDiscovery/projectFiles(in:)``).
     public func analyze(
         files: [String],
+        projectFiles: [String] = [],
         cacheURL: URL? = nil,
         indexStore: IndexStoreOptions = .disabled,
         embeddingConfidence: Bool = false,
@@ -175,7 +180,9 @@ public struct Analyzer: Sendable {
 
         // Aggregate the corpus and run detection.
         let result = StaticAnalyzer.aggregate(perFile.map(\.facts), files: analyzedPaths)
-        let context = CorpusContext(result: result)
+        let entryPoints = Self.systemEntryPoints(in: projectFiles)
+        report.notes.append(contentsOf: entryPoints.notes)
+        let context = CorpusContext(result: result, systemEntryPoints: entryPoints.typeNames)
         let detector = UnusedCodeDetector(configuration: engineConfig)
 
         // Reachability is the one stage the index can resolve more precisely.
@@ -255,6 +262,29 @@ public struct Analyzer: Sendable {
             report = report.fingerprintsAnchored(to: root)
         }
         return report
+    }
+
+    // MARK: - System entry points
+
+    /// Project files above this cap are skipped with a note.
+    static let projectFileByteCap = 32 * 1024 * 1024
+
+    /// The type names the project files make entry points, plus one note per
+    /// file that could not be read.
+    static func systemEntryPoints(in projectFiles: [String]) -> (typeNames: Set<String>, notes: [String]) {
+        var typeNames: Set<String> = []
+        var notes: [String] = []
+        for path in projectFiles where SystemEntryPoints.isProjectFile(path) {
+            guard let data = try? BoundedFileReader.read(path: path, cap: projectFileByteCap) else {
+                notes.append("\(ToolInfo.name): project file \(path) could not be read; its entry points are unknown")
+                continue
+            }
+            let contents = String(decoding: data, as: UTF8.self)
+            for entryPoint in SystemEntryPoints.scan(path: path, contents: contents) {
+                typeNames.insert(entryPoint.typeName)
+            }
+        }
+        return (typeNames, notes)
     }
 
     // MARK: - Reachability oracle (syntax vs index)
