@@ -1,12 +1,15 @@
 //  Rewritten in deadwood (originally lifted from SwiftStaticAnalysis's
 //  ConfidenceCalculator): composite confidence model.
 //
-//  - dead branches are dataflow proofs → certain
+//  - dead branches are dataflow proofs: certain for a literal condition,
+//    high when the proof propagates a variable
 //  - the base comes from *effective* visibility (a member of a private type
 //    is effectively private, so "no references" is proof, not suspicion)
 //  - demotions capture dynamic-reference risk the reachability graph cannot
-//    see: a name appearing in a string literal, and members of NSObject
-//    subclasses without @objc (selector machinery may still reach them)
+//    see: a name appearing in a string literal outside the declaration's
+//    own text, and members of NSObject subclasses without @objc (selector
+//    machinery may still reach them)
+//  - a name found in a comment adds a note, not a demotion
 
 // MARK: - Base confidence
 
@@ -61,7 +64,7 @@ struct ConfidenceCalculator: Sendable {
         var confidence = item.declaration.unusedConfidence(context: context)
         var notes: [String] = []
 
-        if context.nameAppearsInStringLiteral(item.declaration.name) {
+        if context.nameAppearsInStringLiteral(of: item.declaration) {
             confidence = .low
             notes.append("name appears in a string literal — possible dynamic reference")
         }
@@ -69,6 +72,12 @@ struct ConfidenceCalculator: Sendable {
         if context.isObjcAdjacentMember(item.declaration) {
             confidence = demoted(confidence)
             notes.append("member of an NSObject subclass without @objc — selector dispatch may reach it")
+        }
+
+        // Not a demotion: a comment compiles to nothing. Commented-out code
+        // that still names the declaration is worth deleting with it.
+        if item.reason == .neverReferenced, context.nameAppearsInComment(item.declaration.name) {
+            notes.append("also named in a comment, possibly commented-out code to delete with it")
         }
 
         return Assessment(confidence: confidence, demotionNotes: notes)

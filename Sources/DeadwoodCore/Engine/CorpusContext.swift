@@ -31,9 +31,12 @@ struct CorpusContext: Sendable {
     /// Names of protocols declared inside the corpus.
     let protocolNames: Set<String>
 
-    /// Identifier-shaped tokens appearing inside string literals anywhere
-    /// in the corpus (dynamic-reference demotion set).
-    private let stringLiteralTokens: Set<String>
+    /// Where each identifier-shaped token appears inside a string literal,
+    /// outside generated files (dynamic-reference demotion set).
+    private let stringLiteralOccurrences: [String: [SourceLocation]]
+
+    /// Identifier-shaped tokens appearing in comments.
+    private let commentTokens: Set<String>
 
     /// Scope-start keys of the types that lexically contain an `@Test`
     /// function, at any depth: the test framework instantiates them.
@@ -54,7 +57,8 @@ struct CorpusContext: Sendable {
         generatedFiles = result.generatedFiles
         regionSpansByFile = result.regionSpansByFile.mapValues { $0.map(\.regionSpan) }
         scopes = result.scopes
-        stringLiteralTokens = result.stringLiteralTokens
+        stringLiteralOccurrences = result.stringLiteralOccurrences
+        commentTokens = result.commentTokens
 
         var byScopeStart: [String: Declaration] = [:]
         var nominals: [String: [Declaration]] = [:]
@@ -249,8 +253,21 @@ struct CorpusContext: Sendable {
     /// Whether the declaration's name appears inside any string literal in
     /// the corpus — a possible dynamic reference (NSClassFromString,
     /// selector strings, reflection by name).
-    func nameAppearsInStringLiteral(_ name: String) -> Bool {
-        stringLiteralTokens.contains(name)
+    /// Whether the declaration's name appears in a string literal outside
+    /// the declaration itself: a name only in its own text (a log message,
+    /// a generated accessor's asset name) is no dynamic reference.
+    func nameAppearsInStringLiteral(of declaration: Declaration) -> Bool {
+        guard let occurrences = stringLiteralOccurrences[declaration.name] else { return false }
+        let range = declaration.range
+        return occurrences.contains { occurrence in
+            occurrence.file != declaration.location.file
+                || occurrence.line < range.start.line || occurrence.line > range.end.line
+        }
+    }
+
+    /// Whether the name appears in a comment, as commented-out code does.
+    func nameAppearsInComment(_ name: String) -> Bool {
+        commentTokens.contains(name)
     }
 
     /// Whether the declaration is a member of an NSObject-descendant class

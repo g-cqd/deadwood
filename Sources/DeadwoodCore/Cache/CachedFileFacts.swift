@@ -7,7 +7,8 @@ struct CachedFileFacts: Sendable, Codable {
     let declarations: [Declaration]
     let references: [CachedReference]
     let scopes: [Scope]
-    let stringLiteralTokens: Set<String>
+    let stringLiteralTokens: Set<TokenLine>
+    let commentTokens: Set<String>
     let isGenerated: Bool
     let regionSpans: [CodeRegionSpan]
 
@@ -16,7 +17,8 @@ struct CachedFileFacts: Sendable, Codable {
         declarations: [Declaration],
         references: [CachedReference],
         scopes: [Scope],
-        stringLiteralTokens: Set<String>,
+        stringLiteralTokens: Set<TokenLine>,
+        commentTokens: Set<String>,
         isGenerated: Bool,
         regionSpans: [CodeRegionSpan]
     ) {
@@ -25,6 +27,7 @@ struct CachedFileFacts: Sendable, Codable {
         self.references = references
         self.scopes = scopes
         self.stringLiteralTokens = stringLiteralTokens
+        self.commentTokens = commentTokens
         self.isGenerated = isGenerated
         self.regionSpans = regionSpans
     }
@@ -35,6 +38,7 @@ struct CachedFileFacts: Sendable, Codable {
         references = facts.references.map(CachedReference.init)
         scopes = facts.scopes
         stringLiteralTokens = facts.stringLiteralTokens
+        commentTokens = facts.commentTokens
         isGenerated = facts.isGenerated
         regionSpans = facts.regionSpans
     }
@@ -46,6 +50,7 @@ struct CachedFileFacts: Sendable, Codable {
             references: references.map { $0.restored(in: file) },
             scopes: scopes,
             stringLiteralTokens: stringLiteralTokens,
+            commentTokens: commentTokens,
             isGenerated: isGenerated,
             regionSpans: regionSpans
         )

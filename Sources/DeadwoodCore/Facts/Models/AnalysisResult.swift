@@ -21,9 +21,12 @@ struct AnalysisResult: Sendable {
     /// Scope hierarchy.
     let scopes: ScopeTree
 
-    /// Identifier-shaped tokens appearing inside string literals anywhere
-    /// in the corpus (dynamic-reference demotion set).
-    let stringLiteralTokens: Set<String>
+    /// Where each identifier-shaped token appears inside a string literal,
+    /// outside generated files (dynamic-reference demotion set).
+    let stringLiteralOccurrences: [String: [SourceLocation]]
+
+    /// Identifier-shaped tokens appearing in comments anywhere in the corpus.
+    let commentTokens: Set<String>
 
     /// Files a generator wrote: their code counts as uses, but nothing in
     /// them is reported.
@@ -37,7 +40,8 @@ struct AnalysisResult: Sendable {
         declarations: DeclarationIndex,
         references: ReferenceIndex,
         scopes: ScopeTree,
-        stringLiteralTokens: Set<String> = [],
+        stringLiteralOccurrences: [String: [SourceLocation]] = [:],
+        commentTokens: Set<String> = [],
         generatedFiles: Set<String> = [],
         regionSpansByFile: [String: [CodeRegionSpan]] = [:]
     ) {
@@ -45,7 +49,8 @@ struct AnalysisResult: Sendable {
         self.declarations = declarations
         self.references = references
         self.scopes = scopes
-        self.stringLiteralTokens = stringLiteralTokens
+        self.stringLiteralOccurrences = stringLiteralOccurrences
+        self.commentTokens = commentTokens
         self.generatedFiles = generatedFiles
         self.regionSpansByFile = regionSpansByFile
     }
@@ -69,7 +74,9 @@ struct FileAnalysisResult: Sendable, Codable {
     let scopes: [Scope]
 
     /// Identifier-shaped tokens inside this file's string literals.
-    let stringLiteralTokens: Set<String>
+    let stringLiteralTokens: Set<TokenLine>
+    /// Identifier-shaped tokens inside this file's comments.
+    let commentTokens: Set<String>
     /// Whether a generator wrote this file.
     let isGenerated: Bool
     /// The lines only debug builds or previews compile.
@@ -80,7 +87,8 @@ struct FileAnalysisResult: Sendable, Codable {
         declarations: [Declaration],
         references: [Reference],
         scopes: [Scope],
-        stringLiteralTokens: Set<String> = [],
+        stringLiteralTokens: Set<TokenLine> = [],
+        commentTokens: Set<String> = [],
         isGenerated: Bool = false,
         regionSpans: [CodeRegionSpan] = []
     ) {
@@ -89,6 +97,7 @@ struct FileAnalysisResult: Sendable, Codable {
         self.references = references
         self.scopes = scopes
         self.stringLiteralTokens = stringLiteralTokens
+        self.commentTokens = commentTokens
         self.isGenerated = isGenerated
         self.regionSpans = regionSpans
     }
