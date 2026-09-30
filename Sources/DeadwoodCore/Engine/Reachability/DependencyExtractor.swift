@@ -42,6 +42,17 @@ struct DependencyExtractor: Sendable {
 
     /// Build a reachability graph from analysis results.
     func buildGraph(from result: AnalysisResult, context: CorpusContext) async -> ReachabilityGraph {
+        await buildGraph(from: result, context: context, recordingRegionLevels: false).graph
+    }
+
+    /// Build the reachability graph and, when asked, the same edges with
+    /// the region level of the code that draws each one: an edge is at
+    /// the lowest level of the references drawing it (``RegionLevel``).
+    func buildGraph(
+        from result: AnalysisResult,
+        context: CorpusContext,
+        recordingRegionLevels: Bool
+    ) async -> (graph: ReachabilityGraph, leveled: LeveledEdges?) {
         let graph = ReachabilityGraph()
 
         await graph.detectRoots(
@@ -50,46 +61,23 @@ struct DependencyExtractor: Sendable {
             configuration: configuration.rootDetection
         )
 
-        await buildEdges(graph: graph, result: result, context: context, upTo: nil)
+        let leveled = await buildEdges(
+            graph: graph, result: result, context: context, recordingRegionLevels: recordingRegionLevels)
 
-        return graph
-    }
-
-    /// The graph of what a build at `level` compiles: only the roots and
-    /// the references whose region level is at most `level` count. At
-    /// `.production` it leaves out previews and `#if DEBUG` code.
-    func buildGraph(
-        from result: AnalysisResult,
-        context: CorpusContext,
-        upTo level: RegionLevel
-    ) async -> ReachabilityGraph {
-        let graph = ReachabilityGraph()
-        let declarations = result.declarations.declarations
-        let detector = RootDetector(configuration: configuration.rootDetection)
-        var roots: Set<Int32> = []
-        for (index, declaration) in declarations.enumerated()
-        where context.regionLevel(ofLine: declaration.location.line, inFile: declaration.location.file) <= level
-            && detector.rootReason(for: declaration, context: context) != nil
-        {
-            roots.insert(Int32(index))
-        }
-        await graph.prepare(declarationCount: declarations.count, roots: roots)
-        await buildEdges(graph: graph, result: result, context: context, upTo: level)
-        return graph
+        return (graph, leveled)
     }
 
     // MARK: - Edge building
 
     /// Compute each declaration's reference targets in parallel and
-    /// batch-insert them.
-    /// - Parameter level: when set, references in code above this region
-    ///   level draw no edge.
+    /// batch-insert them; with `recordingRegionLevels`, also return them
+    /// with their levels.
     private func buildEdges(
         graph: ReachabilityGraph,
         result: AnalysisResult,
         context: CorpusContext,
-        upTo level: RegionLevel?
-    ) async {
+        recordingRegionLevels: Bool
+    ) async -> LeveledEdges? {
         let allDeclarations = result.declarations.declarations
 
         // Name → declaration indices lookup (immutable copy for Sendable
@@ -104,43 +92,60 @@ struct DependencyExtractor: Sendable {
         // Per-file references sorted by line, built once: each declaration
         // binary-searches its line range instead of filtering the whole
         // file's reference list — O((D+R) log R) per file, not O(D·R).
+        // With levels, each file holding regions also gets the level of
+        // every sorted reference, aligned by index.
         var sortedRefsMutable: [String: [Reference]] = [:]
+        var refLevelsMutable: [String: [UInt8]] = [:]
         sortedRefsMutable.reserveCapacity(result.references.byFile.count)
         for (file, refs) in result.references.byFile {
-            let kept =
-                if let level {
-                    refs.filter { context.regionLevel(ofLine: $0.location.line, inFile: file) <= level }
-                } else {
-                    refs
+            let sorted = refs.sorted { $0.location.line < $1.location.line }
+            sortedRefsMutable[file] = sorted
+            if recordingRegionLevels, context.hasCodeRegions(inFile: file) {
+                refLevelsMutable[file] = sorted.map {
+                    UInt8(context.regionLevel(ofLine: $0.location.line, inFile: file).rawValue)
                 }
-            sortedRefsMutable[file] = kept.sorted { $0.location.line < $1.location.line }
+            }
         }
         let sortedRefsByFile = sortedRefsMutable
+        let refLevelsByFile = refLevelsMutable
 
         let maxConcurrency = ProcessInfo.processInfo.activeProcessorCount
 
         let targetsBySource = await ParallelProcessor.compactMap(
             Array(allDeclarations.enumerated()),
             maxConcurrency: maxConcurrency
-        ) { entry -> (source: Int32, targets: [Int32])? in
-            let targets = self.referenceTargets(
+        ) { entry -> (source: Int32, targets: [Int32], levels: [UInt8])? in
+            let leveled = self.referenceTargets(
                 of: entry.element,
                 sortedRefsByFile: sortedRefsByFile,
-                declByName: declByName
+                refLevelsByFile: recordingRegionLevels ? refLevelsByFile : nil,
+                declByName: declByName,
+                context: context
             )
-            return targets.isEmpty ? nil : (Int32(entry.offset), targets)
+            return leveled.targets.isEmpty ? nil : (Int32(entry.offset), leveled.targets, leveled.levels)
         }
 
-        await graph.addTargets(targetsBySource)
+        await graph.addTargets(targetsBySource.map { ($0.source, $0.targets) })
 
+        var witnessEdges: [DependencyEdge] = []
         if configuration.trackProtocolWitnesses {
-            let witnessEdges = computeProtocolEdges(
+            witnessEdges = computeProtocolEdges(
                 result: result,
                 context: context,
                 declByName: declByName
             )
             await graph.addEdges(witnessEdges)
         }
+
+        guard recordingRegionLevels else { return nil }
+        var edges = LeveledEdges(nodeCount: allDeclarations.count)
+        for entry in targetsBySource {
+            edges.add(source: entry.source, targets: entry.targets, levels: entry.levels)
+        }
+        for edge in witnessEdges {
+            edges.add(source: edge.from, targets: [edge.to], levels: [0])
+        }
+        return edges
     }
 
     /// The declarations one declaration may depend on, each once, ascending
@@ -152,47 +157,59 @@ struct DependencyExtractor: Sendable {
     private func referenceTargets(
         of declaration: Declaration,
         sortedRefsByFile: [String: [Reference]],
-        declByName: [String: [Int32]]
-    ) -> [Int32] {
-        var targets = Set<Int32>()
-
-        for reference in findReferencesInScope(declaration: declaration, sortedRefsByFile: sortedRefsByFile) {
-            if let matches = declByName[reference.identifier] {
-                targets.formUnion(matches)
-            }
-            if let qualifier = reference.qualifier, let matches = declByName[qualifier] {
-                targets.formUnion(matches)
+        refLevelsByFile: [String: [UInt8]]?,
+        declByName: [String: [Int32]],
+        context: CorpusContext
+    ) -> (targets: [Int32], levels: [UInt8]) {
+        // Target → the lowest level of the references drawing it.
+        var targets: [Int32: UInt8] = [:]
+        func add(_ matches: [Int32], level: UInt8) {
+            for match in matches {
+                if let existing = targets[match], existing <= level { continue }
+                targets[match] = level
             }
         }
 
-        // Type annotations reference their type names.
+        let file = declaration.location.file
+        let fileRefs = sortedRefsByFile[file] ?? []
+        let fileLevels = refLevelsByFile?[file]
+        for index in referenceIndicesInScope(declaration: declaration, fileRefs: fileRefs) {
+            let reference = fileRefs[index]
+            let level = fileLevels?[index] ?? 0
+            if let matches = declByName[reference.identifier] {
+                add(matches, level: level)
+            }
+            if let qualifier = reference.qualifier, let matches = declByName[qualifier] {
+                add(matches, level: level)
+            }
+        }
+
+        // Type annotations reference their type names, from the
+        // declaration's own line.
         if let typeAnnotation = declaration.typeAnnotation {
+            let level =
+                refLevelsByFile == nil
+                ? 0 : UInt8(context.regionLevel(ofLine: declaration.location.line, inFile: file).rawValue)
             for typeName in extractTypeNames(from: typeAnnotation) {
                 if let matches = declByName[typeName] {
-                    targets.formUnion(matches)
+                    add(matches, level: level)
                 }
             }
         }
 
-        return targets.sorted()
+        let sorted = targets.keys.sorted()
+        return (sorted, sorted.map { targets[$0] ?? 0 })
     }
 
-    /// References inside a declaration's file and line range: two binary
-    /// searches over the file's line-sorted references bound the inclusive
-    /// [start.line, end.line] subrange (same membership as the old linear
-    /// filter, in line order instead of collection order).
-    private func findReferencesInScope(
-        declaration: Declaration,
-        sortedRefsByFile: [String: [Reference]]
-    ) -> ArraySlice<Reference> {
-        guard let fileRefs = sortedRefsByFile[declaration.location.file] else {
-            return []
-        }
+    /// Indices of the references inside a declaration's line range: two
+    /// binary searches over the file's line-sorted references bound the
+    /// inclusive [start.line, end.line] subrange.
+    private func referenceIndicesInScope(declaration: Declaration, fileRefs: [Reference]) -> Range<Int> {
         let startLine = declaration.range.start.line
         let endLine = declaration.range.end.line
         let lower = fileRefs.partitionPoint { $0.location.line >= startLine }
         let upper = fileRefs.partitionPoint { $0.location.line > endLine }
-        return fileRefs[lower..<upper]
+        return lower..<max(lower, upper)
     }
 
     /// Extract type names from a type annotation string.
@@ -366,7 +383,10 @@ struct ReachabilityBasedDetector: Sendable {
     /// back as `.referencedOnlyByTests`.
     func detect(in result: AnalysisResult, context: CorpusContext) async -> [UnusedCode] {
         let extractor = DependencyExtractor(configuration: extractionConfiguration)
-        let graph = await extractor.buildGraph(from: result, context: context)
+        let wantsRegions =
+            (configuration.detectPreviewOnly || configuration.detectDebugOnly) && context.hasCodeRegions
+        let (graph, leveledEdges) = await extractor.buildGraph(
+            from: result, context: context, recordingRegionLevels: wantsRegions)
 
         // BFS backend: forced by `useParallelBFS`, else auto-selected
         // against the node-count threshold.
@@ -405,10 +425,9 @@ struct ReachabilityBasedDetector: Sendable {
                 ))
         }
 
-        if configuration.detectPreviewOnly || configuration.detectDebugOnly, context.hasCodeRegions {
+        if let leveledEdges {
             results.append(
-                contentsOf: await regionOnlyResults(
-                    result: result, context: context, reachableWithTests: reachableWithTests))
+                contentsOf: regionOnlyResults(edges: leveledEdges, declarations: declarations, context: context))
         }
 
         return results
@@ -416,31 +435,37 @@ struct ReachabilityBasedDetector: Sendable {
 
     // MARK: - Region reachability
 
-    /// Production code that only previews or `#if DEBUG` code reach. Two
-    /// more passes, over the graphs a release build and a debug build
-    /// compile; a declaration the full pass reaches but the release pass
-    /// does not is debug-only when the debug pass reaches it, preview-only
-    /// otherwise. Code declared in a preview or `#if DEBUG` is never the
-    /// subject: it already sits where it belongs.
-    /// - Complexity: O(V + E) per pass, two passes.
+    /// Production code that only previews or `#if DEBUG` code reach: the
+    /// lowest level at which a declaration becomes reachable is debug-only
+    /// or preview (``LeveledReachability``). Code declared in a preview or
+    /// `#if DEBUG` is never the subject: it already sits where it belongs.
+    /// - Complexity: O(V + E).
     private func regionOnlyResults(
-        result: AnalysisResult,
-        context: CorpusContext,
-        reachableWithTests: Set<Int>
-    ) async -> [UnusedCode] {
-        let extractor = DependencyExtractor(configuration: extractionConfiguration)
-        let reachableInRelease = await extractor.buildGraph(from: result, context: context, upTo: .production)
-            .computeReachable()
-        let reachableInDebug = await extractor.buildGraph(from: result, context: context, upTo: .debugOnly)
-            .computeReachable()
-
-        let declarations = result.declarations.declarations
-        var results: [UnusedCode] = []
-        for index in reachableWithTests.sorted() where !reachableInRelease.contains(index) {
-            let declaration = declarations[index]
+        edges: LeveledEdges,
+        declarations: [Declaration],
+        context: CorpusContext
+    ) -> [UnusedCode] {
+        let detector = RootDetector(configuration: extractionConfiguration.rootDetection)
+        var roots: [(node: Int32, level: UInt8)] = []
+        var declaredLevels = [RegionLevel](repeating: .production, count: declarations.count)
+        for (index, declaration) in declarations.enumerated() {
             let level = context.regionLevel(ofLine: declaration.location.line, inFile: declaration.location.file)
-            guard level == .production else { continue }
-            let onlyDebug = reachableInDebug.contains(index)
+            declaredLevels[index] = level
+            if detector.rootReason(for: declaration, context: context) != nil {
+                roots.append((Int32(index), UInt8(level.rawValue)))
+            }
+        }
+        let reachedAt = LeveledReachability.levels(
+            of: edges, roots: roots, levelCount: RegionLevel.allCases.count)
+
+        var results: [UnusedCode] = []
+        for (index, declaration) in declarations.enumerated() where declaredLevels[index] == .production {
+            let onlyDebug: Bool
+            switch reachedAt[index] {
+            case UInt8(RegionLevel.debugOnly.rawValue): onlyDebug = true
+            case UInt8(RegionLevel.preview.rawValue): onlyDebug = false
+            default: continue
+            }
             guard onlyDebug ? configuration.detectDebugOnly : configuration.detectPreviewOnly,
                 let confidence = reportableConfidence(of: declaration, context: context)
             else { continue }
