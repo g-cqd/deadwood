@@ -397,6 +397,7 @@ public struct Analyzer: Sendable {
                     let reach = try IndexReachabilityBridge().computeReachability(
                         result: result,
                         context: context,
+                        configuration: engineConfig,
                         rootConfiguration: engineConfig.rootDetection,
                         productionMode: productionMode,
                         testScoped: testScoped,
@@ -420,19 +421,11 @@ public struct Analyzer: Sendable {
                         )
                     }
 
+                    let extractionConfig = DependencyExtractionConfiguration(
+                        rootDetection: engineConfig.rootDetection, treatProtocolRequirementsAsRoot: true)
                     let tail = ReachabilityBasedDetector(
-                        configuration: engineConfig,
-                        extractionConfiguration: DependencyExtractionConfiguration(
-                            rootDetection: engineConfig.rootDetection,
-                            treatProtocolRequirementsAsRoot: true,
-                            trackProtocolWitnesses: true
-                        )
-                    )
-                    var unused = tail.neverReferencedResults(
-                        declarations: declarations,
-                        reachableWithTests: reach.reachableWithTests,
-                        context: context
-                    )
+                        configuration: engineConfig, extractionConfiguration: extractionConfig)
+                    var unused = reach.deadGroupResults
                     if productionMode, let reachableInProduction = reach.reachableInProduction {
                         unused.append(
                             contentsOf: tail.onlyTestedResults(
@@ -444,11 +437,41 @@ public struct Analyzer: Sendable {
                             ))
                     }
 
+                    // Region notes are an independent pass over the syntax
+                    // name-graph (`DependencyExtractor.regionOnlyResults`
+                    // needs no reachability set of its own), so the index
+                    // oracle gets them exactly as the syntax oracle does,
+                    // with no index-specific region graph to build.
+                    if (engineConfig.detectPreviewOnly || engineConfig.detectDebugOnly),
+                        context.hasCodeRegions
+                    {
+                        let (_, leveledEdges) = await DependencyExtractor(configuration: extractionConfig)
+                            .buildGraph(from: result, context: context, recordingRegionLevels: true)
+                        if let leveledEdges {
+                            unused.append(
+                                contentsOf: tail.regionOnlyResults(
+                                    edges: leveledEdges, declarations: declarations, context: context))
+                        }
+                    }
+
+                    // A file the index never saw, or saw before it last
+                    // changed, cannot support a verdict: the edges it would
+                    // draw are missing or describe code that no longer
+                    // exists. Drop findings anchored there rather than
+                    // report them from stale or absent data; the note below
+                    // already says which files and why.
+                    if !stale.isEmpty {
+                        let staleFiles = Set(stale.map { IndexBasedDependencyGraph.canonicalPath($0) })
+                        unused.removeAll {
+                            staleFiles.contains(IndexBasedDependencyGraph.canonicalPath($0.declaration.location.file))
+                        }
+                    }
+
                     var notes = ["\(ToolInfo.name): --index-store active at \(path) — \(reach.summary)"]
                     if !stale.isEmpty {
                         notes.append(
                             "\(ToolInfo.name): index is stale for \(stale.count) file(s); "
-                                + "results may lag recent edits — re-run `swift build`")
+                                + "skipping their declarations — re-run `swift build`")
                     }
                     return (unused, notes)
                 } catch {

@@ -326,16 +326,6 @@
             db.symbolOccurrences(inFilePath: filePath)
         }
 
-        /// Enumerate related symbol occurrences (protocol conformances,
-        /// containment) — forwards the underlying IndexStoreDB query.
-        func forEachRelatedOccurrence(
-            byUSR usr: String,
-            roles: SymbolRole,
-            _ body: (SymbolOccurrence) -> Bool
-        ) {
-            db.forEachRelatedSymbolOccurrence(byUSR: usr, roles: roles, body)
-        }
-
         /// Poll for changes to the index.
         func pollForChanges() {
             db.pollForUnitChangesAndWait()
