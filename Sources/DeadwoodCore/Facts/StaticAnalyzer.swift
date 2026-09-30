@@ -44,6 +44,7 @@ struct StaticAnalyzer: Sendable {
             references: refCollector.references,
             scopes: Array(declCollector.tracker.tree.scopes.values),
             stringLiteralTokens: refCollector.stringLiteralTokens,
+            commentTokens: refCollector.commentTokens,
             isGenerated: GeneratedCode.isGenerated(path: file, tree: tree),
             regionSpans: CodeRegionScanner.scan(tree, converter: converter).map(CodeRegionSpan.init)
         )
@@ -104,7 +105,8 @@ struct StaticAnalyzer: Sendable {
         var declarationIndex = DeclarationIndex()
         var referenceIndex = ReferenceIndex()
         var scopeTree = ScopeTree()
-        var stringTokens: Set<String> = []
+        var stringOccurrences: [String: [SourceLocation]] = [:]
+        var commentTokens: Set<String> = []
         var generatedFiles: Set<String> = []
         var regionSpansByFile: [String: [CodeRegionSpan]] = [:]
 
@@ -118,9 +120,14 @@ struct StaticAnalyzer: Sendable {
             for scope in result.scopes {
                 scopeTree.add(scope)
             }
-            stringTokens.formUnion(result.stringLiteralTokens)
+            commentTokens.formUnion(result.commentTokens)
             if result.isGenerated {
                 generatedFiles.insert(result.file)
+            } else {
+                for occurrence in result.stringLiteralTokens {
+                    stringOccurrences[occurrence.token, default: []].append(
+                        SourceLocation(file: result.file, line: occurrence.line, column: 1))
+                }
             }
             if !result.regionSpans.isEmpty {
                 regionSpansByFile[result.file] = result.regionSpans
@@ -132,7 +139,8 @@ struct StaticAnalyzer: Sendable {
             declarations: declarationIndex,
             references: referenceIndex,
             scopes: scopeTree,
-            stringLiteralTokens: stringTokens,
+            stringLiteralOccurrences: stringOccurrences,
+            commentTokens: commentTokens,
             generatedFiles: generatedFiles,
             regionSpansByFile: regionSpansByFile
         )
