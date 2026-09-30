@@ -25,11 +25,12 @@ struct FindingMapper: Sendable {
         // finding on the type reads better than one per member. Dataflow
         // findings (dead branches/stores) are locations, not members.
         // A member only collapses into a type flagged for the same reason:
-        // an unused member of a preview-only type is still unused.
+        // an unused member of a preview-only type is still unused. Dead code
+        // is one family, whether nothing names it or only dead code does.
         let flaggedTypeKeys = Set(
             unused
                 .filter { Self.typeKinds.contains($0.declaration.kind) }
-                .map { "\($0.reason.rawValue)|\(key(of: $0.declaration))" }
+                .map { "\(Self.collapseFamily($0.reason))|\(key(of: $0.declaration))" }
         )
         let dataflowReasons: Set<UnusedReason> = [.deadBranch, .deadStore]
 
@@ -98,6 +99,9 @@ struct FindingMapper: Sendable {
         if context.effectiveAccess(of: item.declaration) >= .public {
             return .unusedPublicApi
         }
+        if item.reason == .onlyUsedByDeadCode {
+            return .unusedTransitively
+        }
         switch item.declaration.kind {
         case .function, .method:
             return .unusedFunction
@@ -130,7 +134,14 @@ struct FindingMapper: Sendable {
     ) -> Bool {
         guard !flaggedTypeKeys.isEmpty else { return false }
         return context.enclosingTypeDeclarations(of: declaration)
-            .contains { flaggedTypeKeys.contains("\(reason.rawValue)|\(key(of: $0))") }
+            .contains { flaggedTypeKeys.contains("\(Self.collapseFamily(reason))|\(key(of: $0))") }
+    }
+
+    private static func collapseFamily(_ reason: UnusedReason) -> String {
+        switch reason {
+        case .neverReferenced, .onlyUsedByDeadCode, .deadCycle: "dead"
+        default: reason.rawValue
+        }
     }
 
     // MARK: - Text
@@ -161,6 +172,11 @@ struct FindingMapper: Sendable {
             return "\(subject) is used only by previews but ships in release builds"
         case .referencedOnlyByDebugCode:
             return "\(subject) is used only by #if DEBUG code but ships in release builds"
+        case .onlyUsedByDeadCode:
+            return "\(subject) is only used by dead code: \(item.detail ?? "")"
+        case .deadCycle:
+            return "\(subject) is only used by dead code it uses itself, a cycle nothing live reaches: "
+                + (item.detail ?? "")
         default:
             switch mode {
             case .simple:
@@ -182,8 +198,13 @@ struct FindingMapper: Sendable {
             case .referencedOnlyByTests: "reachable with test roots, unreachable without them"
             case .referencedOnlyByPreviews: "move it under #if DEBUG next to the previews"
             case .referencedOnlyByDebugCode: "move it under #if DEBUG with its callers"
+            case .onlyUsedByDeadCode: "unreachable once its dead users go; delete them together"
+            case .deadCycle: "the cycle is unreachable from any entry point; delete it whole"
             }
         var note = "confidence \(assessment.confidence.rawValue) — \(reasonText)"
+        if item.reason == .neverReferenced, let detail = item.detail {
+            note += "; \(detail)"
+        }
         for demotion in assessment.demotionNotes {
             note += "; \(demotion)"
         }
@@ -191,10 +212,7 @@ struct FindingMapper: Sendable {
     }
 
     private func displayName(of declaration: Declaration) -> String {
-        if let signature = declaration.signature {
-            return declaration.name + signature.selectorString
-        }
-        return declaration.name
+        declaration.displayName
     }
 
     private func kindWord(_ declaration: Declaration) -> String {

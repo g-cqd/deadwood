@@ -31,6 +31,10 @@ enum UnusedReason: String, Sendable, Codable {
     case referencedOnlyByPreviews
     /// Production code reachable only from `#if DEBUG` code.
     case referencedOnlyByDebugCode
+    /// Used, but only by declarations that are dead themselves.
+    case onlyUsedByDeadCode
+    /// Used only within a cycle of declarations nothing live reaches.
+    case deadCycle
 }
 
 // MARK: - Confidence
@@ -79,16 +83,21 @@ struct UnusedCode: Sendable, Codable {
 
     /// Suggested action.
     let suggestion: String
+    /// For dead-code groups: the dead users of a member, or the size of a
+    /// root's group.
+    let detail: String?
 
     init(
         declaration: Declaration,
         reason: UnusedReason,
         confidence: Confidence,
-        suggestion: String = "Consider removing this declaration"
+        suggestion: String = "Consider removing this declaration",
+        detail: String? = nil
     ) {
         self.declaration = declaration
         self.reason = reason
         self.confidence = confidence
         self.suggestion = suggestion
+        self.detail = detail
     }
 }

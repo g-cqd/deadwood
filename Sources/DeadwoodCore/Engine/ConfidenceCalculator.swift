@@ -57,11 +57,16 @@ struct ConfidenceCalculator: Sendable {
             // Dataflow-backed but conservative around aliasing/inout.
             return Assessment(confidence: .high, demotionNotes: [])
         case .neverReferenced, .onlyAssigned, .importNotUsed, .referencedOnlyByTests,
-            .referencedOnlyByPreviews, .referencedOnlyByDebugCode:
+            .referencedOnlyByPreviews, .referencedOnlyByDebugCode, .onlyUsedByDeadCode, .deadCycle:
             break
         }
 
         var confidence = item.declaration.unusedConfidence(context: context)
+        // A declaration only dead code uses is as sure as the weakest link
+        // of the chain leading to it.
+        if item.reason == .onlyUsedByDeadCode {
+            confidence = min(confidence, item.confidence)
+        }
         var notes: [String] = []
 
         if context.nameAppearsInStringLiteral(of: item.declaration) {
