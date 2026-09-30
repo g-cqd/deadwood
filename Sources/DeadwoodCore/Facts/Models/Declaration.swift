@@ -321,6 +321,11 @@ extension Declaration {
     /// Name of the node synthesized for file-scope statements.
     static let topLevelStatementsName = "top-level code"
 
+    /// The name as findings show it: `fetch(id:)` for a function.
+    var displayName: String {
+        signature.map { name + $0.selectorString } ?? name
+    }
+
     /// Whether this is the node synthesized for a `#Preview` expansion.
     var isPreviewCode: Bool {
         kind == .topLevelCode && name == Self.previewCodeName
