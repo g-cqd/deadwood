@@ -1,3 +1,5 @@
+import ProjectModel
+
 #if canImport(FoundationEssentials)
     internal import FoundationEssentials
 #else
@@ -36,6 +38,18 @@ public enum SourceDiscovery {
     ///   `directory`; each directory is read once.
     public static func swiftFiles(in directory: String) -> [String] {
         files(in: directory) { $0.hasSuffix(".swift") }
+    }
+
+    /// The project files under `directory` that name entry points:
+    /// Info.plists and other property lists, storyboards, xibs and Xcode
+    /// project files, sorted.
+    public static func projectFiles(in directory: String) -> [String] {
+        files(in: directory, where: isProjectFile)
+    }
+
+    /// Whether `path` names a project file ``projectFiles(in:)`` would list.
+    public static func isProjectFile(_ path: String) -> Bool {
+        SystemEntryPoints.isProjectFile(path)
     }
 
     /// The files under `directory` whose path `isIncluded` accepts, sorted,
