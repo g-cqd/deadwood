@@ -13,6 +13,8 @@
 //  - the dead-branch pass moved to `DeadBranchPass` (it consumes parsed
 //    trees instead of re-reading files).
 
+import ProjectModel
+
 #if canImport(FoundationEssentials)
     import FoundationEssentials
 #else
@@ -622,15 +624,33 @@ struct ReachabilityBasedDetector: Sendable {
             guard onlyDebug ? configuration.detectDebugOnly : configuration.detectPreviewOnly,
                 let confidence = reportableConfidence(of: declaration, context: context)
             else { continue }
-            results.append(
-                UnusedCode(
-                    declaration: declaration,
-                    reason: onlyDebug ? .referencedOnlyByDebugCode : .referencedOnlyByPreviews,
-                    confidence: confidence,
-                    suggestion: onlyDebug
-                        ? "Only #if DEBUG code reaches '\(declaration.name)' — move it under #if DEBUG"
-                        : "Only previews reach '\(declaration.name)' — move it under #if DEBUG"
-                ))
+            let region: CodeRegion = onlyDebug ? .debugOnly : .preview
+            // --include promotes this from a note about code only debug/
+            // preview code reaches to an ordinary finding, under the same
+            // rule an unreferenced declaration of this kind gets, tagged
+            // with the region so it can still be told apart and filtered.
+            if configuration.regionSelection.isIncluded(region) {
+                results.append(
+                    UnusedCode(
+                        declaration: declaration,
+                        reason: .neverReferenced,
+                        confidence: confidence,
+                        suggestion:
+                            "Only \(onlyDebug ? "#if DEBUG code" : "previews") reach"
+                            + " '\(declaration.name)' outside #if DEBUG — consider removing it",
+                        regionTag: region
+                    ))
+            } else {
+                results.append(
+                    UnusedCode(
+                        declaration: declaration,
+                        reason: onlyDebug ? .referencedOnlyByDebugCode : .referencedOnlyByPreviews,
+                        confidence: confidence,
+                        suggestion: onlyDebug
+                            ? "Only #if DEBUG code reaches '\(declaration.name)' — move it under #if DEBUG"
+                            : "Only previews reach '\(declaration.name)' — move it under #if DEBUG"
+                    ))
+            }
         }
         return results
     }

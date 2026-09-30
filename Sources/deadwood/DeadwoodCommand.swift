@@ -1,5 +1,6 @@
 public import ArgumentParser
 import DeadwoodCore
+import ProjectModel
 import SystemPackage
 
 #if canImport(FoundationEssentials)
@@ -52,6 +53,16 @@ struct Analyze: AsyncParsableCommand {
             "Production mode: declarations reachable only through tests get the referenced-only-by-tests rule."
     )
     var production = false
+
+    @Option(
+        name: .long,
+        help:
+            "Regions to treat as first-class code, comma-separated (preview,debug,test,mock,generated,script) or \"all\": dead code inside them is reported, and a preview/debug-only note becomes a normal finding, tagged \"region: <name>\". A root (a preview, a test, a script's top level, a plist-named class) is never reported, included or not."
+    )
+    var include: String?
+
+    @Option(name: .long, help: "Regions to keep out of scope even under --include all.")
+    var exclude: String?
 
     @Option(name: .long, help: "Configuration file (default: ./.deadwood.json when present).")
     var config: String?
@@ -136,6 +147,13 @@ struct Analyze: AsyncParsableCommand {
         var configuration = try loadConfiguration()
         if production {
             configuration.production = true
+        }
+        if let include { configuration.includeRegions = include }
+        if let exclude { configuration.excludeRegions = exclude }
+        do {
+            _ = try configuration.regionSelection()
+        } catch {
+            throw ValidationError(error.description)
         }
         let reportScope = try resolveReportScope()
         let (files, projectFiles) = try discoverInputs(configuration: configuration)

@@ -204,7 +204,9 @@ public struct Analyzer: Sendable {
         }
         unused.append(contentsOf: detector.detectAssignOnly(result: result, context: context))
         unused.append(contentsOf: perFile.flatMap(\.deadBranches))
-        report.notes.append(contentsOf: Self.dropGenerated(from: &unused, result: result))
+        report.notes.append(
+            contentsOf: Self.dropGenerated(
+                from: &unused, result: result, regionSelection: engineConfig.regionSelection))
 
         // Surface per-file degraded-analysis notes (e.g. over-bound
         // functions the dead-branch pass skipped): the rest of the file was
@@ -272,8 +274,27 @@ public struct Analyzer: Sendable {
     /// per generated file with declarations nothing outside it names.
     /// - Complexity: O(*g* · *r*) for *g* generated declarations and *r*
     ///   references per name.
-    static func dropGenerated(from unused: inout [UnusedCode], result: AnalysisResult) -> [String] {
+    static func dropGenerated(
+        from unused: inout [UnusedCode], result: AnalysisResult, regionSelection: RegionSelection
+    ) -> [String] {
         guard !result.generatedFiles.isEmpty else { return [] }
+        // --include generated keeps them, tagged, as ordinary findings
+        // instead of withholding them — worth doing deliberately when a
+        // generator's own template, not just its output, needs pruning.
+        if regionSelection.isIncluded(.generated) {
+            unused = unused.map { item in
+                guard result.generatedFiles.contains(item.declaration.location.file) else { return item }
+                return UnusedCode(
+                    declaration: item.declaration,
+                    reason: item.reason,
+                    confidence: item.confidence,
+                    suggestion: item.suggestion,
+                    detail: item.detail,
+                    regionTag: CodeRegion(rawValue: item.regionTag).union(.generated)
+                )
+            }
+            return []
+        }
         unused.removeAll { result.generatedFiles.contains($0.declaration.location.file) }
         let judged: Set<DeclarationKind> = [
             .function, .method, .variable, .constant, .class, .struct, .enum, .actor, .enumCase,
@@ -745,6 +766,7 @@ public struct Analyzer: Sendable {
         // Region reachability needs the whole corpus, like production mode.
         engine.detectPreviewOnly = mode == .reachability && configuration.isEnabled(.previewOnly)
         engine.detectDebugOnly = mode == .reachability && configuration.isEnabled(.debugOnly)
+        engine.regionSelection = (try? configuration.regionSelection()) ?? .none
         return engine
     }
 }
