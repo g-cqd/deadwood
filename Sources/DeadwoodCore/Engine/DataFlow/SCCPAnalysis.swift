@@ -244,6 +244,11 @@ private struct SCCPAnalysisSession {
     // MARK: - Execution
 
     mutating func run() -> SCCPResult {
+        // A write the CFG cannot place makes the variable's value unknown
+        // everywhere; starting at bottom keeps it there (meet is monotone).
+        for name in cfg.unmodeledWrites {
+            values[name] = .bottom
+        }
         cfgWorklist.append(CFGEdge(from: .entry, to: cfg.entryBlock))
 
         var iterations = 0
@@ -294,6 +299,10 @@ private struct SCCPAnalysisSession {
 
         if let terminator = block.terminator {
             processTerminator(terminator, in: blockID, firstVisit: firstVisit)
+        }
+        // Any statement of a `do` body may throw into its catches.
+        for target in cfg.exceptionalEdges[blockID] ?? [] {
+            cfgWorklist.append(CFGEdge(from: blockID, to: target))
         }
     }
 

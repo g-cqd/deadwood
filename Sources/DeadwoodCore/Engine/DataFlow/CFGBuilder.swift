@@ -207,6 +207,16 @@ struct ControlFlowGraph: Sendable {
     /// Reverse postorder for efficient iteration.
     var reversePostOrder: [BlockID]
 
+    /// Edges an error thrown in a `do` body takes to its `catch` clauses.
+    /// They are also in `successors`, but no terminator names them, so a
+    /// pass that follows terminators must follow these as well.
+    var exceptionalEdges: [BlockID: [BlockID]] = [:]
+
+    /// Variables the CFG writes to without placing the write: assigned
+    /// inside a closure or a nested function, or passed `inout` (`&x`).
+    /// Their value at any point is unknown.
+    var unmodeledWrites: Set<String> = []
+
     init(functionName: String, file: String) {
         self.functionName = functionName
         self.file = file
@@ -230,6 +240,12 @@ struct ControlFlowGraph: Sendable {
     mutating func addEdge(from: BlockID, to: BlockID) {
         blocks[from]?.successors.append(to)
         blocks[to]?.predecessors.append(from)
+    }
+
+    /// Add an edge a thrown error takes.
+    mutating func addExceptionalEdge(from: BlockID, to: BlockID) {
+        addEdge(from: from, to: to)
+        exceptionalEdges[from, default: []].append(to)
     }
 
     /// Compute the reverse postorder traversal from the entry block.
@@ -279,9 +295,6 @@ final class CFGBuilder: SyntaxVisitor {
     /// Stack of switch exit blocks.
     private var switchStack: [BlockID] = []
 
-    /// Pending block connections (do/catch exception flow).
-    private var pendingConnections: [(from: BlockID, to: BlockID)] = []
-
     /// Where each registered statement lives, keyed by its syntax node id.
     /// One post-construction walk of the whole body attributes use/def sets
     /// to these slots instead of running a fresh extractor per statement.
@@ -313,7 +326,6 @@ final class CFGBuilder: SyntaxVisitor {
         blockCounter = 0
         loopStack = []
         switchStack = []
-        pendingConnections = []
         statementRegistry = [:]
 
         if let body {
@@ -326,8 +338,10 @@ final class CFGBuilder: SyntaxVisitor {
             cfg.blocks[currentBlockID]?.terminator = .return(expression: nil)
         }
 
-        for (from, to) in pendingConnections {
-            cfg.addEdge(from: from, to: to)
+        if let body {
+            let writes = UnmodeledWriteCollector(viewMode: .sourceAccurate)
+            writes.walk(body)
+            cfg.unmodeledWrites = writes.names
         }
 
         applyUseDef(body: body)
@@ -743,17 +757,36 @@ final class CFGBuilder: SyntaxVisitor {
         cfg.blocks[currentBlockID]?.terminator = .fallthrough(fallthroughTarget)
     }
 
+    /// Any block of the `do` body may throw, so each has an exceptional
+    /// edge to every `catch`; the body's normal exit and every `catch` that
+    /// falls through meet after the statement.
     private func processDoStatement(_ doStmt: DoStmtSyntax) {
+        let entryBlock = currentBlockID
+        let firstBodyBlock = cfg.blockOrder.count
         processCodeBlock(doStmt.body)
+        guard !doStmt.catchClauses.isEmpty else { return }
+
+        let throwingBlocks = [entryBlock] + cfg.blockOrder[firstBodyBlock...]
+        let mergeBlock = newBlock()
+        if cfg.blocks[currentBlockID]?.terminator == nil {
+            cfg.addEdge(from: currentBlockID, to: mergeBlock)
+            cfg.blocks[currentBlockID]?.terminator = .branch(mergeBlock)
+        }
 
         for catchClause in doStmt.catchClauses {
             let catchBlock = newBlock()
-            // Exception flow from the do body to each catch.
-            pendingConnections.append((from: currentBlockID, to: catchBlock))
-
+            for block in throwingBlocks {
+                cfg.addExceptionalEdge(from: block, to: catchBlock)
+            }
             switchToBlock(catchBlock)
             processCodeBlock(catchClause.body)
+            if cfg.blocks[currentBlockID]?.terminator == nil {
+                cfg.addEdge(from: currentBlockID, to: mergeBlock)
+                cfg.blocks[currentBlockID]?.terminator = .branch(mergeBlock)
+            }
         }
+
+        switchToBlock(mergeBlock)
     }
 
     // MARK: - Statement addition
@@ -1051,5 +1084,75 @@ private final class ClosureCaptureExtractor: SyntaxVisitor {
             localVariables.insert(identifier.identifier.text)
         }
         return .visitChildren
+    }
+}
+
+// MARK: - UnmodeledWriteCollector
+
+/// Names written where the CFG cannot place the write: assignments inside
+/// closures and nested functions (they run at an unknown time, possibly
+/// several times), and `inout` arguments anywhere in the body.
+private final class UnmodeledWriteCollector: SyntaxVisitor {
+    private(set) var names: Set<String> = []
+
+    /// Depth of closures and nested functions around the current node.
+    private var deferredDepth = 0
+
+    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+        deferredDepth += 1
+        return .visitChildren
+    }
+
+    override func visitPost(_ node: ClosureExprSyntax) {
+        deferredDepth -= 1
+    }
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        deferredDepth += 1
+        return .visitChildren
+    }
+
+    override func visitPost(_ node: FunctionDeclSyntax) {
+        deferredDepth -= 1
+    }
+
+    override func visit(_ node: InOutExprSyntax) -> SyntaxVisitorContinueKind {
+        if let name = Self.rootName(of: node.expression) {
+            names.insert(name)
+        }
+        return .visitChildren
+    }
+
+    override func visit(_ node: InfixOperatorExprSyntax) -> SyntaxVisitorContinueKind {
+        guard deferredDepth > 0, Self.isAssignment(node.operator),
+            let name = Self.rootName(of: node.leftOperand)
+        else { return .visitChildren }
+        names.insert(name)
+        return .visitChildren
+    }
+
+    /// `=` and the compound assignments (`+=`, `&&=`, ...), not comparisons.
+    private static func isAssignment(_ operatorExpression: ExprSyntax) -> Bool {
+        if operatorExpression.is(AssignmentExprSyntax.self) {
+            return true
+        }
+        guard let binary = operatorExpression.as(BinaryOperatorExprSyntax.self) else { return false }
+        let text = binary.operator.text
+        let comparisons: Set<String> = ["==", "!=", "<=", ">=", "===", "!=="]
+        return text.hasSuffix("=") && !comparisons.contains(text)
+    }
+
+    /// `x`, `x.y` or `x[i]` → `x`.
+    private static func rootName(of expression: ExprSyntax) -> String? {
+        if let reference = expression.as(DeclReferenceExprSyntax.self) {
+            return reference.baseName.text
+        }
+        if let member = expression.as(MemberAccessExprSyntax.self), let base = member.base {
+            return rootName(of: base)
+        }
+        if let subscriptCall = expression.as(SubscriptCallExprSyntax.self) {
+            return rootName(of: subscriptCall.calledExpression)
+        }
+        return nil
     }
 }
