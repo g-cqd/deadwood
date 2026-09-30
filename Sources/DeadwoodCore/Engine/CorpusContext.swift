@@ -7,6 +7,8 @@
 //  type scope's location equals its type declaration's location, giving a
 //  precise scope → declaration mapping.
 
+import ProjectModel
+
 // MARK: - CorpusContext
 
 /// Resolves structural questions about collected facts: which type encloses
@@ -32,6 +34,10 @@ struct CorpusContext: Sendable {
     /// Identifier-shaped tokens appearing inside string literals anywhere
     /// in the corpus (dynamic-reference demotion set).
     private let stringLiteralTokens: Set<String>
+
+    /// Scope-start keys of the types that lexically contain an `@Test`
+    /// function, at any depth: the test framework instantiates them.
+    private let testContainerKeys: Set<String>
 
     init(result: AnalysisResult) {
         scopes = result.scopes
@@ -61,6 +67,17 @@ struct CorpusContext: Sendable {
             }
         }
 
+        var testContainers: Set<String> = []
+        for declaration in result.declarations.declarations
+        where declaration.attributes.contains(TestConventions.testAttribute)
+            && (declaration.kind == .function || declaration.kind == .method)
+        {
+            for scope in result.scopes.chain(from: declaration.scope) where scope.kind.isTypeScope {
+                testContainers.insert(Self.key(scope.location))
+            }
+        }
+        testContainerKeys = testContainers
+
         typeDeclarationByScopeStart = byScopeStart
         nominalTypesByName = nominals
         mergedConformancesByTypeName = conformances
@@ -76,6 +93,14 @@ struct CorpusContext: Sendable {
     static func baseName(ofConformance conformance: String) -> String {
         let unqualified = conformance.split(separator: ".").last.map(String.init) ?? conformance
         return unqualified.split(separator: "<").first.map(String.init) ?? unqualified
+    }
+
+    // MARK: - Test containers
+
+    /// Whether a type or extension declaration lexically contains an
+    /// `@Test` function, directly or in a nested type.
+    func containsTestFunction(_ declaration: Declaration) -> Bool {
+        testContainerKeys.contains(Self.key(declaration.location))
     }
 
     // MARK: - Enclosing types
