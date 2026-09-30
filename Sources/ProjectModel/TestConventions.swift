@@ -11,7 +11,4 @@ public enum TestConventions {
 
     /// XCTest runs every `test…` method of an `XCTestCase` subclass.
     public static let xcTestCaseClass = "XCTestCase"
-
-    /// The name prefix of an XCTest test method.
-    public static let xcTestMethodPrefix = "test"
 }
