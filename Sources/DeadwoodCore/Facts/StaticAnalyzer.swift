@@ -43,7 +43,8 @@ struct StaticAnalyzer: Sendable {
                 + Self.topLevelCodeDeclarations(tree: tree, file: file, converter: converter),
             references: refCollector.references,
             scopes: Array(declCollector.tracker.tree.scopes.values),
-            stringLiteralTokens: refCollector.stringLiteralTokens
+            stringLiteralTokens: refCollector.stringLiteralTokens,
+            isGenerated: GeneratedCode.isGenerated(path: file, tree: tree)
         )
     }
 
@@ -103,6 +104,7 @@ struct StaticAnalyzer: Sendable {
         var referenceIndex = ReferenceIndex()
         var scopeTree = ScopeTree()
         var stringTokens: Set<String> = []
+        var generatedFiles: Set<String> = []
 
         for result in results {
             for declaration in result.declarations {
@@ -115,6 +117,9 @@ struct StaticAnalyzer: Sendable {
                 scopeTree.add(scope)
             }
             stringTokens.formUnion(result.stringLiteralTokens)
+            if result.isGenerated {
+                generatedFiles.insert(result.file)
+            }
         }
 
         return AnalysisResult(
@@ -122,7 +127,8 @@ struct StaticAnalyzer: Sendable {
             declarations: declarationIndex,
             references: referenceIndex,
             scopes: scopeTree,
-            stringLiteralTokens: stringTokens
+            stringLiteralTokens: stringTokens,
+            generatedFiles: generatedFiles
         )
     }
 }

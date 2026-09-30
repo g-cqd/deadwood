@@ -123,6 +123,9 @@ enum RootReason: String, Sendable {
     /// without any declaration naming them.
     case topLevelCode
 
+    /// Declared in a generated file: not judged, but what it uses is used.
+    case generatedCode
+
     /// A type a project file names for the system to instantiate: an
     /// Info.plist principal or delegate class, a storyboard custom class.
     case systemEntryPoint
@@ -272,6 +275,9 @@ struct RootDetector: Sendable {
                 return configuration.treatPreviewProvidersAsRoot ? .swiftUIPreview : nil
             }
             return .topLevelCode
+        }
+        if context.isGeneratedFile(declaration.location.file) {
+            return .generatedCode
         }
         if hasAttribute(declaration, named: "main") {
             return .mainAttribute

@@ -204,6 +204,7 @@ public struct Analyzer: Sendable {
         }
         unused.append(contentsOf: detector.detectAssignOnly(result: result, context: context))
         unused.append(contentsOf: perFile.flatMap(\.deadBranches))
+        report.notes.append(contentsOf: Self.dropGenerated(from: &unused, result: result))
 
         // Surface per-file degraded-analysis notes (e.g. over-bound
         // functions the dead-branch pass skipped): the rest of the file was
@@ -262,6 +263,34 @@ public struct Analyzer: Sendable {
             report = report.fingerprintsAnchored(to: root)
         }
         return report
+    }
+
+    // MARK: - Generated code
+
+    /// Removes the results located in generated files (dead branches; their
+    /// declarations are roots and never reach here), and returns one note
+    /// per generated file with declarations nothing outside it names.
+    /// - Complexity: O(*g* · *r*) for *g* generated declarations and *r*
+    ///   references per name.
+    static func dropGenerated(from unused: inout [UnusedCode], result: AnalysisResult) -> [String] {
+        guard !result.generatedFiles.isEmpty else { return [] }
+        unused.removeAll { result.generatedFiles.contains($0.declaration.location.file) }
+        let judged: Set<DeclarationKind> = [
+            .function, .method, .variable, .constant, .class, .struct, .enum, .actor, .enumCase,
+        ]
+        var unnamed: [String: Int] = [:]
+        for declaration in result.declarations.declarations
+        where judged.contains(declaration.kind) && result.generatedFiles.contains(declaration.location.file) {
+            let file = declaration.location.file
+            let namedElsewhere = result.references.find(identifier: declaration.name)
+                .contains { $0.location.file != file }
+            if !namedElsewhere {
+                unnamed[file, default: 0] += 1
+            }
+        }
+        return unnamed.sorted { $0.key < $1.key }.map { file, count in
+            "\(ToolInfo.name): generated file \(file) has \(count) declaration(s) nothing outside it names"
+        }
     }
 
     // MARK: - System entry points
