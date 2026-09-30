@@ -111,12 +111,38 @@ struct DependencyExtractor: Sendable {
 
         let maxConcurrency = ProcessInfo.processInfo.activeProcessorCount
 
+        // Each reference belongs to the innermost declaration holding it,
+        // and to that one only: a container does not also use what its
+        // members use, so a dead member's uses die with it.
+        var declarationsByFileMutable: [String: [Int32]] = [:]
+        for (index, declaration) in allDeclarations.enumerated() {
+            declarationsByFileMutable[declaration.location.file, default: []].append(Int32(index))
+        }
+        let declarationsByFile = declarationsByFileMutable
+        let ownership = await ParallelProcessor.map(
+            Array(sortedRefsByFile.keys),
+            maxConcurrency: maxConcurrency
+        ) { file in
+            Self.referenceOwners(
+                refs: sortedRefsByFile[file] ?? [],
+                candidates: declarationsByFile[file] ?? [],
+                declarations: allDeclarations,
+                context: context
+            )
+        }
+        var ownedRefsMutable: [Int32: [Int]] = [:]
+        for fileOwnership in ownership {
+            ownedRefsMutable.merge(fileOwnership) { first, _ in first }
+        }
+        let ownedRefs = ownedRefsMutable
+
         let targetsBySource = await ParallelProcessor.compactMap(
             Array(allDeclarations.enumerated()),
             maxConcurrency: maxConcurrency
         ) { entry -> (source: Int32, targets: [Int32], levels: [UInt8])? in
             let leveled = self.referenceTargets(
                 of: entry.element,
+                ownedRefIndices: ownedRefs[Int32(entry.offset)] ?? [],
                 sortedRefsByFile: sortedRefsByFile,
                 refLevelsByFile: recordingRegionLevels ? refLevelsByFile : nil,
                 declByName: declByName,
@@ -149,13 +175,14 @@ struct DependencyExtractor: Sendable {
     }
 
     /// The declarations one declaration may depend on, each once, ascending
-    /// (pure function): every declaration named like a reference inside the
-    /// declaration's line range, or like that reference's qualifier
-    /// (name-level over-approximation), and the types its annotation names.
+    /// (pure function): every declaration named like a reference it owns,
+    /// or like that reference's qualifier (name-level over-approximation),
+    /// and the types its annotation names.
     /// - Complexity: O(*r* + *t* log *t*) for *r* matches among the
     ///   references and *t* distinct targets.
     private func referenceTargets(
         of declaration: Declaration,
+        ownedRefIndices: [Int],
         sortedRefsByFile: [String: [Reference]],
         refLevelsByFile: [String: [UInt8]]?,
         declByName: [String: [Int32]],
@@ -173,7 +200,7 @@ struct DependencyExtractor: Sendable {
         let file = declaration.location.file
         let fileRefs = sortedRefsByFile[file] ?? []
         let fileLevels = refLevelsByFile?[file]
-        for index in referenceIndicesInScope(declaration: declaration, fileRefs: fileRefs) {
+        for index in ownedRefIndices {
             let reference = fileRefs[index]
             let level = fileLevels?[index] ?? 0
             if let matches = declByName[reference.identifier] {
@@ -201,15 +228,56 @@ struct DependencyExtractor: Sendable {
         return (sorted, sorted.map { targets[$0] ?? 0 })
     }
 
-    /// Indices of the references inside a declaration's line range: two
-    /// binary searches over the file's line-sorted references bound the
-    /// inclusive [start.line, end.line] subrange.
-    private func referenceIndicesInScope(declaration: Declaration, fileRefs: [Reference]) -> Range<Int> {
-        let startLine = declaration.range.start.line
-        let endLine = declaration.range.end.line
-        let lower = fileRefs.partitionPoint { $0.location.line >= startLine }
-        let upper = fileRefs.partitionPoint { $0.location.line > endLine }
-        return lower..<max(lower, upper)
+    /// Which declaration owns each of one file's line-sorted references:
+    /// the innermost one holding its line. Parameters, locals, initializers
+    /// and deinitializers own nothing: their code runs as part of the
+    /// function or type around them. At line granularity, siblings sharing
+    /// a line give its references to the later one.
+    ///
+    /// Invariant: before a reference is assigned, the stack holds, bottom to
+    /// top, the owners opened so far whose ranges may still hold it, and
+    /// every entry above the first one holding its line has been popped, so
+    /// the top is the innermost owner. Each owner is pushed and popped once.
+    /// - Complexity: O(*d* log *d* + *r*) for *d* declarations and *r*
+    ///   references in the file.
+    static func referenceOwners(
+        refs: [Reference],
+        candidates: [Int32],
+        declarations: [Declaration],
+        context: CorpusContext
+    ) -> [Int32: [Int]] {
+        let transparentKinds: Set<DeclarationKind> = [.parameter, .import, .initializer, .deinitializer]
+        let owners = candidates.filter { index in
+            let declaration = declarations[Int(index)]
+            return !transparentKinds.contains(declaration.kind) && !context.isLocalDeclaration(declaration)
+        }
+        .sorted { lhs, rhs in
+            // `location` skips leading trivia; `range.start` does not, and
+            // would start a member on the line its predecessor ends.
+            let left = declarations[Int(lhs)]
+            let right = declarations[Int(rhs)]
+            if left.location.line != right.location.line { return left.location.line < right.location.line }
+            if left.range.end.line != right.range.end.line { return left.range.end.line > right.range.end.line }
+            return left.location.column < right.location.column
+        }
+
+        var owned: [Int32: [Int]] = [:]
+        var stack: [Int32] = []
+        var next = 0
+        for (refIndex, reference) in refs.enumerated() {
+            let line = reference.location.line
+            while next < owners.count, declarations[Int(owners[next])].location.line <= line {
+                stack.append(owners[next])
+                next += 1
+            }
+            while let top = stack.last, declarations[Int(top)].range.end.line < line {
+                stack.removeLast()
+            }
+            if let owner = stack.last {
+                owned[owner, default: []].append(refIndex)
+            }
+        }
+        return owned
     }
 
     /// Extract type names from a type annotation string.
@@ -403,11 +471,8 @@ struct ReachabilityBasedDetector: Sendable {
         // Map indices back through the declaration array only here, at the
         // findings boundary — the graph never carries declarations.
         let declarations = result.declarations.declarations
-        var results = neverReferencedResults(
-            declarations: declarations,
-            reachableWithTests: reachableWithTests,
-            context: context
-        )
+        var results = await deadGroupResults(
+            graph: graph, declarations: declarations, reachable: reachableWithTests, context: context)
 
         if configuration.productionMode {
             let classifier = TestScopeClassifier(testsGlob: configuration.testsGlob)
@@ -431,6 +496,74 @@ struct ReachabilityBasedDetector: Sendable {
         }
 
         return results
+    }
+
+    // MARK: - Dead-code groups
+
+    /// The unreachable declarations, grouped: a declaration nothing names
+    /// heads its group, and the ones only dead code uses follow it as
+    /// `onlyUsedByDeadCode`, their confidence the weakest along the path
+    /// from the root. A cycle nothing live reaches is one group headed by
+    /// its first member (``DeadCodeGroups``).
+    /// - Complexity: O(D + E_D) beyond the search that found them dead.
+    private func deadGroupResults(
+        graph: ReachabilityGraph,
+        declarations: [Declaration],
+        reachable: Set<Int>,
+        context: CorpusContext
+    ) async -> [UnusedCode] {
+        let calculator = ConfidenceCalculator(context: context)
+        var own: [Int: Confidence] = [:]
+        for index in 0..<declarations.count where !reachable.contains(index) {
+            let declaration = declarations[index]
+            guard let base = reportableConfidence(of: declaration, context: context) else { continue }
+            let provisional = UnusedCode(declaration: declaration, reason: .neverReferenced, confidence: base)
+            own[index] = calculator.assess(provisional).confidence
+        }
+        let dead = Set(own.keys)
+        let groups = DeadCodeGroups(dead: dead.sorted(), successors: await graph.deadSuccessors(of: dead))
+
+        var chain: [Int: Confidence] = [:]
+        var results: [UnusedCode] = []
+        for node in groups.order {
+            let declaration = declarations[node]
+            let ownConfidence = own[node] ?? .low
+            let users = (groups.users[node] ?? []).map { declarations[$0].displayName }
+            if groups.rootOf[node] == node {
+                chain[node] = ownConfidence
+                let count = groups.memberCount[node] ?? 0
+                let isCycle = groups.cycleRoots.contains(node)
+                results.append(
+                    UnusedCode(
+                        declaration: declaration,
+                        reason: isCycle ? .deadCycle : .neverReferenced,
+                        confidence: declaration.unusedConfidence(context: context),
+                        suggestion: "Unreachable from any entry point - consider removing '\(declaration.name)'",
+                        detail: isCycle
+                            ? Self.listing(users)
+                            : count > 0 ? "\(count) declaration(s) only it uses are dead with it" : nil
+                    ))
+            } else {
+                let parentConfidence = groups.parentOf[node].flatMap { chain[$0] } ?? ownConfidence
+                let confidence = min(ownConfidence, parentConfidence)
+                chain[node] = confidence
+                results.append(
+                    UnusedCode(
+                        declaration: declaration,
+                        reason: .onlyUsedByDeadCode,
+                        confidence: confidence,
+                        suggestion: "Only dead code uses '\(declaration.name)' - remove it with its users",
+                        detail: Self.listing(users)
+                    ))
+            }
+        }
+        return results
+    }
+
+    /// "a, b, c and 2 more".
+    private static func listing(_ names: [String]) -> String {
+        let shown = names.prefix(3).joined(separator: ", ")
+        return names.count > 3 ? "\(shown) and \(names.count - 3) more" : shown
     }
 
     // MARK: - Region reachability
@@ -568,6 +701,9 @@ struct ReachabilityBasedDetector: Sendable {
         context: CorpusContext
     ) -> Confidence? {
         guard shouldReport(declaration) else { return nil }
+        // A local lives and dies with its function, which owns its uses;
+        // dead stores are the dead-store pass's job (as in index mode).
+        guard !context.isLocalDeclaration(declaration) else { return nil }
         let confidence = declaration.unusedConfidence(context: context)
         guard confidence >= configuration.minimumConfidence else { return nil }
         return confidence

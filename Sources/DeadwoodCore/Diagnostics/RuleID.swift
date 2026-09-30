@@ -13,6 +13,7 @@ public enum RuleID: String, CaseIterable, Sendable, Codable {
     case deadStore = "dead-store"
     case previewOnly = "preview-only"
     case debugOnly = "debug-only"
+    case unusedTransitively = "unused-transitively"
 
     public var summary: String {
         switch self {
@@ -40,6 +41,8 @@ public enum RuleID: String, CaseIterable, Sendable, Codable {
             "production code that only SwiftUI previews use"
         case .debugOnly:
             "production code that only #if DEBUG code uses"
+        case .unusedTransitively:
+            "declaration only dead code uses: dead with it"
         }
     }
 
@@ -112,6 +115,14 @@ public enum RuleID: String, CaseIterable, Sendable, Codable {
             builds for nothing. Move it under #if DEBUG next to the previews. \
             Code that already sits in #if DEBUG or in a preview is never \
             reported.
+            """
+        case .unusedTransitively:
+            """
+            Something uses this declaration, but everything that uses it is \
+            dead: unreachable from any entry point. Deleting the dead users \
+            leaves it unused, so it is reported in the same run, with the \
+            users named, rather than one run per link of the chain. Its \
+            confidence is the weakest along the chain. Delete it with them.
             """
         case .debugOnly:
             """
