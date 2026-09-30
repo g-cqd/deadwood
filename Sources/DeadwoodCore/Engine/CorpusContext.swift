@@ -132,6 +132,11 @@ struct CorpusContext: Sendable {
         !regionSpansByFile.isEmpty
     }
 
+    /// Whether one file has debug-only or preview code.
+    func hasCodeRegions(inFile file: String) -> Bool {
+        regionSpansByFile[file] != nil
+    }
+
     /// The region of one line: production, debug-only, preview, or both.
     /// - Complexity: O(s) in the number of the file's region spans.
     func region(ofLine line: Int, inFile file: String) -> CodeRegion {
