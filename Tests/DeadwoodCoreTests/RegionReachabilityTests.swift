@@ -15,7 +15,7 @@ import Testing
     @Test func `production code only a preview uses gets a preview-only note`() async throws {
         let report = try await CorpusFixture([
             "SampleView.swift": Self.sampleView,
-            "ViewModifiers.swift": """
+            "SampleModifiers.swift": """
             import SwiftUI
 
             extension View {
@@ -87,7 +87,7 @@ import Testing
         ])
         let report = try await CorpusFixture([
             "SampleView.swift": Self.sampleView,
-            "ViewModifiers.swift": """
+            "SampleModifiers.swift": """
             import SwiftUI
 
             extension View {
