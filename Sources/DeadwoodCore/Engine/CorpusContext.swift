@@ -43,8 +43,12 @@ struct CorpusContext: Sendable {
     /// settings) tell the system to instantiate.
     private let systemEntryPointNames: Set<String>
 
+    /// Files a generator wrote.
+    private let generatedFiles: Set<String>
+
     init(result: AnalysisResult, systemEntryPoints: Set<String> = []) {
         systemEntryPointNames = systemEntryPoints
+        generatedFiles = result.generatedFiles
         scopes = result.scopes
         stringLiteralTokens = result.stringLiteralTokens
 
@@ -106,6 +110,11 @@ struct CorpusContext: Sendable {
     /// instantiates.
     func isSystemEntryPoint(_ typeName: String) -> Bool {
         systemEntryPointNames.contains(typeName)
+    }
+
+    /// Whether a generator wrote `file`.
+    func isGeneratedFile(_ file: String) -> Bool {
+        generatedFiles.contains(file)
     }
 
     // MARK: - Test containers
