@@ -23,6 +23,7 @@ incremental fail-open facts cache.
 | `unused-type` | on | types nothing references (members collapse into the type) |
 | `unused-property` | on | stored/computed properties with no reference |
 | `unused-enum-case` | on | cases never constructed or matched (raw-value/Codable/CaseIterable enums exempt, including conformances added via extension) |
+| `unused-transitively` | on | declarations only dead code uses, reported in the same run as the dead code, grouped under it and naming its dead users (confidence: the weakest along the chain) |
 | `dead-branch` | on | branches whose condition provably folds to a constant |
 | `referenced-only-by-tests` | on (fires only under `--production`) | declarations reachable with test roots but unreachable without them |
 | `preview-only` | on, note | production code only `#Preview` bodies and `PreviewProvider` types use: it ships in release builds for nothing |
