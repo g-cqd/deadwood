@@ -111,6 +111,10 @@ enum RootReason: String, Sendable {
     /// Visible outside the analyzed file (single-file analysis only): one
     /// file cannot prove an internal-or-wider declaration unused.
     case visibleOutsideFile
+
+    /// File-scope statements or a freestanding macro: executed or expanded
+    /// without any declaration naming them.
+    case topLevelCode
 }
 
 // MARK: - RootDetectionConfiguration
@@ -252,6 +256,12 @@ struct RootDetector: Sendable {
 
     /// Determine whether `declaration` is a root and why.
     func rootReason(for declaration: Declaration, context: CorpusContext) -> RootReason? {
+        if declaration.kind == .topLevelCode {
+            if declaration.isPreviewCode {
+                return configuration.treatPreviewProvidersAsRoot ? .swiftUIPreview : nil
+            }
+            return .topLevelCode
+        }
         if hasAttribute(declaration, named: "main") {
             return .mainAttribute
         }

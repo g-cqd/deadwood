@@ -7,6 +7,7 @@
 //    `BoundedFileReader`, so parsing here is pure and synchronous.
 //  - `AnalysisStatistics` bookkeeping dropped.
 
+import ProjectModel
 import SwiftParser
 import SwiftSyntax
 
@@ -38,11 +39,43 @@ struct StaticAnalyzer: Sendable {
 
         return FileAnalysisResult(
             file: file,
-            declarations: declCollector.declarations + declCollector.imports,
+            declarations: declCollector.declarations + declCollector.imports
+                + Self.topLevelCodeDeclarations(tree: tree, file: file, converter: converter),
             references: refCollector.references,
             scopes: Array(declCollector.tracker.tree.scopes.values),
             stringLiteralTokens: refCollector.stringLiteralTokens
         )
+    }
+
+    /// One synthesized node per run of file-scope code (`#Preview`, script
+    /// statements). Their line ranges hold the references made from that
+    /// code, so reachability sees them; `RootDetector` roots them.
+    static func topLevelCodeDeclarations(
+        tree: SourceFileSyntax,
+        file: String,
+        converter: SourceLocationConverter
+    ) -> [Declaration] {
+        TopLevelCodeScanner.scan(tree, converter: converter).map { code in
+            let start = SourceLocation(file: file, line: code.startLine, column: 1)
+            let end = SourceLocation(file: file, line: code.endLine, column: 1)
+            return Declaration(
+                name: Self.topLevelCodeName(for: code),
+                kind: .topLevelCode,
+                accessLevel: .private,
+                modifiers: [],
+                location: start,
+                range: SourceRange(start: start, end: end),
+                scope: .global
+            )
+        }
+    }
+
+    private static func topLevelCodeName(for code: TopLevelCode) -> String {
+        switch code.kind {
+        case .preview: Declaration.previewCodeName
+        case .macro: "#\(code.macroName)"
+        case .statements: Declaration.topLevelStatementsName
+        }
     }
 
     /// Collect facts from one source string (parses and folds it first).

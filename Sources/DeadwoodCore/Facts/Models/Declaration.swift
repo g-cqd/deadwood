@@ -28,6 +28,9 @@ enum DeclarationKind: String, Sendable, CaseIterable, Codable {
     case `operator`
     case enumCase
     case actor
+    /// File-scope code that is not a declaration (`#Preview`, script
+    /// statements): a synthesized node, rooted, never reported.
+    case topLevelCode
 }
 
 // MARK: - AccessLevel
@@ -306,5 +309,20 @@ struct DeclarationIndex: Sendable {
     /// Find declarations of a specific kind.
     func find(kind: DeclarationKind) -> [Declaration] {
         byKind[kind] ?? []
+    }
+}
+
+// MARK: - Top-level code
+
+extension Declaration {
+    /// Name of the node synthesized for a `#Preview` expansion.
+    static let previewCodeName = "#Preview"
+
+    /// Name of the node synthesized for file-scope statements.
+    static let topLevelStatementsName = "top-level code"
+
+    /// Whether this is the node synthesized for a `#Preview` expansion.
+    var isPreviewCode: Bool {
+        kind == .topLevelCode && name == Self.previewCodeName
     }
 }
