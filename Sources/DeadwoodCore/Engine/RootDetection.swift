@@ -18,6 +18,8 @@
 //  - optional single-file rule: anything effectively visible outside the
 //    file is a root, because one file alone cannot prove it unused
 
+import ProjectModel
+
 // MARK: - RootReason
 
 /// Reasons why a declaration is considered a root (entry point).
@@ -42,6 +44,11 @@ enum RootReason: String, Sendable {
 
     /// Test method (methods starting with "test", @Test functions).
     case testMethod
+
+    /// Test suite the framework instantiates: an `XCTestCase` subclass, an
+    /// `@Suite` type, or a type holding `@Test` functions (a suite without
+    /// the attribute), at any nesting depth.
+    case testSuite
 
     /// Required by Codable synthesis (CodingKeys, coded stored properties).
     case codableRequirement
@@ -316,6 +323,9 @@ struct RootDetector: Sendable {
             if isFunctionLike, hasAttribute(declaration, named: "Test") {
                 return .testMethod
             }
+            if isTestSuite(declaration, context: context) {
+                return .testSuite
+            }
         }
 
         if declaration.name == "CodingKeys", declaration.kind == .enum {
@@ -484,6 +494,24 @@ struct RootDetector: Sendable {
             return .possibleExternalWitness
         }
         return nil
+    }
+
+    private func isTestSuite(_ declaration: Declaration, context: CorpusContext) -> Bool {
+        switch declaration.kind {
+        case .class, .struct, .enum, .actor, .extension:
+            break
+        default:
+            return false
+        }
+        if hasAttribute(declaration, named: TestConventions.suiteAttribute)
+            || context.containsTestFunction(declaration)
+        {
+            return true
+        }
+        guard declaration.kind == .class else { return false }
+        let base = TestConventions.xcTestCaseClass
+        return declaration.conformances.contains { CorpusContext.baseName(ofConformance: $0) == base }
+            || context.typeTransitivelyConforms(declaration.name, to: base)
     }
 
     private func hasAttribute(_ declaration: Declaration, named name: String) -> Bool {
