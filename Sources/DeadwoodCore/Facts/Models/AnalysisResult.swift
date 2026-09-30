@@ -29,13 +29,17 @@ struct AnalysisResult: Sendable {
     /// them is reported.
     let generatedFiles: Set<String>
 
+    /// Per file, the lines only debug builds or previews compile.
+    let regionSpansByFile: [String: [CodeRegionSpan]]
+
     init(
         files: [String],
         declarations: DeclarationIndex,
         references: ReferenceIndex,
         scopes: ScopeTree,
         stringLiteralTokens: Set<String> = [],
-        generatedFiles: Set<String> = []
+        generatedFiles: Set<String> = [],
+        regionSpansByFile: [String: [CodeRegionSpan]] = [:]
     ) {
         self.files = files
         self.declarations = declarations
@@ -43,6 +47,7 @@ struct AnalysisResult: Sendable {
         self.scopes = scopes
         self.stringLiteralTokens = stringLiteralTokens
         self.generatedFiles = generatedFiles
+        self.regionSpansByFile = regionSpansByFile
     }
 }
 
@@ -67,6 +72,8 @@ struct FileAnalysisResult: Sendable, Codable {
     let stringLiteralTokens: Set<String>
     /// Whether a generator wrote this file.
     let isGenerated: Bool
+    /// The lines only debug builds or previews compile.
+    let regionSpans: [CodeRegionSpan]
 
     init(
         file: String,
@@ -74,7 +81,8 @@ struct FileAnalysisResult: Sendable, Codable {
         references: [Reference],
         scopes: [Scope],
         stringLiteralTokens: Set<String> = [],
-        isGenerated: Bool = false
+        isGenerated: Bool = false,
+        regionSpans: [CodeRegionSpan] = []
     ) {
         self.file = file
         self.declarations = declarations
@@ -82,5 +90,6 @@ struct FileAnalysisResult: Sendable, Codable {
         self.scopes = scopes
         self.stringLiteralTokens = stringLiteralTokens
         self.isGenerated = isGenerated
+        self.regionSpans = regionSpans
     }
 }

@@ -11,6 +11,8 @@ public enum RuleID: String, CaseIterable, Sendable, Codable {
     case referencedOnlyByTests = "referenced-only-by-tests"
     case assignOnlyProperty = "assign-only-property"
     case deadStore = "dead-store"
+    case previewOnly = "preview-only"
+    case debugOnly = "debug-only"
 
     public var summary: String {
         switch self {
@@ -34,6 +36,10 @@ public enum RuleID: String, CaseIterable, Sendable, Codable {
             "stored property that is written but never read"
         case .deadStore:
             "assignment overwritten before any read (liveness + reaching definitions)"
+        case .previewOnly:
+            "production code that only SwiftUI previews use"
+        case .debugOnly:
+            "production code that only #if DEBUG code uses"
         }
     }
 
@@ -99,11 +105,29 @@ public enum RuleID: String, CaseIterable, Sendable, Codable {
             mark a logic slip (wrong variable, leftover debugging). Opt-in \
             because inout/aliasing effects are approximated conservatively.
             """
+        case .previewOnly:
+            """
+            Only #Preview bodies and PreviewProvider types reach this \
+            declaration. It is used, so it is not dead, but it ships in release \
+            builds for nothing. Move it under #if DEBUG next to the previews. \
+            Code that already sits in #if DEBUG or in a preview is never \
+            reported.
+            """
+        case .debugOnly:
+            """
+            Only code inside #if DEBUG reaches this declaration. It is used, so \
+            it is not dead, but it ships in release builds for nothing. Move it \
+            under #if DEBUG with its callers. Code that already sits in #if \
+            DEBUG is never reported.
+            """
         }
     }
 
     public var defaultSeverity: Severity {
-        .warning
+        switch self {
+        case .previewOnly, .debugOnly: .note
+        default: .warning
+        }
     }
 
     public var enabledByDefault: Bool {

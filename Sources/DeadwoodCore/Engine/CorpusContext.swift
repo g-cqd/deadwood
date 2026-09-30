@@ -46,9 +46,13 @@ struct CorpusContext: Sendable {
     /// Files a generator wrote.
     private let generatedFiles: Set<String>
 
+    /// Per file, the lines only debug builds or previews compile.
+    private let regionSpansByFile: [String: [RegionSpan]]
+
     init(result: AnalysisResult, systemEntryPoints: Set<String> = []) {
         systemEntryPointNames = systemEntryPoints
         generatedFiles = result.generatedFiles
+        regionSpansByFile = result.regionSpansByFile.mapValues { $0.map(\.regionSpan) }
         scopes = result.scopes
         stringLiteralTokens = result.stringLiteralTokens
 
@@ -115,6 +119,26 @@ struct CorpusContext: Sendable {
     /// Whether a generator wrote `file`.
     func isGeneratedFile(_ file: String) -> Bool {
         generatedFiles.contains(file)
+    }
+
+    // MARK: - Code regions
+
+    /// Whether any analyzed file has debug-only or preview code.
+    var hasCodeRegions: Bool {
+        !regionSpansByFile.isEmpty
+    }
+
+    /// The region of one line: production, debug-only, preview, or both.
+    /// - Complexity: O(s) in the number of the file's region spans.
+    func region(ofLine line: Int, inFile file: String) -> CodeRegion {
+        guard let spans = regionSpansByFile[file] else { return .production }
+        return RegionSpan.region(atLine: line, in: spans)
+    }
+
+    /// The build context that compiles a line: production (0), debug-only
+    /// (1), or preview (2). Previews are debug code, so they rank last.
+    func regionLevel(ofLine line: Int, inFile file: String) -> RegionLevel {
+        RegionLevel(region(ofLine: line, inFile: file))
     }
 
     // MARK: - Test containers
@@ -236,5 +260,29 @@ struct CorpusContext: Sendable {
         guard !declaration.attributes.contains("objc") else { return false }
         guard let enclosing = nearestEnclosingType(of: declaration) else { return false }
         return typeTransitivelyConforms(enclosing.name, to: "NSObject")
+    }
+}
+
+// MARK: - RegionLevel
+
+/// How far from production a piece of code is: the level at which a
+/// reachability pass starts to count it.
+enum RegionLevel: Int, Sendable, Comparable, CaseIterable {
+    case production = 0
+    case debugOnly = 1
+    case preview = 2
+
+    init(_ region: CodeRegion) {
+        if region.contains(.preview) {
+            self = .preview
+        } else if region.contains(.debugOnly) {
+            self = .debugOnly
+        } else {
+            self = .production
+        }
+    }
+
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        lhs.rawValue < rhs.rawValue
     }
 }
