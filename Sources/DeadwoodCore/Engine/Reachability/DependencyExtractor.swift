@@ -657,32 +657,6 @@ struct ReachabilityBasedDetector: Sendable {
 
     // MARK: - Report tail (shared with the index-store oracle)
 
-    /// Genuinely unreachable declarations (even with test roots): normal
-    /// rules. Pure over a precomputed reachable-index set, so both the syntax
-    /// graph and the `--index-store` bridge feed it their own reachability.
-    func neverReferencedResults(
-        declarations: [Declaration],
-        reachableWithTests: Set<Int>,
-        context: CorpusContext
-    ) -> [UnusedCode] {
-        var results: [UnusedCode] = []
-        for index in 0..<declarations.count where !reachableWithTests.contains(index) {
-            let declaration = declarations[index]
-            guard let confidence = reportableConfidence(of: declaration, context: context) else {
-                continue
-            }
-            results.append(
-                UnusedCode(
-                    declaration: declaration,
-                    reason: .neverReferenced,
-                    confidence: confidence,
-                    suggestion:
-                        "Unreachable from any entry point - consider removing '\(declaration.name)'"
-                ))
-        }
-        return results
-    }
-
     /// Production declarations that only the test pass reaches. Pure over
     /// precomputed reachable-index sets so the index bridge can reuse it with
     /// index-derived reachability.
