@@ -6,6 +6,7 @@
 // MARK: - TaskBackedAsyncStream
 
 /// Creates `AsyncStream` values backed by a cancellable task.
+// @dw:accept unused-transitively -- retained concurrency primitive from the lift contract; exercised by tests
 enum TaskBackedAsyncStream {
     /// Default in-flight buffer for `makeStream`. 256 elements caps memory
     /// pressure for streaming analysis results without throttling typical
