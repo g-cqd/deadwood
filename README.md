@@ -296,7 +296,7 @@ broken, can change which findings fire or the exit code.
 
 ## Confidence model
 
-Every finding's note carries its confidence:
+Every finding's note carries its confidence, and the same level is a structured `confidence` field in the JSON report and SARIF `properties.confidence`. The levels:
 
 - **certain** — dataflow proofs on literal conditions (`if false`); a dead
   branch proven by propagating a variable is **high**.
@@ -351,6 +351,100 @@ deadwood rules                      # list rules; `rules <id>` explains one
 `--minimum-confidence <low|medium|high|certain>` reports only findings at or above that level of the [confidence model](#confidence-model) above. Findings without a confidence are always reported, and the flag applies before `--baseline` and `--write-baseline`, so a baseline written with it holds only what the same flag would report.
 
 `--report-new-since <baseline>` promotes the findings outside `--only` that the baseline does not hold into the report. It needs `--only` or `--only-from`; see [Newly dead code outside the changed files](#newly-dead-code-outside-the-changed-files).
+
+The flags, exit codes and JSON fields that 1.x freezes are listed in [CLI and JSON contract (1.x)](#cli-and-json-contract-1x).
+
+## CLI and JSON contract (1.x)
+
+The contract is versioned by the JSON `schemaVersion` (currently 1) and holds for every 1.x release, even while deadwood's own version is 0.x.
+
+Within 1.x, `deadwood analyze [paths…]`, the flags below, the exit codes and the JSON fields do not change incompatibly. Adding a flag or a field is not a breaking change.
+
+JSON goes to stdout and stderr is free-form text, so do not merge them with `2>&1`. A document without `schemaVersion` is not a 1.x report.
+
+Outside the freeze: `--experimental-embedding-confidence`, `--embedding-bundle` (and the `DEADWOOD_EMBEDDING_BUNDLE` variable), the free-form text of `deadwood rules`, and the `DeadwoodCore` library API.
+
+| Flag | Meaning |
+|---|---|
+| `--format` | `xcode` (default, build-log lines), `json` (the report below) or `sarif` (SARIF 2.1.0) |
+| `--only <path>`, `--only-from <file>` | report only these files; `--only` is repeatable, and `--only-from` reads one path per line (`-` reads stdin). See [Report scope](#report-scope) |
+| `--relative-to <dir>` | print paths relative to `<dir>`; it also anchors fingerprints. See [Baselines and fingerprints](#baselines-and-fingerprints) |
+| `--baseline <file>`, `--write-baseline <file>` | drop the findings a baseline holds; write the current findings as a baseline, then exit `0` |
+| `--report-new-since <file>` | report findings outside `--only` that a base-branch baseline does not hold. See [Newly dead code outside the changed files](#newly-dead-code-outside-the-changed-files) |
+| `--config <file>` | configuration file; default `./.deadwood.json` when present |
+| `--cache-path <file>`, `--no-cache` | facts-cache file; disable the cache. See [Facts cache and parallel jobs](#facts-cache-and-parallel-jobs) |
+| `--strict` | warnings fail the gate too; notes never do |
+| `--minimum-confidence <level>` | report only findings at or above `low`, `medium`, `high` or `certain`; findings without a confidence are always reported |
+| `--include <regions>`, `--exclude <regions>` | comma-separated `preview`, `debug`, `test`, `mock`, `generated`, `script` or `all`: analyze as first-class code, or keep out of scope |
+| `--index-store`, `--index-store-path <path>`, `--index-store-build` | USR-precise cross-module reachability from the compiler's index store (macOS). `--index-store-path` names the store, and `--index-store-build` runs `swift build` when none is found; each implies `--index-store` |
+
+### Exit status
+
+The exit codes below do not change incompatibly within 1.x; [Exit codes](#exit-codes) summarizes them. deadwood does not use `74`.
+
+- **`0`**: the gate passed. Without `--strict`, no finding has `error` severity; with it, no finding is a `warning` or an `error`. Notes never fail a run. `--write-baseline` exits `0` whatever the findings.
+- **`1`**: findings only. Without `--strict`, it means a finding has `error` severity; with `--strict`, any finding that is a `warning` or an `error`. A rule's severity is `warning` by default (`note` for `preview-only` and `debug-only`), and the configuration can set it per rule. Only findings in the report count: one removed by `--baseline` or `--minimum-confidence`, one out of scope, and one suppressed do not. A finding promoted by `--report-new-since` does.
+- **`64`**: usage. An argument that does not parse (an unknown flag or an invalid value); `--write-baseline` with `--only` or `--only-from`; `--report-new-since` without `--only` or `--only-from`; `--only-from -` together with `-` as an input; an input path that does not exist; an input with no Swift files; an `--only-from` file that is unreadable, not a regular file, or over 4 MiB; an unknown region name on the command line.
+- **`70`**: nothing was analyzed. A cancelled run prints nothing on stdout. When every file was skipped (unreadable, not UTF-8, or over 10 MiB), the report is still printed in the requested format and the run exits `70`. A report on stdout means nothing could be analyzed; empty stdout means the run itself failed.
+- **`78`**: a configuration or baseline is unusable. The configuration file (`--config`, or `./.deadwood.json`) is unreadable, over 1 MiB, malformed, names an unknown rule, or names an unknown region. A `--baseline` or `--report-new-since` file is missing, not a regular file, over 1 MiB, malformed, or has a `version` other than `1`; the `--report-new-since` baseline is read before the analysis starts. A `--write-baseline` file that cannot be written also exits `78`.
+
+### Report scope
+
+- The whole corpus is analyzed, because reachability spans files. Only the report is scoped.
+- A finding is kept when its location is in scope, and only kept findings decide the exit code.
+- Scope entries and finding paths are canonicalized the same way: standardized, with symlinks resolved. A relative entry resolves against the working directory. `--relative-to` changes how paths print and how fingerprints are anchored (see below), never which findings are kept.
+- An empty scope (an empty `--only-from` file) keeps no finding: `findings` is empty and the exit status is `0`.
+- Out-of-scope findings are not printed. The JSON report lists them in `outOfScope`, and the summary counts them. Suppressed findings are not scoped: `suppressed` lists them for the whole corpus.
+- A non-empty scope that matches no analyzed file prints a warning on stderr. The exit status still follows the findings.
+- The exception is `--report-new-since`, which promotes out-of-scope findings whose fingerprint the baseline does not hold. Its rules are in [Newly dead code outside the changed files](#newly-dead-code-outside-the-changed-files), and with it the no-match warning is not printed.
+
+### JSON report
+
+`--format json` prints one object on stdout. Optional keys are omitted when they have no value, never written as `null`.
+
+| Field | Meaning |
+|---|---|
+| `schemaVersion` | integer, `1` today; the contract version shared by arcleak, dolly and deadwood |
+| `findings` | reported findings: in scope, not suppressed, not baselined, at or above `--minimum-confidence` |
+| `suppressed` | findings silenced by an `@dw:` directive, each with `finding` and `reason`; `reason` is omitted when the directive gave none |
+| `outOfScope` | findings outside `--only` / `--only-from` |
+| `degradedFiles` | files skipped or only partly analyzed, each with `path`, `detail` and `skipped` (`false` when only part of the file was skipped) |
+| `analyzedFileCount` | files analyzed |
+| `cacheHits`, `cacheMisses` | facts reused from the cache, and facts parsed; both `0` without a cache |
+| `cacheLoadFailure` | optional string; present only when the facts cache was ignored as unreadable or undecodable |
+| `notes` | informational notes, also printed on stderr |
+| `wasCancelled` | `false` in every printed report: a cancelled run prints nothing and exits `70` |
+
+Each element of `findings`:
+
+| Field | Meaning |
+|---|---|
+| `rule`, `severity` | rule id (`deadwood rules` lists them); `note`, `warning` or `error` |
+| `path`, `line`, `column` | location, absolute or relative to `--relative-to`; `line` and `column` are 1-based, and `column` counts UTF-8 bytes |
+| `message` | one-line description |
+| `note` | optional; omitted when there is none. It begins with `confidence <level> — ` |
+| `confidence` | optional; `certain`, `high`, `medium` or `low`; omitted when the finding was not scored |
+| `fingerprintPath` | optional; the path the fingerprint hashes. Set when every analyzed file is in one git repository (relative to its root), and for paths under a `--relative-to` directory; omitted otherwise |
+| `fingerprint` | stable identity, as hex; the value `--baseline` matches in the same run |
+
+`schemaVersion` changes only when a field is removed, renamed, retyped, made required or optional, or changes meaning, or when the closed set of severities changes. Adding a field does not change it. Rule ids are an open set: a new rule can appear in any 1.x release, so consumers must handle a rule id they do not know. Consumers ignore unknown fields and reject a `schemaVersion` above the one they were written for.
+
+### Facts cache and parallel jobs
+
+- **Location.** `deadwood/<key>/facts.json` under the user's caches directory (`~/Library/Caches` on macOS). The key is a hash of the git repository root that contains the working directory, or of the working directory itself outside a repository. It follows where deadwood runs, not which paths it analyzes.
+- **Validation.** Entries are keyed by absolute path and checked against the file's content (a 64-bit FNV-1a hash and its byte count) and the whole configuration. The header records the tool version and the executable's file identity, so a rebuilt executable starts with an empty cache, silently. The content hash is not cryptographic: a collision can serve stale facts for one file until that file next changes.
+- **Writes.** A run that changes the cache writes the whole file atomically, rebuilt from its own files, so deleted files are pruned. There is no lock: concurrent runs can lose each other's new entries (the last writer wins), and a reader never sees a partial file.
+- **Damage and size.** A corrupt body under a matching header is ignored with a note (on stderr, and as `cacheLoadFailure` in JSON) and replaced after a complete analysis. A cache file over 64 MiB is ignored with the same note. A payload over 64 MiB is not written, and an existing file is removed, with a note.
+- **Parallel CI jobs on one machine** should each pass their own `--cache-path`, outside the analyzed tree, so they neither lose entries nor evict each other's. `--no-cache` disables reads and writes, and overrides `--cache-path`.
+
+### Baselines and fingerprints
+
+- **Format.** A baseline is JSON with `fingerprints` (sorted), `tool` and `version`, and `version` is `1`. A baseline with another `version` is refused with exit `78`; `tool` is not checked. A file over 1 MiB is refused too.
+- **Fingerprint.** `fingerprint` is the FNV-1a 64-bit hash, in hex, of `rule|path|line|column|message`. The path is the finding's `fingerprintPath` when it has one, and the absolute path otherwise.
+- **Anchor.** When every analyzed file is in one git repository, `fingerprintPath` is relative to that repository's root, so a baseline matches on any checkout. Outside a repository the absolute path is hashed, so a baseline does not move between machines.
+- **`--relative-to`.** Given the repository root (`--relative-to .` at the root), it changes only the printed paths, and the fingerprints equal the automatic anchor. Any other directory re-anchors the findings under it, and findings outside it keep the repository anchor. Outside a repository it changes the hashed path too. Pass the same `--relative-to` value to the run that writes a baseline and to every run that reads it.
+- **Edits move findings.** `line` and `column` are hashed with the message, so an edit above a baselined finding re-reports it. Regenerate the baseline after large moves.
+- **Writing.** `--write-baseline` records the findings the report would show: after `--minimum-confidence` and `--relative-to`, so a baseline written with the flag holds only what the same flag reports. It needs an unscoped run (exit `64` with `--only` or `--only-from`), ignores `--baseline`, and exits `0`.
 
 ## Accepting a finding
 
