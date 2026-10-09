@@ -100,6 +100,10 @@ enum RootReason: String, Sendable {
     /// `@_objcRuntimeName` — referenced from the Objective-C runtime.
     case objcRuntimeName
 
+    /// Core Data managed property (`@NSManaged`) — read and written by name at
+    /// runtime, at any access level.
+    case coreDataManagedProperty
+
     /// Operator function — used through operator syntax, which produces no
     /// identifier reference.
     case operatorFunction
@@ -383,6 +387,10 @@ struct RootDetector: Sendable {
         }
         if hasAttribute(declaration, named: "_objcRuntimeName") {
             return .objcRuntimeName
+        }
+        // Core Data reaches a managed member by name, so a private one is as live as a public one.
+        if hasAttribute(declaration, named: "NSManaged") {
+            return .coreDataManagedProperty
         }
 
         // OS-discovered entry points: the system instantiates these by

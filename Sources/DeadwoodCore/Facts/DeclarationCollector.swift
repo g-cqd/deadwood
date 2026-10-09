@@ -88,6 +88,7 @@ final class DeclarationCollector: ScopeTrackingVisitor {
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         let isConstant = node.bindingSpecifier.tokenKind == .keyword(.let)
         let propertyWrappers = extractPropertyWrappers(from: node.attributes)
+        let attributes = extractAttributes(from: node.attributes)
 
         for binding in node.bindings {
             guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self) else {
@@ -104,7 +105,8 @@ final class DeclarationCollector: ScopeTrackingVisitor {
                 node: node,
                 typeAnnotation: typeAnnotation,
                 documentation: extractDocumentation(from: node),
-                propertyWrappers: propertyWrappers
+                propertyWrappers: propertyWrappers,
+                attributes: attributes
             )
             declarations.append(declaration)
         }
