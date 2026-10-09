@@ -55,9 +55,7 @@ jobs:
 
   macos:
     runs-on: macos-26
-    # continue-on-error so a macOS post-run stall can never block the Linux
-    # binary: publish treats this job as satisfied and ships whatever built.
-    continue-on-error: true
+    # The macOS arm64 binary is the primary artifact, so a failed or stalled macOS job fails the release (its existing timeouts still bound a stall).
     # Same stall countermeasures as CI: pipe isolation, step bounds, job bound.
     timeout-minutes: 30
     steps:
@@ -107,10 +105,8 @@ jobs:
           exit 0
 
   publish:
-    # macOS is continue-on-error, so `needs` treats it as satisfied even if it
-    # stalled or failed — publish then ships whatever artifacts exist (Linux
-    # always; macOS when it built). A single-platform stall never blocks a
-    # release.
+    # Needs both jobs to succeed: the macOS arm64 binary is the primary
+    # artifact, so a failed or stalled macOS job fails the release.
     needs: [linux, macos]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -132,6 +128,7 @@ jobs:
           BUNDLE="deadwood.artifactbundle"
           mkdir -p "$BUNDLE"
           variants=""
+          ls deadwood-*-macos-arm64.tar.gz >/dev/null 2>&1 || { echo "::error::no macOS arm64 archive; refusing to publish without the primary artifact"; exit 1; }
           for archive in deadwood-*-macos-arm64.tar.gz deadwood-*-linux-x86_64.tar.gz; do
             tar -xzf "$archive"
             name="${archive%.tar.gz}"
@@ -149,8 +146,8 @@ jobs:
             variants="$variants{\"path\":\"$name/bin/deadwood\",\"supportedTriples\":[\"$triple\"]},"
           done
           if [ -z "$variants" ]; then
-            echo "::warning::no platform archives to bundle"
-            exit 0
+            echo "::error::no platform archives to bundle"
+            exit 1
           fi
           printf '{"schemaVersion":"1.0","artifacts":{"deadwood":{"type":"executable","version":"%s","variants":[%s]}}}\n' \
             "$VERSION" "${variants%,}" > "$BUNDLE/info.json"
@@ -158,8 +155,9 @@ jobs:
           # SwiftPM checksums the zip with `swift package compute-checksum`,
           # which is a plain SHA-256 of the file.
           sha256sum "deadwood-$VERSION.artifactbundle.zip" > "deadwood-$VERSION.artifactbundle.zip.sha256"
+          (cd "$(dirname "deadwood-$VERSION.artifactbundle.zip")" && sha256sum -c "deadwood-$VERSION.artifactbundle.zip.sha256")
 
-      - name: Create or update release with whatever binaries built
+      - name: Create or update the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -171,7 +169,8 @@ jobs:
             exit 1
           fi
           if ! ls deadwood-*-macos-arm64.tar.gz >/dev/null 2>&1; then
-            echo "::warning::no macOS artifact — publishing Linux only (macOS lane failed/stalled)"
+            echo "::error::no macOS artifact — refusing to publish Linux only (macOS lane failed/stalled)"
+            exit 1
           fi
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
