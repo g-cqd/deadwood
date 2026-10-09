@@ -49,13 +49,16 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux
+          if-no-files-found: error
           path: |
             deadwood-*.tar.gz
             deadwood-*.sha256
 
   macos:
     runs-on: macos-26
-    # The macOS arm64 binary is the primary artifact, so a failed or stalled macOS job fails the release (its existing timeouts still bound a stall).
+    # The macOS arm64 binary is the primary artifact, so a failed or stalled
+    # macOS job fails the release; its existing timeouts still bound a stall.
+    # Recover with "Re-run failed jobs": the Linux artifact persists.
     # Same stall countermeasures as CI: pipe isolation, step bounds, job bound.
     timeout-minutes: 30
     steps:
@@ -73,6 +76,7 @@ jobs:
           status=$?
           cat build.log
           [ $status -ne 0 ] && exit $status
+          set -e
           BIN="$(swift build -c release --show-bin-path)/deadwood"
           VERSION="$("$BIN" --version)"
           TAG="${GITHUB_REF_NAME#v}"
@@ -92,6 +96,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: release-macos
+          if-no-files-found: error
           path: |
             deadwood-*.tar.gz
             deadwood-*.sha256
@@ -128,7 +133,19 @@ jobs:
           BUNDLE="deadwood.artifactbundle"
           mkdir -p "$BUNDLE"
           variants=""
-          ls deadwood-*-macos-arm64.tar.gz >/dev/null 2>&1 || { echo "::error::no macOS arm64 archive; refusing to publish without the primary artifact"; exit 1; }
+          macos_archives=(deadwood-*-macos-arm64.tar.gz)
+          if [ ${#macos_archives[@]} -eq 0 ]; then
+            echo "::error::no macOS arm64 archive; refusing to publish without the primary artifact"
+            exit 1
+          fi
+          # Verify the downloaded archives against their checksum files before
+          # anything is extracted from them.
+          checksum_files=(deadwood-*.tar.gz.sha256)
+          if [ ${#checksum_files[@]} -eq 0 ]; then
+            echo "::error::no checksum files for the downloaded archives"
+            exit 1
+          fi
+          for s in "${checksum_files[@]}"; do sha256sum -c "$s"; done
           for archive in deadwood-*-macos-arm64.tar.gz deadwood-*-linux-x86_64.tar.gz; do
             tar -xzf "$archive"
             name="${archive%.tar.gz}"
@@ -155,7 +172,6 @@ jobs:
           # SwiftPM checksums the zip with `swift package compute-checksum`,
           # which is a plain SHA-256 of the file.
           sha256sum "deadwood-$VERSION.artifactbundle.zip" > "deadwood-$VERSION.artifactbundle.zip.sha256"
-          (cd "$(dirname "deadwood-$VERSION.artifactbundle.zip")" && sha256sum -c "deadwood-$VERSION.artifactbundle.zip.sha256")
 
       - name: Create or update the release
         env:
@@ -166,10 +182,6 @@ jobs:
           assets=(deadwood-*.tar.gz deadwood-*.artifactbundle.zip deadwood-*.sha256)
           if [ ${#assets[@]} -eq 0 ]; then
             echo "::error::no release artifacts built on any platform"
-            exit 1
-          fi
-          if ! ls deadwood-*-macos-arm64.tar.gz >/dev/null 2>&1; then
-            echo "::error::no macOS artifact — refusing to publish Linux only (macOS lane failed/stalled)"
             exit 1
           fi
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
