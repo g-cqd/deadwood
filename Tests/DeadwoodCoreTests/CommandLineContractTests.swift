@@ -44,6 +44,22 @@ import Testing
         #expect(invocation.toolExecutionNotifications == nil)
     }
 
+    @Test("An empty --only-from file reports nothing, moves the findings out of scope, and exits 0")
+    func emptyOnlyFromReportsNothing() throws {
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let scope = root.appending(path: "changed.txt")
+        try Data().write(to: scope)
+        let run = try BuiltTool.run(
+            ["analyze", root.path, "--format", "json", "--no-cache", "--only-from", scope.path], in: root)
+
+        #expect(run.status == 0)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.isEmpty)
+        #expect(report.outOfScope.count == 1)
+        #expect(report.analyzedFileCount == 1)
+    }
+
     @Test("`A cache without this build's header is a miss`")
     func cacheWithoutHeaderDoesNotCrash() throws {
         let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])

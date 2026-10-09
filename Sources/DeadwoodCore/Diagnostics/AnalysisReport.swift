@@ -4,7 +4,7 @@ public struct AnalysisReport: Sendable, Codable {
     /// Findings that matched a suppression directive; kept so suppression debt is visible.
     public var suppressed: [SuppressedFinding]
     /// Findings the engine produced that fell outside the configured
-    /// ``ReportScope``. Empty when no scope was set. Kept rather than dropped
+    /// ``ProjectModel/ReportScope``. Empty when no scope was set. Kept rather than dropped
     /// so a scoped run never looks like a clean one.
     public var outOfScope: [Finding] = []
     /// Files that failed to read, or whose analysis was cut short (a function
