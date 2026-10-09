@@ -65,7 +65,8 @@ struct FindingMapper: Sendable {
             line: item.declaration.location.line,
             column: item.declaration.location.column,
             message: message(for: item, rule: rule),
-            note: note(for: item, assessment: assessment)
+            note: note(for: item, assessment: assessment),
+            confidence: assessment.confidence
         )
     }
 

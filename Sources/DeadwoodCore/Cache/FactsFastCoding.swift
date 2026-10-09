@@ -42,7 +42,6 @@ extension AccessLevel: AemiJSONFastEncodable, AemiJSONFastDecodable {}
 extension ReferenceContext: AemiJSONFastEncodable, AemiJSONFastDecodable {}
 extension ScopeKind: AemiJSONFastEncodable, AemiJSONFastDecodable {}
 extension UnusedReason: AemiJSONFastEncodable, AemiJSONFastDecodable {}
-extension Confidence: AemiJSONFastEncodable, AemiJSONFastDecodable {}
 extension PropertyWrapperKind: AemiJSONFastEncodable, AemiJSONFastDecodable {}
 
 // MARK: - ScopeID
