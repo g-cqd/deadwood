@@ -2,7 +2,11 @@
 //  run without the index store can say that its name-based findings are
 //  imprecise. Platform-neutral: it only lists directories.
 
-import Foundation
+#if canImport(FoundationEssentials)
+    import FoundationEssentials
+#else
+    import Foundation
+#endif
 
 /// Detection of Xcode projects and the warning a run without the index store
 /// gets for them.
