@@ -118,6 +118,8 @@ import Testing
 
         #expect(!report.flags("scene"))
         #expect(!report.flags("window"))
+        // Control: a type nothing references is still reported.
+        #expect(report.flags("OrphanHelper"))
     }
 
     /// An `@main` app delegate hands `SceneDelegate` to the scene lifecycle in
