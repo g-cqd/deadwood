@@ -87,7 +87,7 @@ extension AnalysisReport {
     /// as it is, so suppression debt stays visible.
     /// - Returns: the filtered report, and how many findings were dropped from ``findings``.
     /// - Complexity: O(*n*) for *n* findings.
-    public func keeping(minimumConfidence: Confidence) -> (report: AnalysisReport, dropped: Int) {
+    package func keeping(minimumConfidence: Confidence) -> (report: AnalysisReport, dropped: Int) {
         func meetsMinimum(_ finding: Finding) -> Bool {
             finding.confidence.map { $0 >= minimumConfidence } ?? true
         }
