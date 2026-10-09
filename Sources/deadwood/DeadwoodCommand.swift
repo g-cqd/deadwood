@@ -283,14 +283,12 @@ struct Analyze: AsyncParsableCommand {
         // Promotion precedes --baseline, so a promoted finding the baseline also holds is suppressed. It cannot
         // reach --write-baseline: validation refuses a scope with --write-baseline.
         var promotedFingerprints: Set<String> = []
-        var everyOutOfScopeFindingPromoted = false
+        var baselineMatchesNothing = false
         if let newSinceBaseline {
-            let outOfScopeCount = report.outOfScope.count
+            baselineMatchesNothing = NewFindings.matchesNothing(report, in: newSinceBaseline.fingerprints)
             let promotion = NewFindings.promote(report, notIn: newSinceBaseline.fingerprints)
             report = promotion.report
             promotedFingerprints = promotion.promoted
-            everyOutOfScopeFindingPromoted =
-                !newSinceBaseline.fingerprints.isEmpty && outOfScopeCount > 0 && report.outOfScope.isEmpty
         }
 
         if let writeBaseline {
@@ -316,7 +314,7 @@ struct Analyze: AsyncParsableCommand {
             if promotedCount > 0 {
                 newNotes.append("\(promotedCount) finding(s) outside --only are new since \(reportNewSince)")
             }
-            if everyOutOfScopeFindingPromoted {
+            if baselineMatchesNothing {
                 newNotes.append(
                     "every out-of-scope finding is new since \(reportNewSince); "
                         + "the baseline may not match this corpus (check --relative-to and the analyzed paths)")

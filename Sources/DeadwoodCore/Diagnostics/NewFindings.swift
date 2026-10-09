@@ -32,4 +32,16 @@ public enum NewFindings {
         copy.findings.sort()
         return (copy, promoted)
     }
+
+    /// Whether `fingerprints` matches none of the fingerprints of `report`'s findings or out-of-scope findings,
+    /// so the baseline may have been written for another corpus. Read before ``promote(_:notIn:)``.
+    /// - Parameter fingerprints: the fingerprints of the baseline written on the base branch.
+    /// - Returns: `false` when either side is empty, since an empty baseline or report cannot be a mismatch.
+    /// - Complexity: O(*n*) for *n* findings.
+    public static func matchesNothing(_ report: AnalysisReport, in fingerprints: Set<String>) -> Bool {
+        guard !fingerprints.isEmpty else { return false }
+        let reported = report.findings + report.outOfScope
+        guard !reported.isEmpty else { return false }
+        return !reported.contains { fingerprints.contains($0.fingerprint) }
+    }
 }
