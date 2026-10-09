@@ -271,6 +271,37 @@ import Testing
             #expect(!result.message.text.contains(root.path), "\(result.message.text)")
         }
     }
+
+    // MARK: - Minimum confidence
+
+    @Test("--minimum-confidence drops a finding below the level, and says how many it dropped")
+    func minimumConfidenceDropsLowerFindings() throws {
+        // A private orphan is scored high, so `certain` drops it.
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let run = try BuiltTool.run(
+            ["analyze", root.path, "--format", "json", "--no-cache", "--minimum-confidence", "certain"], in: root)
+
+        #expect(run.status == 0)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.isEmpty)
+        let note = "1 finding(s) below --minimum-confidence certain not reported"
+        #expect(report.notes.contains(note))
+        #expect(run.standardError.contains(note))
+    }
+
+    @Test("--minimum-confidence with an unknown level is a usage error, exit 64")
+    func minimumConfidenceRejectsUnknownLevel() throws {
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let run = try BuiltTool.run(
+            ["analyze", root.path, "--format", "json", "--no-cache", "--minimum-confidence", "bogus"], in: root)
+
+        #expect(run.status == 64)
+        #expect(run.standardOutput.isEmpty)
+    }
 }
 
 // MARK: - Harness
