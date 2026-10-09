@@ -21,6 +21,7 @@ import Testing
 
         #expect(report.findings.first?.rule == .deadBranch)
         #expect(report.findings.first?.note?.hasPrefix("confidence certain") == true)
+        #expect(report.findings.first?.confidence == .certain)
     }
 
     @Test("Private orphans are high confidence")
@@ -31,6 +32,7 @@ import Testing
         )
 
         #expect(report.findings.first?.note?.hasPrefix("confidence high") == true)
+        #expect(report.findings.first?.confidence == .high)
     }
 
     @Test("A name inside a string literal demotes to low with a note")

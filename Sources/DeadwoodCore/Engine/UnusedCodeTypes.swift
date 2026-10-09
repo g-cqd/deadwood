@@ -40,8 +40,8 @@ enum UnusedReason: String, Sendable, Codable {
 
 // MARK: - Confidence
 
-/// Confidence level for unused code detection.
-enum Confidence: String, Sendable, Comparable, CaseIterable, Codable {
+/// Confidence level for unused code detection, ordered `low` < `medium` < `high` < `certain`.
+public enum Confidence: String, Sendable, Comparable, CaseIterable, Codable {
     /// Proven by dataflow analysis (dead branches): not a heuristic.
     case certain
 
@@ -54,7 +54,7 @@ enum Confidence: String, Sendable, Comparable, CaseIterable, Codable {
     /// Possibly unused (public API, may be used externally).
     case low
 
-    static func < (lhs: Self, rhs: Self) -> Bool {
+    public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.rank < rhs.rank
     }
 

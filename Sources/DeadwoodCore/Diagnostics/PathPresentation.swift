@@ -41,6 +41,7 @@ extension AnalysisReport {
                 column: finding.column,
                 message: stripInText(finding.message),
                 note: finding.note.map(stripInText),
+                confidence: finding.confidence,
                 // An explicit --relative-to is an explicit anchor request, so it sets
                 // the fingerprint spelling too; from the repository root it matches the
                 // automatic anchor exactly.
@@ -80,6 +81,7 @@ extension AnalysisReport {
                 column: finding.column,
                 message: finding.message,
                 note: finding.note,
+                confidence: finding.confidence,
                 fingerprintPath: RepositoryRoot.relativize(finding.path, to: root)
             )
         }
