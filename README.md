@@ -115,12 +115,14 @@ through a path the source-only graph can't see. Configure accordingly:
   the test target removes it. Pair with **`--production`** to then surface
   those as their own `referenced-only-by-tests` findings instead of hiding
   them.
-- **For a real "safe to delete" signal, use `--index-store` (macOS).** The
+- **For a real "safe to delete" signal, use the index store (macOS).** The
   compiler index resolves cross-file/cross-target/dynamic references and
   disambiguates same-named symbols the name graph conflates — it is the
   accuracy mode. On SwiftStaticAnalysis it cleared a name-conflation false
   positive and surfaced 58 genuinely dead declarations the syntax mode missed.
-  It falls open to syntax mode when no index is present.
+  For an Xcode project it is the recommended configuration; see
+  [Index-store mode](#index-store-mode-macos). Without an index it warns and
+  falls back to name-based reachability.
 - **Keep the opt-in rules opt-in.** `unused-import` and `unused-public-api` are
   deliberately off by default: the import heuristic can't see extension or
   operator usage (it over-reports — hundreds of findings on a real corpus),
@@ -147,8 +149,7 @@ through a path the source-only graph can't see. Configure accordingly:
   helpers) with `// @dw:accept -- reason` so the decision is on record rather
   than re-flagged every run.
 
-Bottom line: `deadwood analyze Sources Tests --index-store` on macOS is the
-high-precision configuration; plain `deadwood analyze Sources` is the fast,
+Bottom line: for an Xcode project, `deadwood analyze . --index-store-path <DerivedData>/<Project>-<hash>/Index.noindex/DataStore` after a build is the high-precision configuration; for a package, `deadwood analyze Sources Tests --index-store` on macOS is. Plain `deadwood analyze Sources` is the fast,
 zero-setup pass whose findings you review rather than delete blindly.
 
 ## Production mode
@@ -162,7 +163,11 @@ unreachable declarations keep their normal rules, and the rule never points
 into test code itself. `testsGlob` in `.deadwood.json` overrides the
 built-in `**/Tests/**` + `**/*Tests.swift` heuristics.
 
-## Index-store mode (opt-in, macOS)
+## Index-store mode (macOS)
+
+For an Xcode project, run deadwood in index-store mode: it is the recommended
+configuration, and the one this section documents first. The flag is off by
+default, so pass it (or `--index-store-path`) on every run.
 
 `deadwood analyze --index-store Sources` swaps the reachability oracle from
 the name-level syntax graph to the compiler's **index store** (IndexStoreDB),
@@ -174,9 +179,39 @@ is resolved more precisely, so the finding set differs exactly where the
 index is more accurate (it both *finds* dead code the name graph conflated
 away and *clears* false positives it raised for cross-module references).
 
-It needs a built index. deadwood discovers one under the project's
-`.build/debug/index/store`, the new SwiftPM build system's `.build/out`
-(versioned `vN/records`), or Xcode DerivedData:
+### Xcode projects
+
+Build or test the project with `xcodebuild` first. That writes the index into
+DerivedData at `<DerivedData>/<Project>-<hash>/Index.noindex/DataStore`. The
+default DerivedData folder is `~/Library/Developer/Xcode/DerivedData`; a custom
+location, such as `~/Desktop/DerivedData` set with `-derivedDataPath`, works
+the same way.
+
+```sh
+xcodebuild build -scheme App -derivedDataPath ~/Desktop/DerivedData   # or: xcodebuild test
+deadwood analyze . --index-store-path ~/Desktop/DerivedData/<Project>-<hash>/Index.noindex/DataStore
+```
+
+The index keys every reference by its USR, the compiler's unique symbol name.
+Same-named symbols in different packages and the app target therefore stay
+distinct instead of being conflated by name, and a declaration used only from
+another package is kept on the strength of that use.
+
+Two warnings say when this mode is not in effect. Both go to stderr and to the
+JSON `notes`, and in SARIF they are `warning`-level `toolExecutionNotifications`.
+Neither changes the exit code.
+
+- An Xcode project analyzed with no index-store flag prints
+  `deadwood: warning: analyzing an Xcode project without the index store;
+  findings use name-based reachability. Pass --index-store-path
+  <DerivedData>/<Project>-<hash>/Index.noindex/DataStore for precise
+  cross-module results.`
+- A requested index store that cannot be used prints a warning naming what is
+  lost and how to fix it, then runs name-based reachability. The reasons are no
+  index store found, an index store that fails to open, a failed auto-build, and
+  a missing `libIndexStore.dylib`.
+
+### Swift packages
 
 ```sh
 swift build                                  # generate the index first
@@ -185,12 +220,15 @@ deadwood analyze --index-store-path .build/out Sources   # explicit store
 deadwood analyze --index-store-build Sources # run `swift build` if none found
 ```
 
-Graceful by design: with no index found — or on Linux, where IndexStoreDB's
-`libIndexStore.dylib` discovery is macOS-only — it prints a note to stderr
-(`no index store found; falling back to syntax reachability — run
-`swift build` to generate one`) and runs the ordinary syntax path. It never
-hard-fails on a missing index. Without the flag, behavior is byte-identical
-to the syntax analyzer.
+For a package, deadwood discovers the index under the project's
+`.build/debug/index/store`, the new SwiftPM build system's `.build/out`
+(versioned `vN/records`), or Xcode DerivedData. `--index-store-build` runs
+`swift build` when none is found.
+
+A missing index never fails a run. On Linux, where IndexStoreDB's
+`libIndexStore.dylib` discovery is macOS-only, `--index-store` prints a warning
+and runs name-based reachability. Without any index-store flag, the analysis is
+the syntax analyzer's, apart from the Xcode-project warning above.
 
 Conservatism carries over from the syntax graph: declarations the index
 cannot judge (unmapped), locals, in-corpus protocol requirements and their
