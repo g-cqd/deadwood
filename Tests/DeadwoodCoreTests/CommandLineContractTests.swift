@@ -322,6 +322,21 @@ import Testing
         #expect(run.standardError.contains(note))
     }
 
+    @Test("--minimum-confidence at a finding's own level keeps it, so the boundary is inclusive")
+    func minimumConfidenceKeepsFindingAtItsLevel() throws {
+        // A private orphan is scored high, so `high` keeps it.
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let run = try BuiltTool.run(
+            ["analyze", root.path, "--format", "json", "--no-cache", "--minimum-confidence", "high"], in: root)
+
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.count == 1)
+        #expect(report.findings.first?.message.contains("'unusedA") == true)
+        #expect(!report.notes.contains { $0.contains("below --minimum-confidence") })
+    }
+
     @Test("--minimum-confidence with an unknown level is a usage error, exit 64")
     func minimumConfidenceRejectsUnknownLevel() throws {
         let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
