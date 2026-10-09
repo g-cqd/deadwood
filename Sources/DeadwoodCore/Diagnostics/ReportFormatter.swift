@@ -138,9 +138,13 @@ public enum ReportFormatter {
                     nil
                 }
             executionSuccessful = failure == nil
-            toolExecutionNotifications = failure.map {
-                [SarifNotification(level: "error", message: SarifText(text: $0))]
-            }
+            // A warning note names a requested feature that did not run, or a setup that degrades the
+            // findings. It is reported as a warning and never fails the run.
+            let warnings = report.notes.filter { $0.hasPrefix("\(ToolInfo.name): warning: ") }
+            let notifications =
+                (failure.map { [SarifNotification(level: "error", message: SarifText(text: $0))] } ?? [])
+                + warnings.map { SarifNotification(level: "warning", message: SarifText(text: $0)) }
+            toolExecutionNotifications = notifications.isEmpty ? nil : notifications
         }
     }
 

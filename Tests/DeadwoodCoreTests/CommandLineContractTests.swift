@@ -44,6 +44,37 @@ import Testing
         #expect(invocation.toolExecutionNotifications == nil)
     }
 
+    @Test("An Xcode project analyzed without the index store warns on stderr and in the notes, and exits 0")
+    func xcodeProjectWithoutIndexStoreWarns() throws {
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root.appending(path: "App.xcodeproj"), withIntermediateDirectories: true)
+        let run = try BuiltTool.run(["analyze", root.path, "--format", "json", "--no-cache"], in: root)
+
+        #expect(run.status == 0)
+        #expect(run.standardError.contains("deadwood: warning: analyzing an Xcode project without the index store"))
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.notes.contains { $0.hasPrefix("deadwood: warning: analyzing an Xcode project") })
+    }
+
+    @Test("The Xcode-project warning is a warning notification in the SARIF invocation, and the run succeeds")
+    func xcodeProjectWarningIsASarifWarning() throws {
+        let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root.appending(path: "App.xcodeproj"), withIntermediateDirectories: true)
+        let run = try BuiltTool.analyze(root.path, relativeTo: root.path, in: root)
+
+        #expect(run.status == 0)
+        let log = try JSONDecoder().decode(SarifLog.self, from: run.standardOutput)
+        let invocation = try #require(log.runs.first?.invocations?.first)
+        #expect(invocation.executionSuccessful)
+        let notifications = try #require(invocation.toolExecutionNotifications)
+        #expect(notifications.map(\.level) == ["warning"])
+        #expect(notifications.first?.message.text.hasPrefix("deadwood: warning: analyzing an Xcode project") == true)
+    }
+
     @Test("An empty --only-from file reports nothing, moves the findings out of scope, and exits 0")
     func emptyOnlyFromReportsNothing() throws {
         let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
