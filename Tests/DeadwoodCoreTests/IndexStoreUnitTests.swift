@@ -53,8 +53,11 @@
         }
 
         @Test func fallbackReasonDescriptionsAreActionable() {
-            #expect(FallbackReason.noIndexStore.description.contains("falling back to syntax"))
+            #expect(FallbackReason.noIndexStore.description.hasPrefix("warning: "))
+            #expect(FallbackReason.noIndexStore.description.contains("falling back to name-based reachability"))
+            #expect(FallbackReason.noIndexStore.description.contains("--index-store-path"))
             #expect(FallbackReason.noIndexStore.description.contains("swift build"))
+            #expect(FallbackReason.indexStoreFailed(error: "x").description.hasPrefix("warning: "))
             #expect(FallbackReason.buildFailed(error: "boom").description.contains("boom"))
             #expect(FallbackReason.dylibNotFound.description.contains("libIndexStore"))
         }

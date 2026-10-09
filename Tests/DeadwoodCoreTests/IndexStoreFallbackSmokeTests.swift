@@ -39,7 +39,11 @@ import Testing
         // The syntax run leaves the note channel empty.
         #expect(syntax.notes.isEmpty)
         // A missing index yields a clear fallback note, never a hard failure.
-        #expect(fallback.notes.contains { $0.contains("falling back to syntax") })
+        #expect(
+            fallback.notes.contains {
+                $0.hasPrefix("deadwood: warning: ") && $0.contains("falling back to name-based reachability")
+            })
+        #expect(fallback.notes.contains { $0.contains("--index-store-path") })
         // The fallback still produced findings (analysis actually ran).
         #expect(!fallback.findings.isEmpty)
         // And they are exactly the syntax findings — byte-for-byte fallback.

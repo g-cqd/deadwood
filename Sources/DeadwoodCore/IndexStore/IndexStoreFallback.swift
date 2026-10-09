@@ -60,13 +60,22 @@
         var description: String {
             switch self {
             case .noIndexStore:
-                "no index store found; falling back to syntax reachability — run `swift build` to generate one"
+                "warning: no index store found; falling back to name-based reachability, which can conflate "
+                    + "same-named declarations across modules. For an Xcode project pass --index-store-path "
+                    + "<DerivedData>/<Project>-<hash>/Index.noindex/DataStore (after xcodebuild build or test); "
+                    + "for a package run swift build first."
             case .indexStoreFailed(let error):
-                "index store failed to open (\(error)); falling back to syntax reachability"
+                "warning: index store failed to open (\(error)); falling back to name-based reachability, which "
+                    + "can conflate same-named declarations across modules. Rebuild the project (swift build, or "
+                    + "xcodebuild build for an Xcode project), or pass --index-store-path to a readable index store."
             case .buildFailed(let error):
-                "index auto-build failed (\(error)); falling back to syntax reachability"
+                "warning: index auto-build failed (\(error)); falling back to name-based reachability, which can "
+                    + "conflate same-named declarations across modules. Fix the build errors and run again, or pass "
+                    + "--index-store-path to an existing index store."
             case .dylibNotFound:
-                "libIndexStore.dylib not found on a trusted path; falling back to syntax reachability"
+                "warning: libIndexStore.dylib not found on a trusted path; falling back to name-based reachability, "
+                    + "which can conflate same-named declarations across modules. Install Xcode or a Swift toolchain "
+                    + "that ships libIndexStore.dylib, then run again."
             }
         }
     }
