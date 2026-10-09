@@ -79,3 +79,21 @@ public struct AnalysisReport: Sendable, Codable {
         }
     }
 }
+
+extension AnalysisReport {
+    /// The report with every finding below `minimumConfidence` removed from ``findings`` and ``outOfScope``.
+    ///
+    /// A finding with no confidence is kept, since there is no level to compare. ``suppressed`` is left
+    /// as it is, so suppression debt stays visible.
+    /// - Returns: the filtered report, and how many findings were dropped from ``findings``.
+    /// - Complexity: O(*n*) for *n* findings.
+    public func keeping(minimumConfidence: Confidence) -> (report: AnalysisReport, dropped: Int) {
+        func meetsMinimum(_ finding: Finding) -> Bool {
+            finding.confidence.map { $0 >= minimumConfidence } ?? true
+        }
+        var copy = self
+        copy.findings = findings.filter(meetsMinimum)
+        copy.outOfScope = outOfScope.filter(meetsMinimum)
+        return (copy, findings.count - copy.findings.count)
+    }
+}
