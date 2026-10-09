@@ -625,6 +625,30 @@ import Testing
         #expect(report.notes.contains(note))
         #expect(report.outOfScope.isEmpty)
     }
+
+    @Test("A baseline holding an in-scope finding is not called mismatched when the one out-of-scope finding is new")
+    func matchingBaselineIsNotNoted() throws {
+        // B.swift's dead function is on the base branch and in the baseline, so the baseline matches this corpus.
+        let root = try Workspace.make([
+            "Sources/main.swift": "runChecks()\n",
+            "Sources/A.swift": "func helper() {}\n",
+            "Sources/B.swift": "func runChecks() { helper() }\nprivate func deadInB() {}\n",
+        ])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        // The pull request adds a dead function to A.swift, outside the scope: the only out-of-scope finding, and new.
+        try Self.overwrite("Sources/A.swift", with: "func helper() {}\nprivate func fresh() {}\n", in: root)
+
+        let run = try Self.reportNewSince(baseline, only: ["Sources/B.swift"], in: root)
+
+        #expect(run.status == 1)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.map(\.path) == ["Sources/A.swift", "Sources/B.swift"])
+        #expect(report.outOfScope.isEmpty)
+        #expect(run.standardError.contains("1 finding(s) outside --only are new since \(baseline.path)"))
+        #expect(!run.standardError.contains("may not match this corpus"))
+    }
 }
 
 // MARK: - Harness
