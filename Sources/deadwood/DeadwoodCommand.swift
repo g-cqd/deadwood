@@ -184,8 +184,9 @@ struct Analyze: AsyncParsableCommand {
         // silent — "no Swift changed" is legitimate.
         // Skipped under --report-new-since: a pull request that only deletes a file names it in --only, and
         // the file is absent from the corpus by design.
+        // The corpus is canonicalized the way the scope is, so a file spelled through /private matches its /var entry.
         if reportNewSince == nil, let scope = reportScope, !scope.files.isEmpty,
-            !files.contains(where: scope.files.contains)
+            ReportScope(files: files).files.isDisjoint(with: scope.files)
         {
             standardError.write(
                 Data(

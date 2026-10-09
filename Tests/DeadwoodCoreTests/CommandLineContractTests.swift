@@ -463,6 +463,25 @@ import Testing
         #expect(withoutNewSince.standardError.contains("matches no analyzed file"))
     }
 
+    #if os(macOS)
+        @Test("A corpus spelled through /private does not warn that its scope matches no analyzed file")
+        func privateSpellingDoesNotWarn() throws {
+            let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
+            defer { try? FileManager.default.removeItem(at: root) }
+            try #require(root.path.hasPrefix("/var/"), "the temporary directory is not under /var: \(root.path)")
+            // The scope canonicalizes /private/var to /var; the corpus keeps the spelling it was given.
+            let privateRoot = "/private" + root.path
+            let run = try BuiltTool.run(
+                ["analyze", privateRoot, "--no-cache", "--format", "json", "--only", privateRoot + "/Sources/A.swift"],
+                in: root)
+
+            #expect(run.status == 0)
+            #expect(!run.standardError.contains("matches no analyzed file"))
+            let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+            #expect(report.findings.map(\.message) == ["function 'unusedA()' is never referenced from any entry point"])
+        }
+    #endif
+
     @Test("A declaration already dead whose message changes is reported again as new")
     func changedDeadMessageIsReportedAgain() throws {
         // `helper` is only used by `deadCaller`, so the base branch reports it as used only by dead code.
