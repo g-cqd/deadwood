@@ -419,10 +419,9 @@ deadwood analyze . --relative-to . --only-from changed.txt --report-new-since ba
   holds is suppressed like any other, and a promoted finding counts toward
   exit `1`.
 - A promotion prints `N finding(s) outside --only are new since <file>` to
-  stderr and into the JSON `notes`. When every out-of-scope finding was
-  promoted, it also says the baseline may not match the corpus. That is a hint,
-  not a diagnosis: a run whose only out-of-scope finding is the new one gets it
-  too.
+  stderr and into the JSON `notes`. When the baseline matches none of the
+  findings the run reports or leaves out of scope, it also says the baseline may
+  not match the corpus. That is a hint, not a diagnosis.
 - The `--only scope matches no analyzed file` warning is not printed, so a
   pull request that only deletes a file can name it in `--only`.
 - `--report-new-since` needs `--only` or `--only-from`, and cannot be combined
