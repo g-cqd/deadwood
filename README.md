@@ -447,6 +447,33 @@ Each element of `findings`:
 - **Edits move findings.** `line` and `column` are hashed with the message, so an edit above a baselined finding re-reports it. Regenerate the baseline after large moves.
 - **Writing.** `--write-baseline` records the findings the report would show: after `--minimum-confidence` and `--relative-to`, so a baseline written with the flag holds only what the same flag reports. It needs an unscoped run (exit `64` with `--only` or `--only-from`), ignores `--baseline`, and exits `0`.
 
+#### Pull request with a confidence threshold
+
+Write the baseline once on the base branch. It must be unscoped (`--only` and
+`--only-from` are refused with `--write-baseline`), and it exits `0` whatever it finds.
+
+```sh
+# on the base branch
+deadwood analyze Sources Tests --relative-to . --minimum-confidence high \
+  --write-baseline base.json
+```
+
+On the pull request, scope the report to the changed files and read the baseline:
+
+```sh
+git diff --name-only origin/main... -- '*.swift' > changed.txt
+deadwood analyze Sources Tests --relative-to . --minimum-confidence high \
+  --baseline base.json --only-from changed.txt --format json
+```
+
+Steps run in this order: findings are scoped to the changed files, then filtered by
+`--minimum-confidence`, then matched against `--baseline`. Only the findings that
+remain decide the exit code (`1` on an error finding, or on any warning with
+`--strict`). Pass the same `--relative-to` to both runs, and use the same
+`--minimum-confidence` (or a lower one on the baseline run) in both.
+To also catch code the pull request made dead in unchanged files, replace
+`--baseline base.json` with `--report-new-since base.json`.
+
 ## Accepting a finding
 
 Directives use the `@` sigil with the `@dw:` or `@deadwood:` namespace:
@@ -517,10 +544,15 @@ deadwood analyze . --relative-to . --only-from changed.txt --report-new-since ba
   stderr and into the JSON `notes`. When the baseline matches none of the
   findings the run reports or leaves out of scope, it also says the baseline may
   not match the corpus. That is a hint, not a diagnosis.
-- The same note can appear when the baseline was written without
-  `--minimum-confidence` and this run uses it, and every finding that survives
-  the filter is genuinely new. Write the baseline and the run with the same
-  `--minimum-confidence`.
+- `--minimum-confidence` runs before the baseline is read for matching, and a
+  baseline written with it holds only findings at or above that level. A run that
+  uses a lower level, or none, then reports every finding below the baseline's
+  level as new, and `--report-new-since` promotes them. A baseline written
+  without the flag is safe for runs with any level: it holds a superset.
+  Write the baseline with the lowest level any run that reads it will use.
+- The "baseline may not match this corpus" note is evaluated after
+  `--minimum-confidence`. It also appears when the only findings that survive the
+  filter are genuinely new, whichever level the baseline was written with.
 - The `--only scope matches no analyzed file` warning is not printed, so a
   pull request that only deletes a file can name it in `--only`. The same
   silence means a mistyped `--only` path is not diagnosed under
