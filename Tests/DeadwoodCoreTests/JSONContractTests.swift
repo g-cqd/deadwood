@@ -28,6 +28,7 @@ import Testing
         "column",
         "message",
         "note",
+        "confidence",
         "fingerprintPath",
         "fingerprint",
     ]
@@ -44,6 +45,7 @@ import Testing
             path: "Sources/A.swift", line: 5, column: 9,
             message: "function 'a' is never used",
             note: "declared private",
+            confidence: .high,
             fingerprintPath: "Sources/A.swift")
         let report = AnalysisReport(findings: [finding], analyzedFileCount: 1)
 
@@ -72,7 +74,7 @@ import Testing
         let object = try Self.object(report)
 
         let first = try #require((object["findings"] as? [[String: Any]])?.first)
-        #expect(Set(first.keys) == Self.findingKeys.subtracting(["note", "fingerprintPath"]))
+        #expect(Set(first.keys) == Self.findingKeys.subtracting(["note", "confidence", "fingerprintPath"]))
         let suppressed = try #require((object["suppressed"] as? [[String: Any]])?.first)
         #expect(Set(suppressed.keys) == ["finding"])
         #expect(!object.keys.contains("cacheLoadFailure"))
@@ -83,7 +85,7 @@ import Testing
         let finding = Finding(
             rule: .unusedFunction, severity: .warning,
             path: "a.swift", line: 1, column: 1, message: "m",
-            note: "n", fingerprintPath: "a.swift")
+            note: "n", confidence: .certain, fingerprintPath: "a.swift")
         var report = AnalysisReport(
             findings: [finding],
             suppressed: [.init(finding: finding, reason: "because")])
@@ -93,6 +95,7 @@ import Testing
 
         let first = try #require((object["findings"] as? [[String: Any]])?.first)
         #expect(first["note"] as? String == "n")
+        #expect(first["confidence"] as? String == "certain")
         #expect(first["fingerprintPath"] as? String == "a.swift")
         let suppressed = try #require((object["suppressed"] as? [[String: Any]])?.first)
         #expect(suppressed["reason"] as? String == "because")
