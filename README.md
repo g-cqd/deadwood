@@ -517,7 +517,9 @@ deadwood analyze . --relative-to . --only-from changed.txt --report-new-since ba
   findings the run reports or leaves out of scope, it also says the baseline may
   not match the corpus. That is a hint, not a diagnosis.
 - The `--only scope matches no analyzed file` warning is not printed, so a
-  pull request that only deletes a file can name it in `--only`.
+  pull request that only deletes a file can name it in `--only`. The same
+  silence means a mistyped `--only` path is not diagnosed under
+  `--report-new-since`.
 - `--report-new-since` needs `--only` or `--only-from`, and cannot be combined
   with `--write-baseline`. A missing or malformed baseline exits `78`.
 
