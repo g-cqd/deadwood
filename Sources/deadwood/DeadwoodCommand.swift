@@ -126,7 +126,7 @@ struct Analyze: AsyncParsableCommand {
     @Flag(
         name: .long,
         help:
-            "macOS only. Use the compiler's index store for USR-precise cross-module reachability (~95% precision) instead of the name-level syntax graph. Requires a built index (`swift build`); with no index found it prints a note and falls back to the syntax path. Default (absent) is the syntax path."
+            "macOS only. Use the compiler's index store for USR-precise cross-module reachability (~95% precision) instead of the name-level syntax graph. Requires a built index (`swift build`); with no index found it prints a warning and falls back to name-based reachability. Default (absent) is the syntax path."
     )
     var indexStore = false
 
@@ -209,6 +209,11 @@ struct Analyze: AsyncParsableCommand {
                 embeddingBundle: embeddingBundle,
                 reportScope: reportScope
             )
+        // Only when no index-store flag was given: a requested index that cannot be used already warns
+        // from the analyzer.
+        if !indexOptions.enabled, XcodeProjectDetection.containsXcodeProject(in: paths) {
+            report.notes.append(XcodeProjectDetection.withoutIndexStoreNote)
+        }
         if let failure = report.cacheLoadFailure {
             standardError.write(Data(("deadwood: note: \(failure)\n").utf8))
         }
