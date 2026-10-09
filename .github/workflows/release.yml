@@ -32,7 +32,7 @@ jobs:
           BIN="$(swift build -c release --show-bin-path)/deadwood"
           VERSION="$("$BIN" --version)"
           TAG="${GITHUB_REF_NAME#v}"
-          if [ "${GITHUB_REF_NAME}" != "${GITHUB_REF}" ] && [ -n "$TAG" ] && [ "$VERSION" != "$TAG" ]; then
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "$VERSION" != "$TAG" ]; then
             echo "tag v$TAG does not match ToolInfo.version $VERSION" >&2
             exit 1
           fi
@@ -80,7 +80,7 @@ jobs:
           BIN="$(swift build -c release --show-bin-path)/deadwood"
           VERSION="$("$BIN" --version)"
           TAG="${GITHUB_REF_NAME#v}"
-          if [ "${GITHUB_REF_NAME}" != "${GITHUB_REF}" ] && [ -n "$TAG" ] && [ "$VERSION" != "$TAG" ]; then
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "$VERSION" != "$TAG" ]; then
             echo "tag v$TAG does not match ToolInfo.version $VERSION" >&2
             exit 1
           fi
