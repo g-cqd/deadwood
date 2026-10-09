@@ -43,7 +43,13 @@ import Testing
             fallback.notes.contains {
                 $0.hasPrefix("deadwood: warning: ") && $0.contains("falling back to name-based reachability")
             })
-        #expect(fallback.notes.contains { $0.contains("--index-store-path") })
+        #if os(macOS)
+            // On macOS the warning says how to point at an index store.
+            #expect(fallback.notes.contains { $0.contains("--index-store-path") })
+        #else
+            // Elsewhere the index store is unavailable, and the warning says so.
+            #expect(fallback.notes.contains { $0.contains("--index-store is macOS-only") })
+        #endif
         // The fallback still produced findings (analysis actually ran).
         #expect(!fallback.findings.isEmpty)
         // And they are exactly the syntax findings — byte-for-byte fallback.
