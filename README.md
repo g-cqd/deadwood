@@ -121,8 +121,9 @@ through a path the source-only graph can't see. Configure accordingly:
   accuracy mode. On SwiftStaticAnalysis it cleared a name-conflation false
   positive and surfaced 58 genuinely dead declarations the syntax mode missed.
   For an Xcode project it is the recommended configuration; see
-  [Index-store mode](#index-store-mode-macos). Without an index it warns and
-  falls back to name-based reachability.
+  [Index-store mode](#index-store-mode-macos). Without a usable index it warns,
+  and falls back to name-based reachability; see
+  [Index-store mode](#index-store-mode-macos) for the reasons.
 - **Keep the opt-in rules opt-in.** `unused-import` and `unused-public-api` are
   deliberately off by default: the import heuristic can't see extension or
   operator usage (it over-reports — hundreds of findings on a real corpus),
@@ -206,10 +207,29 @@ Neither changes the exit code.
   findings use name-based reachability. Pass --index-store-path
   <DerivedData>/<Project>-<hash>/Index.noindex/DataStore for precise
   cross-module results.`
-- A requested index store that cannot be used prints a warning naming what is
-  lost and how to fix it, then runs name-based reachability. The reasons are no
-  index store found, an index store that fails to open, a failed auto-build, and
-  a missing `libIndexStore.dylib`.
+- A requested index store that cannot be used prints a warning that names what is
+  lost and how to fix it, then runs name-based reachability. The run still exits
+  with the findings' normal code. The reasons are:
+  - **Not macOS.** `--index-store` is macOS-only: `IndexStoreDB` is not linked on
+    other platforms.
+  - **No index store found.** Discovery looks in the project's
+    `.build/debug/index/store`, `.build/release/index/store`, `.build/index/store`
+    and `.build/out`, then in Xcode DerivedData folders named after the project.
+    An `--index-store-path` that is missing or is not a directory gives the same
+    warning.
+  - **The index store fails to open.** Examples: the sibling `IndexDatabase`
+    directory cannot be created, `IndexStoreDB` rejects the store, or
+    `libIndexStore.dylib` cannot be found while discovering an index.
+  - **`libIndexStore.dylib` is missing.** Reported by name when you pass
+    `--index-store-path`; otherwise it appears as a failure to open.
+  - **The auto-build fails.** `--index-store-build` runs `swift build`, which needs a
+    `Package.swift` at the project root and times out after 600 seconds.
+  - **The index does not cover the analyzed files.** It opened, but resolved none of
+    the analyzed declarations (the wrong project, or files that were never built).
+  - **The index cannot be read.** It opened, but reading it failed.
+
+  A stale index is not a fallback: files edited after the last build are skipped, a
+  note says how many, and `swift build` (or `xcodebuild build`) refreshes them.
 
 ### Swift packages
 
@@ -225,9 +245,9 @@ For a package, deadwood discovers the index under the project's
 (versioned `vN/records`), or Xcode DerivedData. `--index-store-build` runs
 `swift build` when none is found.
 
-A missing index never fails a run. On Linux, where IndexStoreDB's
-`libIndexStore.dylib` discovery is macOS-only, `--index-store` prints a warning
-and runs name-based reachability. Without any index-store flag, the analysis is
+A missing or unusable index never fails a run. Where `IndexStoreDB` is not
+available (any platform other than macOS), `--index-store` prints a warning and
+runs name-based reachability. Without any index-store flag, the analysis is
 the syntax analyzer's, apart from the Xcode-project warning above.
 
 Conservatism carries over from the syntax graph: declarations the index
