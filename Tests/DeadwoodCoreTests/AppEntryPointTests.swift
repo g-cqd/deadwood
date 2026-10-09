@@ -85,6 +85,26 @@ import Testing
         #expect(report.flags("unusedStored"))
     }
 
+    @Test func `IBOutlet and objc properties in a plain class are not reported`() async throws {
+        let report = try await CorpusFixture([
+            "App/VC.swift": """
+            final class VC {
+                @IBOutlet private var label: AnyObject?
+                @objc private var token = 0
+                @IBInspectable private var radius = 0.0
+                var unusedStored = 0
+            }
+            """,
+            "App/Main.swift": "@main struct Main { static func main() { _ = VC() } }",
+        ]).analyze()
+
+        #expect(!report.flags("label"))
+        #expect(!report.flags("token"))
+        #expect(!report.flags("radius"))
+        // Control: an unreferenced stored property in the same class is reported.
+        #expect(report.flags("unusedStored"))
+    }
+
     @Test func `a scene delegate the app delegate names in code is not reported`() async throws {
         let report = try await sceneFixture().analyze()
 
