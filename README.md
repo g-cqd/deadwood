@@ -120,10 +120,9 @@ through a path the source-only graph can't see. Configure accordingly:
   disambiguates same-named symbols the name graph conflates — it is the
   accuracy mode. On SwiftStaticAnalysis it cleared a name-conflation false
   positive and surfaced 58 genuinely dead declarations the syntax mode missed.
-  For an Xcode project it is the recommended configuration; see
-  [Index-store mode](#index-store-mode-macos). Without a usable index it warns,
-  and falls back to name-based reachability; see
-  [Index-store mode](#index-store-mode-macos) for the reasons.
+  For an Xcode project it is the recommended configuration; without a usable
+  index deadwood warns and falls back to name-based reachability (reasons in
+  [Index-store mode](#index-store-mode-macos)).
 - **Keep the opt-in rules opt-in.** `unused-import` and `unused-public-api` are
   deliberately off by default: the import heuristic can't see extension or
   operator usage (it over-reports — hundreds of findings on a real corpus),
@@ -206,7 +205,9 @@ Neither changes the exit code.
   `deadwood: warning: analyzing an Xcode project without the index store;
   findings use name-based reachability. Pass --index-store-path
   <DerivedData>/<Project>-<hash>/Index.noindex/DataStore for precise
-  cross-module results.`
+  cross-module results.` It is detected only when an analyzed path is, or directly
+  contains, an `.xcodeproj` or `.xcworkspace`: `deadwood analyze .` warns, and
+  `deadwood analyze Sources` does not.
 - A requested index store that cannot be used prints a warning that names what is
   lost and how to fix it, then runs name-based reachability. The run still exits
   with the findings' normal code. The reasons are:
@@ -228,8 +229,9 @@ Neither changes the exit code.
     the analyzed declarations (the wrong project, or files that were never built).
   - **The index cannot be read.** It opened, but reading it failed.
 
-  A stale index is not a fallback: files edited after the last build are skipped, a
-  note says how many, and `swift build` (or `xcodebuild build`) refreshes them.
+  A stale index is not a fallback: files edited after the last build, or never
+  indexed, are skipped, a note says how many, and `swift build` (or
+  `xcodebuild build`) refreshes them.
 
 ### Swift packages
 
@@ -483,8 +485,10 @@ On the pull request, scope the report to the changed files and read the baseline
 ```sh
 git diff --name-only origin/main... -- '*.swift' > changed.txt
 deadwood analyze Sources Tests --relative-to . --minimum-confidence high \
-  --baseline base.json --only-from changed.txt --format json
+  --baseline base.json --only-from changed.txt --strict --format json
 ```
+
+Without `--strict` only `error` findings fail the run, and no rule is an error by default.
 
 Steps run in this order: findings are scoped to the changed files, then filtered by
 `--minimum-confidence`, then matched against `--baseline`. Only the findings that
