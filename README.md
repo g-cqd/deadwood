@@ -374,6 +374,7 @@ Outside the freeze: `--experimental-embedding-confidence`, `--embedding-bundle` 
 | `--config <file>` | configuration file; default `./.deadwood.json` when present |
 | `--cache-path <file>`, `--no-cache` | facts-cache file; disable the cache. See [Facts cache and parallel jobs](#facts-cache-and-parallel-jobs) |
 | `--strict` | warnings fail the gate too; notes never do |
+| `--production` | report declarations that only tests reach as `referenced-only-by-tests` instead of dead. See [Production mode](#production-mode) |
 | `--minimum-confidence <level>` | report only findings at or above `low`, `medium`, `high` or `certain`; findings without a confidence are always reported |
 | `--include <regions>`, `--exclude <regions>` | comma-separated `preview`, `debug`, `test`, `mock`, `generated`, `script` or `all`: analyze as first-class code, or keep out of scope |
 | `--index-store`, `--index-store-path <path>`, `--index-store-build` | USR-precise cross-module reachability from the compiler's index store (macOS). `--index-store-path` names the store, and `--index-store-build` runs `swift build` when none is found; each implies `--index-store` |
@@ -516,6 +517,10 @@ deadwood analyze . --relative-to . --only-from changed.txt --report-new-since ba
   stderr and into the JSON `notes`. When the baseline matches none of the
   findings the run reports or leaves out of scope, it also says the baseline may
   not match the corpus. That is a hint, not a diagnosis.
+- The same note can appear when the baseline was written without
+  `--minimum-confidence` and this run uses it, and every finding that survives
+  the filter is genuinely new. Write the baseline and the run with the same
+  `--minimum-confidence`.
 - The `--only scope matches no analyzed file` warning is not printed, so a
   pull request that only deletes a file can name it in `--only`. The same
   silence means a mistyped `--only` path is not diagnosed under
