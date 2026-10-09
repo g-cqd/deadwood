@@ -1,3 +1,5 @@
+public import ProjectModel
+
 /// A single diagnostic produced by a rule.
 public struct Finding: Sendable, Equatable {
     public let rule: RuleID
@@ -37,6 +39,8 @@ public struct Finding: Sendable, Equatable {
         self.fingerprintPath = fingerprintPath
     }
 }
+
+extension Finding: ScopedFinding {}
 
 extension Finding: Comparable {
     /// Deterministic report ordering: path, then position, then rule.

@@ -1,5 +1,6 @@
 import DeadwoodCore
 import Foundation
+import ProjectModel
 import Testing
 
 /// Report scoping narrows what a run *reports*, never what it analyzes. For
