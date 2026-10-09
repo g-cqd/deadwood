@@ -73,8 +73,8 @@ returns, in `Sources/DeadwoodCore/Engine/RootDetection.swift`.
   `Identifiable`, `Sequence`, SwiftUI `View`, ArgumentParser, and others). A
   type conforming to an uncataloged external type, such as `UIResponder`,
   `NSManagedObject` or `UIWindowSceneDelegate`, keeps all its non-private
-  members. So `@NSManaged` properties are kept when they are not `private`;
-  a `private @NSManaged` property is reported (`unused-property`).
+  members. `@NSManaged` members are kept at any access level, `private`
+  included, because Core Data reaches them by name at runtime.
 - SwiftUI `App` and `View` types, `body`, `PreviewProvider`, and SwiftUI
   property wrappers; App Intents, App Shortcuts and Widget conformers.
 - Test code: functions named `test…` or annotated `@Test`; `@Suite` types,
