@@ -77,6 +77,13 @@ struct Analyze: AsyncParsableCommand {
     @Option(
         name: .long,
         help:
+            "Baseline from the base branch: findings outside --only whose fingerprint it does not hold are reported as new. Requires --only or --only-from."
+    )
+    var reportNewSince: String?
+
+    @Option(
+        name: .long,
+        help:
             "Report only findings at or above this confidence (low, medium, high, certain). Findings without a confidence are always reported."
     )
     var minimumConfidence: Confidence?
@@ -152,6 +159,11 @@ struct Analyze: AsyncParsableCommand {
     var embeddingBundle: String?
 
     func run() async throws {
+        // Read before the analysis, so a bad path fails with exit 78 without the analysis cost.
+        var newSinceBaseline: Baseline?
+        if let reportNewSince {
+            newSinceBaseline = try baselineOrExit { try Baseline.load(path: reportNewSince) }
+        }
         var configuration = try loadConfiguration()
         if production {
             configuration.production = true
@@ -170,7 +182,11 @@ struct Analyze: AsyncParsableCommand {
         // misconfiguration (paths relative to the wrong directory, wrong workdir),
         // and it silently reports nothing. Warn loudly; an *empty* scope stays
         // silent — "no Swift changed" is legitimate.
-        if let scope = reportScope, !scope.files.isEmpty, !files.contains(where: scope.files.contains) {
+        // Skipped under --report-new-since: a pull request that only deletes a file names it in --only, and
+        // the file is absent from the corpus by design.
+        if reportNewSince == nil, let scope = reportScope, !scope.files.isEmpty,
+            !files.contains(where: scope.files.contains)
+        {
             standardError.write(
                 Data(
                     "deadwood: warning: --only scope matches no analyzed file — check that scope paths are relative to the right directory\n"
@@ -258,6 +274,19 @@ struct Analyze: AsyncParsableCommand {
             standardError.write(Data((note + "\n").utf8))
         }
 
+        // Promotion precedes --baseline, so a promoted finding the baseline also holds is suppressed. It cannot
+        // reach --write-baseline: validation refuses a scope with --write-baseline.
+        var promotedFingerprints: Set<String> = []
+        var everyOutOfScopeFindingPromoted = false
+        if let newSinceBaseline {
+            let outOfScopeCount = report.outOfScope.count
+            let promotion = NewFindings.promote(report, notIn: newSinceBaseline.fingerprints)
+            report = promotion.report
+            promotedFingerprints = promotion.promoted
+            everyOutOfScopeFindingPromoted =
+                !newSinceBaseline.fingerprints.isEmpty && outOfScopeCount > 0 && report.outOfScope.isEmpty
+        }
+
         if let writeBaseline {
             try baselineOrExit { try Baseline(findings: report.findings).write(path: writeBaseline) }
             standardError.write(
@@ -271,6 +300,25 @@ struct Analyze: AsyncParsableCommand {
             let (kept, baselined) = loaded.filter(report.findings)
             report.findings = kept
             baselinedCount = baselined.count
+        }
+
+        // Counted after --baseline, so the note states what the report shows. Printed here and appended to
+        // the notes, which the JSON format carries.
+        if let reportNewSince {
+            var newNotes: [String] = []
+            let promotedCount = report.findings.filter { promotedFingerprints.contains($0.fingerprint) }.count
+            if promotedCount > 0 {
+                newNotes.append("\(promotedCount) finding(s) outside --only are new since \(reportNewSince)")
+            }
+            if everyOutOfScopeFindingPromoted {
+                newNotes.append(
+                    "every out-of-scope finding is new since \(reportNewSince); "
+                        + "the baseline may not match this corpus (check --relative-to and the analyzed paths)")
+            }
+            for note in newNotes {
+                report.notes.append(note)
+                standardError.write(Data((note + "\n").utf8))
+            }
         }
 
         let output = ReportFormatter.format(report, as: format, relativeTo: relativeTo)
@@ -306,6 +354,10 @@ struct Analyze: AsyncParsableCommand {
                 "--write-baseline records whole-corpus debt and cannot be combined with "
                     + "--only/--only-from. Write the baseline unscoped, then scope the runs that use it."
             )
+        }
+        // Without a scope every finding is already reported, so there is nothing to promote.
+        if reportNewSince != nil, only.isEmpty, onlyFrom == nil {
+            throw ValidationError("--report-new-since requires --only or --only-from")
         }
         if onlyFrom == "-", paths == ["-"] {
             throw ValidationError("--only-from - reads stdin, so paths cannot also come from stdin.")
