@@ -4,7 +4,7 @@
 /// declaration in an unchanged file leaves that declaration dead, and the scope hides it. Promoting
 /// each out-of-scope finding whose fingerprint the base branch's baseline does not hold reports
 /// the dead code the change created, and leaves the debt that was already there out of scope.
-public enum NewFindings {
+package enum NewFindings {
     /// Moves each finding in ``AnalysisReport/outOfScope`` whose fingerprint is not in `fingerprints`
     /// into ``AnalysisReport/findings``, and keeps the rest out of scope.
     ///
@@ -13,7 +13,7 @@ public enum NewFindings {
     /// - Parameter fingerprints: the fingerprints of the baseline written on the base branch.
     /// - Returns: the report, and the fingerprints of the findings that were promoted.
     /// - Complexity: O(*n* log *n*) for *n* findings, from the sort.
-    public static func promote(
+    package static func promote(
         _ report: AnalysisReport, notIn fingerprints: Set<String>
     ) -> (report: AnalysisReport, promoted: Set<String>) {
         var copy = report
@@ -38,7 +38,7 @@ public enum NewFindings {
     /// - Parameter fingerprints: the fingerprints of the baseline written on the base branch.
     /// - Returns: `false` when either side is empty, since an empty baseline or report cannot be a mismatch.
     /// - Complexity: O(*n*) for *n* findings.
-    public static func matchesNothing(_ report: AnalysisReport, in fingerprints: Set<String>) -> Bool {
+    package static func matchesNothing(_ report: AnalysisReport, in fingerprints: Set<String>) -> Bool {
         guard !fingerprints.isEmpty else { return false }
         let reported = report.findings + report.outOfScope
         guard !reported.isEmpty else { return false }
