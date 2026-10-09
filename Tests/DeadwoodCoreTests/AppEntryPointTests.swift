@@ -58,6 +58,33 @@ import Testing
         #expect(report.flags("unusedStored"))
     }
 
+    @Test func `private NSManaged properties are not reported`() async throws {
+        let report = try await CorpusFixture([
+            "App/Item.swift": """
+            import CoreData
+
+            final class Item: NSManagedObject {
+                @NSManaged private var secret: String?
+            }
+            final class Plain {
+                var unusedStored = 0
+            }
+            """,
+            "App/Main.swift": """
+            @main struct Main {
+                static func main() {
+                    _ = Item()
+                    _ = Plain()
+                }
+            }
+            """,
+        ]).analyze()
+
+        #expect(!report.flags("secret"))
+        // Control: an unreferenced stored property in a plain class is reported.
+        #expect(report.flags("unusedStored"))
+    }
+
     @Test func `a scene delegate the app delegate names in code is not reported`() async throws {
         let report = try await sceneFixture().analyze()
 
