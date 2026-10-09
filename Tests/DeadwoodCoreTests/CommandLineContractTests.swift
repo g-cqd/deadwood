@@ -302,6 +302,279 @@ import Testing
         #expect(run.status == 64)
         #expect(run.standardOutput.isEmpty)
     }
+
+    // MARK: - Newly dead code outside the --only scope
+
+    /// The base branch. `legacy` was already dead there, so the baseline holds it. `helper` is live through
+    /// `runChecks()`, which top-level code in `main.swift` calls.
+    private static let baseBranch: [String: String] = [
+        "Sources/main.swift": "runChecks()\n",
+        "Sources/A.swift": "func helper() {}\nprivate func legacy() {}\n",
+        "Sources/B.swift": "func runChecks() { helper() }\n",
+    ]
+
+    /// The pull request: the last use of `helper` is removed from B.swift, which is in the `--only` scope.
+    private static let removedLastUse = "func runChecks() {}\n"
+
+    /// Writes the baseline of the corpus under `root`, as the base branch does.
+    private static func writeBaseline(_ path: URL, in root: URL) throws -> BuiltTool.Run {
+        try BuiltTool.run(
+            ["analyze", root.path, "--relative-to", root.path, "--no-cache", "--write-baseline", path.path],
+            in: root)
+    }
+
+    /// Rewrites an existing file in place.
+    private static func overwrite(_ path: String, with contents: String, in root: URL) throws {
+        try Data(contents.utf8).write(to: root.appending(path: path))
+    }
+
+    /// The CI form of the check: scoped to `changed`, with the base branch's baseline, as JSON, under `--strict`.
+    private static func reportNewSince(
+        _ baseline: URL, only changed: [String], in root: URL, extra: [String] = []
+    ) throws -> BuiltTool.Run {
+        var arguments = [
+            "analyze", root.path, "--relative-to", root.path, "--no-cache", "--format", "json", "--strict",
+            "--report-new-since", baseline.path,
+        ]
+        for path in changed {
+            arguments += ["--only", path]
+        }
+        return try BuiltTool.run(arguments + extra, in: root)
+    }
+
+    @Test("A change that removes the last use of a declaration in an unchanged file reports it as new")
+    func removedLastUseIsReportedAsNew() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        try Self.overwrite("Sources/B.swift", with: Self.removedLastUse, in: root)
+
+        let run = try Self.reportNewSince(baseline, only: ["Sources/B.swift"], in: root)
+
+        #expect(run.status == 1)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.map(\.path) == ["Sources/A.swift"])
+        #expect(report.findings.map(\.message) == ["function 'helper()' is never referenced from any entry point"])
+        #expect(report.outOfScope.map(\.message) == ["function 'legacy()' is never referenced from any entry point"])
+        let note = "1 finding(s) outside --only are new since \(baseline.path)"
+        #expect(report.notes.contains(note))
+        #expect(run.standardError.contains(note))
+    }
+
+    @Test("Without the change, the same declaration is not reported and the run exits 0")
+    func unchangedUseIsNotReported() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+
+        let run = try Self.reportNewSince(baseline, only: ["Sources/B.swift"], in: root)
+
+        #expect(run.status == 0)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.isEmpty)
+        #expect(!run.standardError.contains("new since"))
+    }
+
+    @Test("A promoted finding that --baseline also holds is suppressed")
+    func promotedFindingInBaselineIsSuppressed() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        try Self.overwrite("Sources/B.swift", with: Self.removedLastUse, in: root)
+        let accepted = root.appending(path: "accepted.json")
+        #expect(try Self.writeBaseline(accepted, in: root).status == 0)
+
+        let run = try Self.reportNewSince(
+            baseline, only: ["Sources/B.swift"], in: root, extra: ["--baseline", accepted.path])
+
+        #expect(run.status == 0)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.isEmpty)
+        #expect(report.outOfScope.map(\.path) == ["Sources/A.swift"])
+        #expect(!run.standardError.contains("new since"))
+    }
+
+    @Test("An empty --only-from scope still promotes what is new, and the run exits 1")
+    func emptyScopeStillPromotes() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        try Self.overwrite("Sources/B.swift", with: Self.removedLastUse, in: root)
+        let scope = root.appending(path: "changed.txt")
+        try Data().write(to: scope)
+
+        let run = try Self.reportNewSince(baseline, only: [], in: root, extra: ["--only-from", scope.path])
+
+        #expect(run.status == 1)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.map(\.message) == ["function 'helper()' is never referenced from any entry point"])
+        #expect(report.outOfScope.map(\.message) == ["function 'legacy()' is never referenced from any entry point"])
+    }
+
+    @Test("A scope that names a deleted file does not warn that it matches no analyzed file")
+    func deletedScopeFileDoesNotWarn() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        try FileManager.default.removeItem(at: root.appending(path: "Sources/B.swift"))
+
+        let run = try Self.reportNewSince(baseline, only: ["Sources/B.swift"], in: root)
+        let withoutNewSince = try BuiltTool.run(
+            ["analyze", root.path, "--no-cache", "--only", "Sources/B.swift"], in: root)
+
+        #expect(run.status == 1)
+        #expect(!run.standardError.contains("matches no analyzed file"))
+        #expect(withoutNewSince.standardError.contains("matches no analyzed file"))
+    }
+
+    @Test("A declaration already dead whose message changes is reported again as new")
+    func changedDeadMessageIsReportedAgain() throws {
+        // `helper` is only used by `deadCaller`, so the base branch reports it as used only by dead code.
+        let root = try Workspace.make([
+            "Sources/main.swift": "runChecks()\n",
+            "Sources/A.swift": "func helper() {}\n",
+            "Sources/B.swift": "func runChecks() {}\nprivate func deadCaller() { helper() }\n",
+        ])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        // The pull request deletes the dead user. `helper` is still dead, but its finding now reads differently.
+        try Self.overwrite("Sources/B.swift", with: "func runChecks() {}\n", in: root)
+
+        let run = try Self.reportNewSince(baseline, only: ["Sources/B.swift"], in: root)
+
+        #expect(run.status == 1)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.map(\.path) == ["Sources/A.swift"])
+        #expect(report.findings.map(\.message) == ["function 'helper()' is never referenced from any entry point"])
+    }
+
+    @Test("A finding the config excludes is neither promoted nor reported")
+    func excludedFindingIsNotPromoted() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        try Self.overwrite("Sources/B.swift", with: Self.removedLastUse, in: root)
+        let config = root.appending(path: "config.json")
+        try Data(#"{"exclude": ["Sources/A.swift"]}"#.utf8).write(to: config)
+
+        let run = try Self.reportNewSince(
+            baseline, only: ["Sources/B.swift"], in: root, extra: ["--config", config.path])
+
+        #expect(run.status == 0)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.isEmpty)
+        #expect(report.outOfScope.isEmpty)
+    }
+
+    @Test("A suppressed declaration is never promoted, even when its last use goes")
+    func suppressedFindingIsNotPromoted() throws {
+        let root = try Workspace.make([
+            "Sources/main.swift": "runChecks()\n",
+            "Sources/A.swift": "// @dw:accept:next unused-function -- kept for the plugin API\nfunc helper() {}\n"
+                + "private func legacy() {}\n",
+            "Sources/B.swift": "func runChecks() { helper() }\n",
+        ])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        try Self.overwrite("Sources/B.swift", with: Self.removedLastUse, in: root)
+
+        let run = try Self.reportNewSince(baseline, only: ["Sources/B.swift"], in: root)
+
+        #expect(run.status == 0)
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.isEmpty)
+        #expect(report.suppressed.map(\.finding.path) == ["Sources/A.swift"])
+        #expect(report.outOfScope.map(\.path) == ["Sources/A.swift"])
+    }
+
+    @Test("A --report-new-since file that does not exist is a bad baseline, exit 78")
+    func missingNewSinceFileExits78() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let missing = root.appending(path: "missing.json")
+
+        let run = try Self.reportNewSince(missing, only: ["Sources/B.swift"], in: root)
+
+        #expect(run.status == 78)
+        #expect(run.standardOutput.isEmpty)
+    }
+
+    @Test("A --report-new-since file of the wrong version is a bad baseline, exit 78")
+    func wrongVersionNewSinceFileExits78() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        try Data(#"{"version": 2, "tool": "deadwood", "fingerprints": []}"#.utf8).write(to: baseline)
+
+        let run = try Self.reportNewSince(baseline, only: ["Sources/B.swift"], in: root)
+
+        #expect(run.status == 78)
+        #expect(run.standardOutput.isEmpty)
+    }
+
+    @Test("--report-new-since without --only or --only-from is a usage error, exit 64")
+    func newSinceRequiresScope() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+
+        let run = try BuiltTool.run(
+            ["analyze", root.path, "--no-cache", "--report-new-since", baseline.path], in: root)
+
+        #expect(run.status == 64)
+        #expect(run.standardOutput.isEmpty)
+    }
+
+    @Test("--write-baseline with --only and --report-new-since is a usage error, exit 64")
+    func writeBaselineWithNewSinceIsRefused() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        let written = root.appending(path: "written.json")
+
+        let run = try BuiltTool.run(
+            [
+                "analyze", root.path, "--no-cache", "--only", "Sources/B.swift",
+                "--report-new-since", baseline.path, "--write-baseline", written.path,
+            ], in: root)
+
+        #expect(run.status == 64)
+        #expect(!FileManager.default.fileExists(atPath: written.path))
+    }
+
+    @Test("A baseline written under another --relative-to matches nothing, and the run says so")
+    func mismatchedRelativeToIsNoted() throws {
+        let root = try Workspace.make(Self.baseBranch)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let baseline = root.appending(path: "base.json")
+        #expect(try Self.writeBaseline(baseline, in: root).status == 0)
+        try Self.overwrite("Sources/B.swift", with: Self.removedLastUse, in: root)
+
+        // No --relative-to: the fingerprints hash the absolute paths, which the baseline does not hold.
+        let run = try BuiltTool.run(
+            [
+                "analyze", root.path, "--no-cache", "--format", "json", "--only", "Sources/B.swift",
+                "--report-new-since", baseline.path,
+            ], in: root)
+
+        let note =
+            "every out-of-scope finding is new since \(baseline.path); "
+            + "the baseline may not match this corpus (check --relative-to and the analyzed paths)"
+        #expect(run.standardError.contains(note))
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.notes.contains(note))
+        #expect(report.outOfScope.isEmpty)
+    }
 }
 
 // MARK: - Harness
