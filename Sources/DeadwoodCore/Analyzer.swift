@@ -567,7 +567,7 @@ public struct Analyzer: Sendable {
                 return Finding(
                     rule: finding.rule, severity: finding.severity, path: finding.path,
                     line: finding.line, column: finding.column, message: finding.message,
-                    note: annotated)
+                    note: annotated, confidence: finding.confidence)
             }
             report.notes.append(
                 "\(ToolInfo.name): --experimental-embedding-confidence annotated "

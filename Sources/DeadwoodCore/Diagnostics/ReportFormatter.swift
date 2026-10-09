@@ -172,6 +172,12 @@ public enum ReportFormatter {
         let message: SarifText
         let locations: [SarifLocation]
         let partialFingerprints: [String: String]
+        /// Omitted (nil) when the finding has no confidence.
+        let properties: SarifResultProperties?
+    }
+
+    private struct SarifResultProperties: Encodable {
+        let confidence: String
     }
 
     private struct SarifLocation: Encodable {
@@ -225,7 +231,8 @@ public enum ReportFormatter {
                         )
                     )
                 ],
-                partialFingerprints: ["deadwood/v1": finding.fingerprint]
+                partialFingerprints: ["deadwood/v1": finding.fingerprint],
+                properties: finding.confidence.map { SarifResultProperties(confidence: $0.rawValue) }
             )
         }
         // Degraded files were previously invisible in SARIF — the format the
@@ -245,7 +252,8 @@ public enum ReportFormatter {
                         )
                     )
                 ],
-                partialFingerprints: [:]
+                partialFingerprints: [:],
+                properties: nil
             )
         }
         let log = SarifLog(runs: [

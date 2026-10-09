@@ -10,6 +10,9 @@ public struct Finding: Sendable, Equatable {
     public let message: String
     /// Optional secondary context (retention path, doc citation, fix hint).
     public let note: String?
+    /// How sure the engine is that this is dead code, from ``ConfidenceCalculator``. nil when the
+    /// finding was not scored. Not part of ``fingerprint``, so a baseline survives a change of confidence.
+    public let confidence: Confidence?
     /// The path spelling the fingerprint hashes, when it must differ from the
     /// one shown.
     ///
@@ -27,6 +30,7 @@ public struct Finding: Sendable, Equatable {
         column: Int,
         message: String,
         note: String? = nil,
+        confidence: Confidence? = nil,
         fingerprintPath: String? = nil
     ) {
         self.rule = rule
@@ -36,6 +40,7 @@ public struct Finding: Sendable, Equatable {
         self.column = column
         self.message = message
         self.note = note
+        self.confidence = confidence
         self.fingerprintPath = fingerprintPath
     }
 }
@@ -54,7 +59,7 @@ extension Finding: Comparable {
 
 extension Finding: Codable {
     private enum CodingKeys: String, CodingKey {
-        case rule, severity, path, line, column, message, note, fingerprintPath, fingerprint
+        case rule, severity, path, line, column, message, note, confidence, fingerprintPath, fingerprint
     }
 
     public init(from decoder: any Decoder) throws {
@@ -67,6 +72,7 @@ extension Finding: Codable {
             column: try container.decode(Int.self, forKey: .column),
             message: try container.decode(String.self, forKey: .message),
             note: try container.decodeIfPresent(String.self, forKey: .note),
+            confidence: try container.decodeIfPresent(Confidence.self, forKey: .confidence),
             fingerprintPath: try container.decodeIfPresent(String.self, forKey: .fingerprintPath)
         )
         // fingerprint is derived — ignored on decode, recomputed on access.
@@ -81,6 +87,7 @@ extension Finding: Codable {
         try container.encode(column, forKey: .column)
         try container.encode(message, forKey: .message)
         try container.encodeIfPresent(note, forKey: .note)
+        try container.encodeIfPresent(confidence, forKey: .confidence)
         // The anchor, not just the derived hash: a report round-tripped through
         // JSON and rebuilt into a Baseline would otherwise recompute fingerprints
         // from the absolute path and match nothing.
