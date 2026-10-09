@@ -371,8 +371,9 @@ public struct Analyzer: Sendable {
             return (
                 syntax,
                 [
-                    "\(ToolInfo.name): --index-store is macOS-only; "
-                        + "falling back to syntax reachability on this platform"
+                    "\(ToolInfo.name): warning: --index-store is macOS-only; falling back to name-based "
+                        + "reachability on this platform, which can conflate same-named declarations across "
+                        + "modules. Run the analysis on macOS to use the index store."
                 ]
             )
         #endif
@@ -436,8 +437,11 @@ public struct Analyzer: Sendable {
                         return (
                             syntax,
                             [
-                                "\(ToolInfo.name): index at \(path) does not cover the analyzed "
-                                    + "files (0 declarations resolved); falling back to syntax reachability"
+                                "\(ToolInfo.name): warning: index at \(path) does not cover the analyzed "
+                                    + "files (0 declarations resolved); falling back to name-based reachability, "
+                                    + "which can conflate same-named declarations across modules. Pass the index "
+                                    + "store built from this project (for an Xcode project, its DerivedData "
+                                    + "Index.noindex/DataStore) after building or testing it."
                             ]
                         )
                     }
@@ -500,8 +504,10 @@ public struct Analyzer: Sendable {
                     return (
                         syntax,
                         [
-                            "\(ToolInfo.name): index at \(path) could not be read (\(error)); "
-                                + "falling back to syntax reachability"
+                            "\(ToolInfo.name): warning: index at \(path) could not be read (\(error)); "
+                                + "falling back to name-based reachability, which can conflate same-named "
+                                + "declarations across modules. Rebuild the project, or pass --index-store-path "
+                                + "to a readable index store."
                         ]
                     )
                 }
