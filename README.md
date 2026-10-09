@@ -42,6 +42,64 @@ Two analysis shapes:
   can be judged, because an internal declaration may be used from any other
   file of its module. Cross-file verdicts need corpus mode.
 
+## Entry points
+
+Reachability starts from the roots below. A root is never reported, and
+everything it uses stays used. Each reason is the `RootReason` the rule
+returns, in `Sources/DeadwoodCore/Engine/RootDetection.swift`.
+
+**Swift declarations**
+
+- `@main`, `@UIApplicationMain`, `@NSApplicationMain`; a `main` function; a
+  static `main()`.
+- Public and open declarations, unless `unused-public-api` is enabled, which
+  judges them like internal ones.
+- `@objc` and `@objcMembers`, including KVO-observed `@objc dynamic`
+  properties (on by default, `treatObjcAsRoot`). A `dynamic` member without
+  `@objc` is not a root.
+- Interface Builder attributes: `@IBAction`, `@IBOutlet`, `@IBInspectable`,
+  `@IBDesignable`, `@IBSegueAction`.
+- Codable and raw-value requirements: a `CodingKeys` enum, stored properties of
+  a type conforming to `Codable`, `Encodable` or `Decodable`, and cases of
+  raw-value or `CaseIterable` enums, which other code constructs.
+- `@dynamicMemberLookup` and `@dynamicCallable` types.
+- Operator functions; `@resultBuilder` members; `wrappedValue` and
+  `projectedValue` of property wrappers; `@_silgen_name`, `@_cdecl`,
+  `@_dynamicReplacement`, `@_objcRuntimeName`.
+- Overrides of a superclass member.
+- Protocol witnesses of a protocol or superclass declared outside the
+  analyzed files. A member whose name a cataloged protocol requires is kept
+  (`Equatable`, `Hashable`, `Codable`, `CustomStringConvertible`,
+  `Identifiable`, `Sequence`, SwiftUI `View`, ArgumentParser, and others). A
+  type conforming to an uncataloged external type, such as `UIResponder`,
+  `NSManagedObject` or `UIWindowSceneDelegate`, keeps all its non-private
+  members. So `@NSManaged` properties are kept when they are not `private`;
+  a `private @NSManaged` property is reported (`unused-property`).
+- SwiftUI `App` and `View` types, `body`, `PreviewProvider`, and SwiftUI
+  property wrappers; App Intents, App Shortcuts and Widget conformers.
+- Test code: functions named `test…` or annotated `@Test`; `@Suite` types,
+  types holding `@Test` functions, and `XCTestCase` subclasses, at any depth.
+- File-scope code: top-level statements and `#Preview` bodies.
+- Everything in a generated file (see "Generated code" below).
+
+**Project files**
+
+The types a project file names are roots, matched by their name without the
+module prefix (`$(PRODUCT_MODULE_NAME).SceneDelegate` becomes `SceneDelegate`).
+Only classes, structs, enums and actors match.
+
+- Info.plist keys at any nesting depth: `NSExtensionPrincipalClass`,
+  `NSPrincipalClass`, `UISceneDelegateClassName`, `UISceneClassName`,
+  `WKExtensionDelegateClassName`, `WKApplicationDelegateClassName`,
+  `CLKComplicationPrincipalClass`.
+- `INFOPLIST_KEY_<key>` build settings in `project.pbxproj`, with the same keys.
+- `customClass` attributes in storyboards and xibs.
+
+A scene or app delegate that nothing names (no plist key, no build setting,
+no code reference) is reported as an unused type. A delegate that code names,
+such as `config.delegateClass = SceneDelegate.self` in the app delegate, is
+kept.
+
 ## Recommended configuration for real-world use
 
 deadwood's precision depends heavily on **what you point it at**. Its default
