@@ -1,4 +1,4 @@
-import ProjectModel
+public import ProjectModel
 import SwiftParser
 import SwiftSyntax
 
@@ -40,7 +40,7 @@ public struct Analyzer: Sendable {
     /// or configuration.
     /// - Parameter reportScope: narrows the *report* to a set of files; nil
     ///   reports everything. Reachability is corpus-level either way — see
-    ///   ``ReportScope``.
+    ///   ``ProjectModel/ReportScope``.
     /// - Parameter projectFiles: Info.plists, storyboards, xibs and Xcode
     ///   project files; the types they name are entry points (see
     ///   ``SourceDiscovery/projectFiles(in:)``).
