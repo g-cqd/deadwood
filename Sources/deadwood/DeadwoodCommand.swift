@@ -32,6 +32,7 @@ struct DeadwoodCommand: AsyncParsableCommand {
 }
 
 extension OutputFormat: ExpressibleByArgument {}
+extension Confidence: ExpressibleByArgument {}
 
 struct Analyze: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -72,6 +73,13 @@ struct Analyze: AsyncParsableCommand {
 
     @Option(name: .long, help: "Write the current findings as a new baseline, then exit 0.")
     var writeBaseline: String?
+
+    @Option(
+        name: .long,
+        help:
+            "Report only findings at or above this confidence (low, medium, high, certain). Findings without a confidence are always reported."
+    )
+    var minimumConfidence: Confidence?
 
     @Option(
         name: .long,
@@ -187,6 +195,19 @@ struct Analyze: AsyncParsableCommand {
             )
         if let failure = report.cacheLoadFailure {
             standardError.write(Data(("deadwood: note: \(failure)\n").utf8))
+        }
+
+        // Before the baseline and --write-baseline, so a baseline written with the flag records only what
+        // the same flag would report.
+        if let minimumConfidence {
+            let filtered = report.keeping(minimumConfidence: minimumConfidence)
+            report = filtered.report
+            if filtered.dropped > 0 {
+                let note =
+                    "\(filtered.dropped) finding(s) below --minimum-confidence "
+                    + "\(minimumConfidence.rawValue) not reported"
+                report.notes.append(note)
+            }
         }
 
         // Exclusion scopes the report, never the corpus (see the walker above).

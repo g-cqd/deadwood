@@ -247,8 +247,11 @@ deadwood analyze --production .     # split "only tests reach this" findings
 deadwood analyze --no-cache .       # disable the (default-on) facts cache
 deadwood analyze --index-store .    # USR-precise cross-module reachability (macOS; needs `swift build`)
 deadwood analyze --experimental-embedding-confidence --embedding-bundle ~/Models/MiniLM .
+deadwood analyze --minimum-confidence high .  # report only high and certain findings
 deadwood rules                      # list rules; `rules <id>` explains one
 ```
+
+`--minimum-confidence <low|medium|high|certain>` reports only findings at or above that level of the [confidence model](#confidence-model) above. Findings without a confidence are always reported, and the flag applies before `--baseline` and `--write-baseline`, so a baseline written with it holds only what the same flag would report.
 
 ## Accepting a finding
 
