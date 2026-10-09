@@ -133,7 +133,7 @@ struct Analyze: AsyncParsableCommand {
     @Option(
         name: .long,
         help:
-            "Explicit path to an index store (e.g. .build/debug/index/store). Implies --index-store and skips discovery."
+            "Explicit path to an index store: a package's .build/debug/index/store, or an Xcode project's <DerivedData>/<Project>-<hash>/Index.noindex/DataStore (after xcodebuild build or test). Implies --index-store and skips discovery."
     )
     var indexStorePath: String?
 
