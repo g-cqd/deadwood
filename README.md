@@ -248,10 +248,13 @@ deadwood analyze --no-cache .       # disable the (default-on) facts cache
 deadwood analyze --index-store .    # USR-precise cross-module reachability (macOS; needs `swift build`)
 deadwood analyze --experimental-embedding-confidence --embedding-bundle ~/Models/MiniLM .
 deadwood analyze --minimum-confidence high .  # report only high and certain findings
+deadwood analyze --only-from changed.txt --report-new-since base.json .  # also report dead code the change created
 deadwood rules                      # list rules; `rules <id>` explains one
 ```
 
 `--minimum-confidence <low|medium|high|certain>` reports only findings at or above that level of the [confidence model](#confidence-model) above. Findings without a confidence are always reported, and the flag applies before `--baseline` and `--write-baseline`, so a baseline written with it holds only what the same flag would report.
+
+`--report-new-since <baseline>` promotes the findings outside `--only` that the baseline does not hold into the report. It needs `--only` or `--only-from`; see [Newly dead code outside the changed files](#newly-dead-code-outside-the-changed-files).
 
 ## Accepting a finding
 
@@ -295,6 +298,50 @@ a directory or as an explicit file list, or where the checkout lives.
 re-anchors fingerprints to that directory, which from the repository root is
 the same anchor). SARIF uris must be repository-relative for code scanning to
 link them, so pass it when uploading SARIF.
+
+### Newly dead code outside the changed files
+
+A pull request can leave a declaration in an unchanged file dead: it removes
+the last use. `--only` hides that finding, because the declaration is outside
+the changed files. `--report-new-since <baseline>` reports it. The baseline is
+the base branch's, written unscoped with the same paths, `--relative-to`, and
+configuration as the pull request's run:
+
+```sh
+# on the base branch
+deadwood analyze . --relative-to . --write-baseline base.json
+
+# on the pull request
+git diff --name-only origin/main... -- '*.swift' > changed.txt
+deadwood analyze . --relative-to . --only-from changed.txt --report-new-since base.json --strict
+```
+
+- A finding outside the scope whose fingerprint the baseline does not hold
+  moves into the report. A finding the baseline holds stays out of scope and
+  is still counted in the summary.
+- An empty scope still promotes. A promoted finding that `--baseline` also
+  holds is suppressed like any other, and a promoted finding counts toward
+  exit `1`.
+- A promotion prints `N finding(s) outside --only are new since <file>` to
+  stderr and into the JSON `notes`. When every out-of-scope finding was
+  promoted, it also says the baseline may not match the corpus. That is a hint,
+  not a diagnosis: a run whose only out-of-scope finding is the new one gets it
+  too.
+- The `--only scope matches no analyzed file` warning is not printed, so a
+  pull request that only deletes a file can name it in `--only`.
+- `--report-new-since` needs `--only` or `--only-from`, and cannot be combined
+  with `--write-baseline`. A missing or malformed baseline exits `78`.
+
+Two caveats:
+
+- A declaration that was already dead, but whose finding's message changed, is
+  reported again as new. Transitive findings name their dead users (`is only
+  used by dead code: …`) and a dead cycle names its members. When the change
+  deletes one of those users, the message changes from "only used by dead
+  code" to "never referenced", so the fingerprint is new.
+- Fingerprints depend on `--relative-to`. Pass the same value to the baseline
+  run and to the pull request run; otherwise the findings differ from the
+  baseline's and read as new.
 
 ### SARIF locations
 
