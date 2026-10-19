@@ -279,6 +279,62 @@ struct LiveVariableAnalysisTests {
         #expect(result.deadStores.contains { $0.variable.name == "x" })
     }
 
+    @Test("A binding with no initializer declares a variable and stores nothing")
+    func declarationWithoutInitializerIsNotAStore() {
+        // Deferred initialization: `let response: Int` then one assignment per path is the idiom for
+        // "assigned in a do block, rethrown in the catch". The declaration is not a value that gets
+        // overwritten, and reporting it was a false positive at high confidence.
+        let result = LiveVariableAnalysis().analyze(
+            buildCFG(
+                """
+                func test(_ flag: Bool) throws -> Int {
+                    let response: Int
+                    do {
+                        response = try compute(flag)
+                    } catch {
+                        throw Failure.failed
+                    }
+                    return response
+                }
+                """))
+
+        #expect(!result.deadStores.contains { $0.variable.name == "response" })
+    }
+
+    @Test("A deferred variable assigned twice still has a dead first assignment")
+    func deferredVariableAssignedTwiceIsStillReported() {
+        // Guards the fix above: ignoring declarations must not blind the rule to a real overwritten store.
+        let result = LiveVariableAnalysis().analyze(
+            buildCFG(
+                """
+                func test() -> Int {
+                    var y: Int
+                    y = 1
+                    y = 2
+                    return y
+                }
+                """))
+
+        #expect(result.deadStores.contains { $0.variable.name == "y" })
+    }
+
+    @Test("Shorthand optional binding reads the variable it shadows")
+    func shorthandOptionalBindingReadsTheShadowedVariable() {
+        // `guard let inserted` is `guard let inserted = inserted`: it reads the earlier `inserted`, so
+        // the store that made it was not dead.
+        let result = LiveVariableAnalysis().analyze(
+            buildCFG(
+                """
+                func test(_ text: String?) -> String? {
+                    let inserted = text?.isEmpty == true ? nil : text
+                    guard let inserted, text != nil else { return nil }
+                    return inserted
+                }
+                """))
+
+        #expect(!result.deadStores.contains { $0.variable.name == "inserted" })
+    }
+
     @Test("Ignored variable underscore is skipped")
     func underscoreIgnored() {
         let result = LiveVariableAnalysis().analyze(
