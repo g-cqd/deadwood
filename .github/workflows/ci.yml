@@ -1,99 +1,23 @@
 name: CI
 
+# The graph (lint, linux and macOS in parallel, release archives on main and tags, one required gate) lives in
+# the shared workflow; this file only says what is specific to deadwood. A `v*` tag publishes the release.
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
+  workflow_dispatch:
 
-# A push supersedes any still-running CI for the same ref: cancel it.
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
-# The package requires swift-tools 6.4, which no *released* toolchain ships
-# yet — so both lanes run a 6.4.x toolchain: Linux via the nightly-6.4.x
-# container (the REQUIRED gate), macOS via a dated 6.4.x dev-snapshot pkg
-# installed by the vendored ./.github/actions/setup-swift. Both lanes are on
-# the same 6.4.x branch, so they never disagree on language semantics.
 jobs:
-  linux:
-    runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-6.4.x-jammy
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - name: Build (warnings are errors via package settings)
-        run: swift build --build-tests
-      - name: Tests
-        # --no-parallel: the nightly Linux concurrency runtime has crashed
-        # under swift-testing's parallel executor; serial is stable.
-        run: swift test --no-parallel
-      - name: Self-analysis
-        run: swift run deadwood analyze Sources --strict
-      - name: Removal oracle
-        # Proves flagged declarations are actually removable (typecheck after
-        # deletion). Cross-platform, so it runs on the required Linux gate.
-        run: Scripts/run-removal-oracle.sh
-      - name: swift-format lint
-        run: Scripts/lint-format.sh
-      - name: GCD prohibition
-        run: Scripts/no-gcd.sh
-      - name: Release binary
-        run: |
-          swift build -c release
-          BIN="$(swift build -c release --show-bin-path)/deadwood"
-          "$BIN" --version
-          cp "$BIN" deadwood
-      - uses: actions/upload-artifact@v4
-        with:
-          name: deadwood-${{ github.sha }}-linux-x86_64
-          path: deadwood
-          retention-days: 14
-
-  macos:
-    runs-on: macos-26
-    # Informational until 6.4 GA reaches Xcode. Child-spawning steps write to
-    # files so no orphan can hold the runner's log pipe and hang post-run.
-    continue-on-error: true
-    # Bound raised for the IndexStoreDB dependency, which compiles from source
-    # on macOS (gated out on Linux) and roughly doubles the cold build time.
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - name: Install Swift 6.4 (vendored dated snapshot)
-        timeout-minutes: 10
-        uses: ./.github/actions/setup-swift
-      - name: Build & test
-        timeout-minutes: 30
-        run: |
-          set +e
-          { swift build --build-tests && swift test --no-parallel; } > build-test.log 2>&1 < /dev/null
-          status=$?
-          cat build-test.log
-          exit $status
-      - name: Release binary
-        run: |
-          set +e
-          swift build -c release > release-build.log 2>&1 < /dev/null
-          status=$?
-          cat release-build.log
-          [ $status -ne 0 ] && exit $status
-          cp "$(swift build -c release --show-bin-path)/deadwood" deadwood
-      - uses: actions/upload-artifact@v4
-        with:
-          name: deadwood-${{ github.sha }}-macos-arm64
-          path: deadwood
-          retention-days: 14
-      - name: Straggler census and reap
-        if: always()
-        run: |
-          echo "toolchain processes still alive:"
-          pgrep -fl 'swift-frontend|swift-driver|swift-build|swift-testing|SourceKitService|sourcekit-lsp' || echo "(none)"
-          for pattern in swift-frontend swift-driver swift-build swift-package swift-test swift-testing swiftpm-testing-helper xctest SourceKitService sourcekit-lsp; do
-            pkill -9 -f "$pattern" 2>/dev/null || true
-          done
-          exit 0
+  ci:
+    uses: Aemi-Studio/aemi/.github/workflows/swift-tool.yml@ci/shared-tool-workflow
+    permissions:
+      contents: write
+    with:
+      tool: deadwood
+      linux-extra: Scripts/run-removal-oracle.sh
+      macos-timeout: 45
