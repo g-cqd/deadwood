@@ -25,7 +25,7 @@ let package = Package(
         .executable(name: "deadwood", targets: ["deadwood"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.2"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
         // swift-system: a safe, Sendable stderr handle. Foundation's FileHandle
         // is corelibs-only and would re-link ~51 MiB of ICU into every Linux binary.
@@ -36,20 +36,20 @@ let package = Package(
         // Linux build never sees a symbol from it.
         .package(
             url: "https://github.com/swiftlang/indexstore-db.git",
-            revision: "cb3b960568f18a3cc018923f5824323b5c4edd0b"
+            revision: "64aa0b26913249c4e7c21d351a215fba02702003"
         ),
         // The published JSON package uses Aemi's kernel and runtime products.
         // The repository identity remains ADJSON; select its AemiJSON product.
         // Only the internal facts cache uses this codec; report byte formats stay stable.
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
-            revision: "6b8e5b9fb14b6c835d0dca13ba15f5bb1f3831de"
+            revision: "3cf4aeddd3d7b280e4aa5f6ab69b169ecd127286"
         ),
         // The project model the analyzers share: entry points project files
         // and test frameworks create, code regions, generated files.
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "2168bbbad5cee4993c191830bc5c37c165477e89"
+            revision: "7a55ccf08d32d5b814d5e3c0877c2e296d5339d4"
         ),
     ],
     targets: [
