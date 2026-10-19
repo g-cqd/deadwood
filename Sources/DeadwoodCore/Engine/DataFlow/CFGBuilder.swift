@@ -929,7 +929,11 @@ private final class BodyUseDefWalker: SyntaxAnyVisitor {
 
     override func visit(_ node: PatternBindingSyntax) -> SyntaxVisitorContinueKind {
         enterStatement(node)
-        extractDefsFromPattern(node.pattern)
+        // A binding with no initializer (`let response: T`, assigned on each path later) declares a
+        // variable and stores no value, so it is not a def: reporting it as overwritten was wrong.
+        if node.initializer != nil {
+            extractDefsFromPattern(node.pattern)
+        }
         return .visitChildren
     }
 
@@ -1026,6 +1030,11 @@ private final class BodyUseDefWalker: SyntaxAnyVisitor {
 
     override func visit(_ node: OptionalBindingConditionSyntax) -> SyntaxVisitorContinueKind {
         enterStatement(node)
+        // `if let x` and `guard let x` with no `= expression` are shorthand for `= x`: they read the
+        // variable they shadow, which the walk below cannot see because no reference is written.
+        if node.initializer == nil, let identifier = node.pattern.as(IdentifierPatternSyntax.self) {
+            recordUse(VariableID(name: identifier.identifier.text, scopeDepth: scopeDepth))
+        }
         extractDefsFromPattern(node.pattern)
         return .visitChildren
     }
