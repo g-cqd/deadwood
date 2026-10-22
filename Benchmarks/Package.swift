@@ -9,7 +9,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     dependencies: [
         .package(url: "https://github.com/g-cqd/deadwood.git", branch: "main"),
-        .package(url: "https://github.com/ordo-one/package-benchmark", from: "1.27.0"),
+        .package(url: "https://github.com/ordo-one/package-benchmark", from: "1.38.0"),
     ],
     targets: [
         .executableTarget(
