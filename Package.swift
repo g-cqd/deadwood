@@ -29,7 +29,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
         // swift-system: a safe, Sendable stderr handle. Foundation's FileHandle
         // is corelibs-only and would re-link ~51 MiB of ICU into every Linux binary.
-        .package(url: "https://github.com/apple/swift-system.git", from: "1.7.1"),
+        .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1"),
         // IndexStoreDB backs the opt-in `--index-store` reachability mode. It
         // is linked only on macOS (its `libIndexStore.dylib` discovery is
         // macOS-only), and every consumer sits behind `#if canImport`, so the
@@ -43,13 +43,13 @@ let package = Package(
         // Only the internal facts cache uses this codec; report byte formats stay stable.
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
-            revision: "001c0a99a64e58a226e5851fedf1324a5fa2470c"
+            revision: "e8a6b0e5db6671cb73ddd80348defd0c3275245e"
         ),
         // The project model the analyzers share: entry points project files
         // and test frameworks create, code regions, generated files.
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "1c25dcaa476450867fcd8533723f84f81f79d76b"
+            revision: "727e8ca12c0c3c0bd71d1369a3c6a71724362f75"
         ),
     ],
     targets: [
