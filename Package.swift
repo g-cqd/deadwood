@@ -43,7 +43,7 @@ let package = Package(
         // Only the internal facts cache uses this codec; report byte formats stay stable.
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
-            revision: "e8a6b0e5db6671cb73ddd80348defd0c3275245e"
+            revision: "6bca1d8fade0236506726869fb626c4882fc2aea"
         ),
         // The project model the analyzers share: entry points project files
         // and test frameworks create, code regions, generated files.
