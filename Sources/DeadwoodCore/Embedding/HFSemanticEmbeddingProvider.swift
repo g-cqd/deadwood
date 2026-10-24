@@ -25,6 +25,7 @@
 //  because it has a second Core ML provider; deadwood has exactly one.
 
 #if canImport(CoreML)
+    import WordPiece
     import CoreML
     import Foundation
 

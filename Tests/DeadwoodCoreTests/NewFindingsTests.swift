@@ -1,4 +1,5 @@
 import DeadwoodCore
+import ProjectModel
 import Testing
 
 /// `--report-new-since` promotes an out-of-scope finding into the report when its fingerprint is not in the

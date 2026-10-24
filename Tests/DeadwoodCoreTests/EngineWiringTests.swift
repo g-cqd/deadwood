@@ -3,6 +3,7 @@
 //  suppression through the engine, and the containment collapse.
 
 import Foundation
+import ProjectModel
 import Testing
 
 @testable import DeadwoodCore

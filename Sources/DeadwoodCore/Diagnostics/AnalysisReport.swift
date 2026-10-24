@@ -1,3 +1,5 @@
+public import ProjectModel
+
 /// The complete result of one analysis run.
 public struct AnalysisReport: Sendable, Codable {
     public var findings: [Finding]

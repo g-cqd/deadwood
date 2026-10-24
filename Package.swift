@@ -49,7 +49,7 @@ let package = Package(
         // and test frameworks create, code regions, generated files.
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "600335b98b213103a712fd6922c36ac75888965f"
+            revision: "19af6101ebfa7acbd5a2276ec35e717374f36193"
         ),
     ],
     targets: [
@@ -58,6 +58,8 @@ let package = Package(
             dependencies: [
                 .product(name: "ProjectModel", package: "analyzerkit"),
                 .product(name: "SourceCorpus", package: "analyzerkit"),
+                .product(name: "ReportSupport", package: "analyzerkit"),
+                .product(name: "WordPiece", package: "analyzerkit"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftOperators", package: "swift-syntax"),
@@ -84,7 +86,10 @@ let package = Package(
         ),
         .testTarget(
             name: "DeadwoodCoreTests",
-            dependencies: ["DeadwoodCore", .product(name: "SourceCorpus", package: "analyzerkit")],
+            dependencies: [
+                "DeadwoodCore", .product(name: "SourceCorpus", package: "analyzerkit"),
+                .product(name: "WordPiece", package: "analyzerkit"),
+            ],
             resources: [.copy("Fixtures")],
             swiftSettings: strictSwiftSettings
         ),

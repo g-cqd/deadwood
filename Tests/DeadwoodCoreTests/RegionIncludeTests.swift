@@ -1,4 +1,5 @@
 import DeadwoodCore
+import ProjectModel
 import Testing
 
 /// `--include`/`--exclude`: dead code inside a region is reported like any
