@@ -4,6 +4,7 @@
 // `.JSONDecoder` are structs and have no `.outputFormatting` OptionSet.
 // AemiJSON is confined to cache payload types, so an internal import suffices.
 import AemiJSON
+import SourceCorpus
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials

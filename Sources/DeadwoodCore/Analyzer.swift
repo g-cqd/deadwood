@@ -1,4 +1,5 @@
 public import ProjectModel
+import SourceCorpus
 import SwiftParser
 import SwiftSyntax
 

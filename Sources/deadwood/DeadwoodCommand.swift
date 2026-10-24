@@ -1,6 +1,7 @@
 public import ArgumentParser
 import DeadwoodCore
 import ProjectModel
+import SourceCorpus
 import SystemPackage
 
 #if canImport(FoundationEssentials)
@@ -527,9 +528,9 @@ struct Analyze: AsyncParsableCommand {
                 throw ValidationError("no such file or directory: \(path)")
             }
             if type == .typeDirectory {
-                files.formUnion(SourceDiscovery.swiftFiles(in: path))
-                projectFiles.formUnion(SourceDiscovery.projectFiles(in: path))
-            } else if SourceDiscovery.isProjectFile(path) {
+                files.formUnion(SourceDiscovery.swiftFiles(under: path))
+                projectFiles.formUnion(ProjectFileDiscovery.projectFiles(in: path))
+            } else if ProjectFileDiscovery.isProjectFile(path) {
                 projectFiles.insert(URL(fileURLWithPath: path).path)
             } else {
                 files.insert(URL(fileURLWithPath: path).path)

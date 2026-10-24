@@ -1,4 +1,5 @@
 import ProjectModel
+import SourceCorpus
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials
