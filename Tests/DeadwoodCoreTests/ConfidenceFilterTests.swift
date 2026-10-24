@@ -1,4 +1,5 @@
 import DeadwoodCore
+import ProjectModel
 import Testing
 
 /// `--minimum-confidence` narrows what a run reports. It drops the findings below

@@ -1,3 +1,5 @@
+public import ProjectModel
+
 /// Every diagnostic the tool can emit. Raw values are the public rule ids
 /// used in configuration, suppression directives, and SARIF.
 public enum RuleID: String, CaseIterable, Sendable, Codable {
