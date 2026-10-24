@@ -1,3 +1,5 @@
+import WordPiece
+
 //  WordPieceParityTests.swift
 //  deadwood
 //

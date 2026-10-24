@@ -1,3 +1,5 @@
+import ProjectModel
+
 #if canImport(FoundationEssentials)
     import FoundationEssentials
 #else

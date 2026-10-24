@@ -1,5 +1,6 @@
 import DeadwoodCore
 import Foundation
+import ProjectModel
 import Testing
 
 /// Production mode: reachability computed twice — with test roots and
