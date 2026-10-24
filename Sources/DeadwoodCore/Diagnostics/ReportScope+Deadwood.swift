@@ -1,4 +1,5 @@
 import ProjectModel
+import SourceCorpus
 
 extension ReportScope {
     /// A scope over `files`, canonicalized the way deadwood canonicalizes findings' paths.
