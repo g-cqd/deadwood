@@ -1,3 +1,5 @@
+import SourceCorpus
+
 #if canImport(FoundationEssentials)
     internal import FoundationEssentials
 #else

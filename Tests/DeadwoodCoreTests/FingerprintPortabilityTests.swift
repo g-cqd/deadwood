@@ -9,6 +9,7 @@
 //  genuinely new finding.
 
 import Foundation
+import SourceCorpus
 import Testing
 
 @testable import DeadwoodCore

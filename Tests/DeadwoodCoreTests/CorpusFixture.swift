@@ -1,5 +1,6 @@
 import DeadwoodCore
 import Foundation
+import SourceCorpus
 
 /// A throwaway corpus on disk: writes the given files into a fresh
 /// temporary directory, runs a corpus analysis over them, and removes the
@@ -24,7 +25,7 @@ struct CorpusFixture {
             try Data(contents.utf8).write(to: url)
             if url.pathExtension == "swift" {
                 swiftPaths.append(url.path)
-            } else if SourceDiscovery.isProjectFile(url.path) {
+            } else if ProjectFileDiscovery.isProjectFile(url.path) {
                 projectPaths.append(url.path)
             }
         }
