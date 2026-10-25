@@ -198,28 +198,35 @@ struct CorpusContext: Sendable {
 
     /// The declaration's effective access level: its declared level capped
     /// by every enclosing type's declared level. A `func` inside a
-    /// `private struct` is effectively private. Extensions are resolved to
-    /// the extended nominal type when the name is unambiguous; otherwise
-    /// they conservatively contribute their own declared level.
+    /// `private struct` is effectively private.
+    ///
+    /// An extension is not a cap. Its own level is the default for a member written without one (`public
+    /// extension Int { func f() }` makes `f` public), and a member may name a wider level than the
+    /// extension (`extension Int { public func f() }`). What caps an extension's members is the type it
+    /// extends, when the corpus declares that type; a type from another module caps nothing we can see.
+    /// A member written `internal` inside a public extension cannot be told from an unannotated one (the
+    /// declaration records `.internal` for both), so it counts as public: the verdict errs towards
+    /// "used", never towards a false "unused".
     func effectiveAccess(of declaration: Declaration) -> AccessLevel {
         var access = declaration.accessLevel
-        for enclosing in enclosingTypeDeclarations(of: declaration) {
-            access = min(access, declaredAccess(ofTypeOrExtension: enclosing))
+        for (depth, enclosing) in enclosingTypeDeclarations(of: declaration).enumerated() {
+            if enclosing.kind == .extension {
+                if depth == 0, access == .internal {
+                    access = enclosing.accessLevel
+                }
+                access = min(access, extendedTypeAccess(of: enclosing))
+            } else {
+                access = min(access, enclosing.accessLevel)
+            }
         }
         return access
     }
 
-    private func declaredAccess(ofTypeOrExtension declaration: Declaration) -> AccessLevel {
-        guard declaration.kind == .extension else {
-            return declaration.accessLevel
-        }
-        // `extension Foo` caps members at Foo's declared access when Foo is
-        // resolvable; unknown or ambiguous names stay conservative.
-        let candidates = nominalTypesByName[declaration.name] ?? []
-        if candidates.count == 1, let nominal = candidates.first {
-            return max(declaration.accessLevel, nominal.accessLevel)
-        }
-        return max(declaration.accessLevel, .internal)
+    /// The widest access among the corpus's declarations of the type an extension extends, or `.open`
+    /// (no cap) when the corpus does not declare it.
+    private func extendedTypeAccess(of extensionDeclaration: Declaration) -> AccessLevel {
+        let candidates = nominalTypesByName[extensionDeclaration.name] ?? []
+        return candidates.map(\.accessLevel).max() ?? .open
     }
 
     // MARK: - Conformances
