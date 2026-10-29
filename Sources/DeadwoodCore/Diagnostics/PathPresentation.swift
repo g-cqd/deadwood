@@ -1,3 +1,4 @@
+import ReportSupport
 import SourceCorpus
 
 #if canImport(FoundationEssentials)
@@ -26,14 +27,10 @@ extension AnalysisReport {
     /// degraded file's detail carry paths as free text, so the prefix is
     /// stripped there too — a relative report must never mix both spellings.
     public func relativized(to root: String) -> AnalysisReport {
-        let canonical = SourcePath.canonical(root)
-        let prefix = canonical.hasSuffix("/") ? canonical : canonical + "/"
-        func strip(_ path: String) -> String {
-            path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path
-        }
-        func stripInText(_ text: String) -> String {
-            text.replacing(prefix, with: "")
-        }
+        // The rule every analyzer shares (analyzerkit ReportSupport); which fields it applies to stays here.
+        let presenter = PathPresenter(root: root)
+        let strip = presenter.path
+        let stripInText = presenter.text
         func relativize(_ finding: Finding) -> Finding {
             Finding(
                 rule: finding.rule,
