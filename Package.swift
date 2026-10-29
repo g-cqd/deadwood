@@ -49,7 +49,7 @@ let package = Package(
         // and test frameworks create, code regions, generated files.
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "050e6a44278a8228a70a703f87a85013b1a9663a"
+            revision: "27b767f421ee8d40e1080a808c3aedfabc8ee9f7"
         ),
     ],
     targets: [
@@ -59,6 +59,7 @@ let package = Package(
                 .product(name: "ProjectModel", package: "analyzerkit"),
                 .product(name: "IndexStoreSupport", package: "analyzerkit", condition: .when(platforms: [.macOS])),
                 .product(name: "SourceCorpus", package: "analyzerkit"),
+                .product(name: "Suppression", package: "analyzerkit"),
                 .product(name: "ReportSupport", package: "analyzerkit"),
                 .product(name: "WordPiece", package: "analyzerkit"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
