@@ -12,6 +12,7 @@
 #if canImport(IndexStoreDB)
     import Foundation
     import IndexStoreDB
+    import ProjectModel
 
     /// Directory-existence check that avoids the
     /// `UnsafeMutablePointer<ObjCBool>` out-parameter of
@@ -386,7 +387,8 @@
         /// reads the versioned subdir itself, so callers must pass the ROOT,
         /// not `.../vN` (pointing at `vN` yields an empty database).
         static func findIndexStorePath(in projectRoot: String, derivedDataRoots: [String]? = nil) -> String? {
-            let buildDir = URL(fileURLWithPath: projectRoot).appendingPathComponent(".build")
+            guard let layout = ProjectLayout.discover(paths: [projectRoot]) else { return nil }
+            let buildDir = URL(fileURLWithPath: layout.root).appendingPathComponent(".build")
 
             let candidates = [
                 buildDir.appendingPathComponent("debug/index/store"),
@@ -400,30 +402,14 @@
                 }
             }
 
-            // Xcode DerivedData.
-            let derivedData = URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent("Library")
-                .appendingPathComponent("Developer")
-                .appendingPathComponent("Xcode")
-                .appendingPathComponent("DerivedData")
-
-            if let contents = try? FileManager.default.contentsOfDirectory(atPath: derivedData.path) {
-                let projectName = URL(fileURLWithPath: projectRoot).lastPathComponent
-                let normalizedProjectName = normalizeProjectName(projectName)
-                for dir in contents
-                where dirMatchesProject(dir, projectName: projectName, normalizedName: normalizedProjectName) {
-                    let dataStore =
-                        derivedData
-                        .appendingPathComponent(dir)
-                        .appendingPathComponent("Index.noindex")
-                        .appendingPathComponent("DataStore")
-                    if let root = indexStoreRoot(at: dataStore) {
-                        return root
-                    }
-                }
-            }
-
-            return nil
+            let roots =
+                derivedDataRoots ?? [
+                    URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(
+                        "Library/Developer/Xcode/DerivedData"
+                    ).path
+                ]
+            return layout.derivedDataStores(under: roots).compactMap { indexStoreRoot(at: URL(fileURLWithPath: $0)) }
+                .first
         }
 
         /// The store root to hand IndexStoreDB if `dir` is (or wraps) a usable
@@ -450,37 +436,5 @@
             return nil
         }
 
-        /// Normalize project name to match Xcode's DerivedData convention.
-        private static func normalizeProjectName(_ name: String) -> String {
-            let charactersToReplace = CharacterSet(charactersIn: " -.")
-            var normalized = name
-            for scalar in name.unicodeScalars where charactersToReplace.contains(scalar) {
-                normalized = normalized.replacingAll(String(scalar), with: "_")
-            }
-            return normalized
-        }
-
-        private static func urlEncodeProjectName(_ name: String) -> String? {
-            name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-        }
-
-        /// Check if a DerivedData directory name matches a project name.
-        private static func dirMatchesProject(
-            _ dir: String, projectName: String, normalizedName: String
-        ) -> Bool {
-            let components = dir.split(separator: "-", maxSplits: 1)
-            guard let dirProjectName = components.first else { return false }
-            let dirNameStr = String(dirProjectName)
-
-            if dirNameStr == projectName { return true }
-            if dirNameStr == normalizedName { return true }
-            if let urlEncoded = urlEncodeProjectName(projectName), dirNameStr == urlEncoded {
-                return true
-            }
-            if let decoded = dirNameStr.removingPercentEncoding, decoded == projectName {
-                return true
-            }
-            return dir.contains(projectName) || dir.contains(normalizedName)
-        }
     }
 #endif

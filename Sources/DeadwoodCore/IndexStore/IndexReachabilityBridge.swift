@@ -11,6 +11,7 @@
 
 #if canImport(IndexStoreDB)
     import Foundation
+    import ProjectModel
 
     struct IndexReachabilityBridge {
         /// Reachable declaration-index sets computed over the index edges,
@@ -378,23 +379,7 @@
     /// the fallback manager can discover `.build/.../index/store`.
     enum IndexProjectLocator {
         static func projectRoot(for files: [String], fallback cwd: String) -> String {
-            guard let firstFile = files.first else { return cwd }
-            var current = URL(fileURLWithPath: firstFile).deletingLastPathComponent()
-            for _ in 0..<12 {
-                let packageSwift = current.appendingPathComponent("Package.swift")
-                if FileManager.default.fileExists(atPath: packageSwift.path) {
-                    return current.path
-                }
-                if let contents = try? FileManager.default.contentsOfDirectory(atPath: current.path),
-                    contents.contains(where: { $0.hasSuffix(".xcodeproj") || $0.hasSuffix(".xcworkspace") })
-                {
-                    return current.path
-                }
-                let parent = current.deletingLastPathComponent()
-                if parent.path == current.path { break }
-                current = parent
-            }
-            return cwd
+            ProjectLayout.discover(paths: files)?.root ?? cwd
         }
     }
 #endif
