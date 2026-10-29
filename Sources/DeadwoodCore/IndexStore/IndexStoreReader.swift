@@ -385,7 +385,7 @@
         /// `.build/out`, and Xcode DerivedData's `DataStore`). IndexStoreDB
         /// reads the versioned subdir itself, so callers must pass the ROOT,
         /// not `.../vN` (pointing at `vN` yields an empty database).
-        static func findIndexStorePath(in projectRoot: String) -> String? {
+        static func findIndexStorePath(in projectRoot: String, derivedDataRoots: [String]? = nil) -> String? {
             let buildDir = URL(fileURLWithPath: projectRoot).appendingPathComponent(".build")
 
             let candidates = [
