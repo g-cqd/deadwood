@@ -215,7 +215,9 @@ Neither changes the exit code.
     other platforms.
   - **No index store found.** Discovery looks in the project's
     `.build/debug/index/store`, `.build/release/index/store`, `.build/index/store`
-    and `.build/out`, then in Xcode DerivedData folders named after the project.
+    and `.build/out`, then in Xcode DerivedData matched by `info.plist`'s
+    `WorkspacePath` to a project or workspace in this checkout, newest first.
+    Separate worktrees do not borrow each other's stores.
     An `--index-store-path` that is missing or is not a directory gives the same
     warning.
   - **The index store fails to open.** Examples: the sibling `IndexDatabase`
@@ -240,12 +242,21 @@ swift build                                  # generate the index first
 deadwood analyze --index-store Sources       # USR-precise reachability
 deadwood analyze --index-store-path .build/out Sources   # explicit store
 deadwood analyze --index-store-build Sources # run `swift build` if none found
+deadwood analyze --index-store --verbose Sources # explain dylib selection on stderr
 ```
 
 For a package, deadwood discovers the index under the project's
 `.build/debug/index/store`, the new SwiftPM build system's `.build/out`
 (versioned `vN/records`), or Xcode DerivedData. `--index-store-build` runs
 `swift build` when none is found.
+
+Toolchain discovery is shared with arcleak: `DEVELOPER_DIR`, then
+`xcode-select -p`, `xcrun --find swift`, user-installed toolchains under
+`~/Library/Developer/Toolchains`, then Command Line Tools. The first trusted
+`libIndexStore.dylib` wins. Links resolve before checking: a regular file owned
+by root or you, with neither it nor its immediate containing directory writable
+by group or other. `--verbose` explains selection and preceding rejections on
+stderr; it does not alter the report or prove index coverage.
 
 A missing or unusable index never fails a run. Where `IndexStoreDB` is not
 available (any platform other than macOS), `--index-store` prints a warning and
@@ -400,6 +411,7 @@ Outside the freeze: `--experimental-embedding-confidence`, `--embedding-bundle` 
 | `--minimum-confidence <level>` | report only findings at or above `low`, `medium`, `high` or `certain`; findings without a confidence are always reported |
 | `--include <regions>`, `--exclude <regions>` | comma-separated `preview`, `debug`, `test`, `mock`, `generated`, `script` or `all`: analyze as first-class code, or keep out of scope |
 | `--index-store`, `--index-store-path <path>`, `--index-store-build` | USR-precise cross-module reachability from the compiler's index store (macOS). `--index-store-path` names the store, and `--index-store-build` runs `swift build` when none is found; each implies `--index-store` |
+| `--verbose` | Explain index-store toolchain selection and rejected candidates on stderr when index mode is requested |
 
 ### Exit status
 
