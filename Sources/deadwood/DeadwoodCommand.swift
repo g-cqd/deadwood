@@ -234,9 +234,10 @@ struct Analyze: AsyncParsableCommand {
         }
 
         // Exclusion scopes the report, never the corpus (see the walker above).
-        if !configuration.exclude.isEmpty {
-            report.findings.removeAll { configuration.isExcluded(path: $0.path) }
-            report.outOfScope.removeAll { configuration.isExcluded(path: $0.path) }
+        let exclusion = configuration.pathFilter
+        if !exclusion.isEmpty {
+            report.findings.removeAll { exclusion.excludes($0.path) }
+            report.outOfScope.removeAll { exclusion.excludes($0.path) }
         }
 
         // A cancelled run analysed a partial corpus and therefore reports nothing.
