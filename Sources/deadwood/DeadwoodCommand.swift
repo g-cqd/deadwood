@@ -124,6 +124,9 @@ struct Analyze: AsyncParsableCommand {
     @Flag(name: .long, help: "Disable the facts cache (on by default; overrides --cache-path).")
     var noCache = false
 
+    @Flag(name: .long, help: "Explain index-store toolchain selection and rejected candidates on stderr.")
+    var verbose = false
+
     @Flag(
         name: .long,
         help:
@@ -193,6 +196,12 @@ struct Analyze: AsyncParsableCommand {
                 Data(
                     "deadwood: warning: --only scope matches no analyzed file — check that scope paths are relative to the right directory\n"
                         .utf8))
+        }
+
+        if verbose, indexStore || indexStorePath != nil || indexStoreBuild {
+            for diagnostic in IndexToolchainDiagnostics.resolve() {
+                standardError.write(Data(("deadwood: " + diagnostic + "\n").utf8))
+            }
         }
 
         let indexOptions = IndexStoreOptions(

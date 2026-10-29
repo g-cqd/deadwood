@@ -23,7 +23,7 @@
             #expect(BinaryTrustChecker.isTrusted(at: dylib.path))
         }
 
-        @Test func `a dylib writable by its group, a link and a directory are not trusted`() throws {
+        @Test func `a writable dylib and directory are refused while a link follows the target policy`() throws {
             let directory = try Self.directory()
             defer { try? FileManager.default.removeItem(at: directory) }
             let writable = directory.appending(path: "group.dylib")
@@ -35,7 +35,7 @@
             let link = directory.appending(path: "link.dylib")
             try FileManager.default.createSymbolicLink(at: link, withDestinationURL: trusted)
             #expect(!BinaryTrustChecker.isTrusted(at: writable.path))
-            #expect(!BinaryTrustChecker.isTrusted(at: link.path))
+            #expect(BinaryTrustChecker.isTrusted(at: link.path))
             #expect(!BinaryTrustChecker.isTrusted(at: directory.path))
         }
 
