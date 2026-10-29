@@ -1,4 +1,5 @@
 import AnalyzerCLI
+import AnalyzerConfiguration
 public import ArgumentParser
 import DeadwoodCore
 import ProjectModel
@@ -499,15 +500,14 @@ struct Analyze: AsyncParsableCommand {
         }
     }
 
+    /// `--config`, or the configuration directory's shared and own files (ADR-0020).
     private func loadConfigurationUncaught() throws -> Configuration {
-        if let config {
-            return try Configuration.load(path: config)
+        let (configuration, sources) = try Configuration.resolve(
+            explicit: config, currentDirectory: FileManager.default.currentDirectoryPath, analyzedPaths: paths)
+        if verbose {
+            for line in sources.verboseLines(tool: ToolInfo.name) { standardError.write(Data((line + "\n").utf8)) }
         }
-        let implicit = FileManager.default.currentDirectoryPath + "/.deadwood.json"
-        if FileManager.default.fileExists(atPath: implicit) {
-            return try Configuration.load(path: implicit)
-        }
-        return .default
+        return configuration
     }
 
     /// Deterministic discovery: directories are walked by `SourceDiscovery`,
