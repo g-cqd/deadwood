@@ -5,13 +5,12 @@
 //  - Types are `internal` (deadwood keeps its model layer internal) and
 //    `IndexedSymbolKind.toDeclarationKind()` maps onto deadwood's own
 //    `DeclarationKind`.
-//  - `findLibIndexStore`'s `xcrun` fallback routes through
-//    `ProcessExecutor.runUntilExit` (synchronous, env-scrubbed, no GCD)
-//    instead of the async timeout path, keeping the initializer synchronous.
+//  - Toolchain resolution and trust now delegate to analyzerkit's IndexStoreSupport (roadmap 0009).
 
 #if canImport(IndexStoreDB)
     import Foundation
     import IndexStoreDB
+    import IndexStoreSupport
     import ProjectModel
 
     /// Directory-existence check that avoids the
@@ -216,7 +215,9 @@
 
             let libPath: String
             if let provided = libIndexStorePath {
-                libPath = provided
+                let assessment = IndexStoreSupport.BinaryTrustChecker.assess(provided)
+                guard assessment.isTrusted else { throw IndexStoreError.dylibNotFound }
+                libPath = assessment.path
             } else if let resolved = Self.findLibIndexStore() {
                 libPath = resolved
             } else {
@@ -250,40 +251,9 @@
             }
         }
 
-        /// Find `libIndexStore.dylib` in the system. Each candidate is
-        /// verified root-owned by `BinaryTrustChecker` before being returned.
+        /// The same ordered resolution and trust policy as arcleak, supplied by analyzerkit.
         static func findLibIndexStore() -> String? {
-            let possiblePaths = [
-                "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libIndexStore.dylib",
-                "/Library/Developer/Toolchains/swift-latest.xctoolchain/usr/lib/libIndexStore.dylib",
-                "/Library/Developer/CommandLineTools/usr/lib/libIndexStore.dylib",
-            ]
-
-            for path in possiblePaths where BinaryTrustChecker.isTrusted(at: path) {
-                return path
-            }
-
-            // Fallback to xcrun. Routes through `ProcessExecutor` so the child
-            // does not inherit `DEVELOPER_DIR` from the parent.
-            if let result = try? ProcessExecutor.runUntilExit(
-                executable: URL(fileURLWithPath: "/usr/bin/xcrun"),
-                arguments: ["--find", "swift"]
-            ), result.succeeded {
-                let swiftPath = result.stdout.trimmedWhitespaceAndNewlines
-                if !swiftPath.isEmpty {
-                    let toolchainPath = URL(fileURLWithPath: swiftPath)
-                        .deletingLastPathComponent()  // bin
-                        .deletingLastPathComponent()  // usr
-                        .appendingPathComponent("lib")
-                        .appendingPathComponent("libIndexStore.dylib")
-                    let resolved = toolchainPath.path
-                    if BinaryTrustChecker.isTrusted(at: resolved) {
-                        return resolved
-                    }
-                }
-            }
-
-            return nil
+            ToolchainResolution.resolve().libraryPath
         }
 
         /// Find all occurrences of a symbol by USR.
