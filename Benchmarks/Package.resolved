@@ -1,12 +1,12 @@
 {
-  "originHash" : "5c11674497d7d6e792529f9332baa983c8b3a4fced7f248a7ff52279d03ae409",
+  "originHash" : "11135790f15df770d2d64176189a407ad6d8cb1d4259f627e21990386ee7a614",
   "pins" : [
     {
       "identity" : "aemi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Aemi-Studio/aemi.git",
       "state" : {
-        "revision" : "639caad90b0a8409185a712f32f9dea795e6470c"
+        "revision" : "f6da05cd0efdf60700e854efb5b6092eae89b8c5"
       }
     },
     {
@@ -14,8 +14,23 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiJSON.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "001c0a99a64e58a226e5851fedf1324a5fa2470c"
+        "revision" : "5542d37ff0edb17c822b48fe69bff6e792354c57"
+      }
+    },
+    {
+      "identity" : "aemiregex",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiRegex.git",
+      "state" : {
+        "revision" : "fe9b07f00f7b52d2d210ed4df43bd2b18f4ad674"
+      }
+    },
+    {
+      "identity" : "analyzerkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/analyzerkit.git",
+      "state" : {
+        "revision" : "3d1f8114c156d692333e89337fc990016b639b8d"
       }
     },
     {
@@ -24,7 +39,7 @@
       "location" : "https://github.com/g-cqd/deadwood.git",
       "state" : {
         "branch" : "main",
-        "revision" : "7020fe69eaca804d40917b6210509d1ae5f25800"
+        "revision" : "240bbb3beeac1b268bc8ed5d23b7527df64f5832"
       }
     },
     {
@@ -41,7 +56,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/indexstore-db.git",
       "state" : {
-        "revision" : "cb3b960568f18a3cc018923f5824323b5c4edd0b"
+        "revision" : "64aa0b26913249c4e7c21d351a215fba02702003"
       }
     },
     {
@@ -49,8 +64,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ordo-one/malloc-interposer.git",
       "state" : {
-        "revision" : "9221411ac2e845a93ce65b9ca2ab84f8c1084b0d",
-        "version" : "1.4.0"
+        "revision" : "977dc0639b742ecd05ac03fecc53664095821a5d",
+        "version" : "1.6.1"
       }
     },
     {
@@ -58,8 +73,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ordo-one/package-benchmark",
       "state" : {
-        "revision" : "2f192a6502392735b33466e3c5ae07e95a8065da",
-        "version" : "1.36.2"
+        "revision" : "ca4a9d300fc15d38132853c2e30462337b33c43f",
+        "version" : "1.38.1"
       }
     },
     {
@@ -85,8 +100,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
       "state" : {
-        "revision" : "35a1edcb8ebd2bfe251d587f0b69e62af28f508c",
-        "version" : "1.7.3"
+        "revision" : "f96b909e1a9e469620bc5037c1e24e00153f376f",
+        "version" : "1.7.5"
       }
     },
     {
@@ -94,8 +109,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-lmdb.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "866bc2563f360a7d84f0e87feb27df23c8958537"
+        "branch" : "release/6.4.x",
+        "revision" : "a4bc87807721c1fd114bf35464457e2db0d0e6c0"
       }
     },
     {
@@ -112,8 +127,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax.git",
       "state" : {
-        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
-        "version" : "603.0.2"
+        "revision" : "050f1a346fbbac0ca2cfb15a95274f7bd1cf0ccf",
+        "version" : "604.0.0"
       }
     },
     {
