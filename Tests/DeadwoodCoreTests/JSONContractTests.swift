@@ -10,6 +10,11 @@ import Testing
 @Suite struct JSONContractTests {
     private static let topLevelKeys: Set<String> = [
         "schemaVersion",
+        // ADR-0017: added keys every analyzer writes; timings only with --timings.
+        "tool",
+        "version",
+        "runNotes",
+        "skippedFiles",
         "findings",
         "suppressed",
         "outOfScope",
