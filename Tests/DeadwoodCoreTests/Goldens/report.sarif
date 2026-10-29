@@ -1,0 +1,2304 @@
+{
+  "$schema" : "https:\/\/json.schemastore.org\/sarif-2.1.0.json",
+  "runs" : [
+    {
+      "columnKind" : "utf16CodeUnits",
+      "invocations" : [
+        {
+          "executionSuccessful" : true
+        }
+      ],
+      "originalUriBaseIds" : {
+        "SRCROOT" : {
+          "uri" : "file:\/\/\/SRCROOT\/"
+        }
+      },
+      "results" : [
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/AcceptedDebt.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 4
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'keepalive()' is only used by dead code: futureEntryPoint() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "a72cb963fe6a353b"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/CodableRawEnum.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 6
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "enum 'Status' is only used by dead code: isKnownStatus(_:) — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "e996dc428fa6b571"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/CodableRawEnum.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 12
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "enum 'LegacyCode' is only used by dead code: isLegacy(_:) — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "6b23db4b1ede9d30"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/CodableRawEnum.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 17
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'isKnownStatus(_:)' is never referenced from any entry point — confidence medium — no reference found; 1 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "8d9981fd45c4edb4"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/CodableRawEnum.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 21
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'isLegacy(_:)' is never referenced from any entry point — confidence medium — no reference found; 1 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "fade5e5ad4a0edc3"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/OperatorFuncs.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 16
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'total(_:_:)' is only used by dead code: alwaysTaken() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "323e9bd3c80f44b0"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/ProtocolWitnessChain.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 3
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "protocol 'Greeter' is only used by dead code: English, French, greetings() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "b31fb224fd098ac4"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/ProtocolWitnessChain.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 7
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'English' is only used by dead code: greetings() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "b969169168f1aba7"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/ProtocolWitnessChain.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 11
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'French' is only used by dead code: greetings() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "561eea020b59f5fe"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/ProtocolWitnessChain.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 15
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'greetings()' is never referenced from any entry point — confidence medium — no reference found; 6 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "9500428b47117a6f"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/ShorthandEnumCase.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 4
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "enum 'Mode' is only used by dead code: pick(_:) — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "f2bc507b6de336f1"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/ShorthandEnumCase.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 9
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'pick(_:)' is never referenced from any entry point — confidence medium — no reference found; 3 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "a2ba2b779bd9bdee"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 19
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "class 'ConcreteViewModel' is never referenced from any entry point — confidence medium — no reference found; also named in a comment, possibly commented-out code to delete with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "2da5d77d0cdea56f"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 5,
+                  "startLine" : 47
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'age' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "ff82a4baf002273c"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-property"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 72
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'APIResponse' is never referenced from any entry point — confidence medium — no reference found; also named in a comment, possibly commented-out code to delete with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "5a1e0c0a59977315"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 81
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "class 'DataService' is never referenced from any entry point — confidence medium — no reference found; also named in a comment, possibly commented-out code to delete with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "7335ce1181f45404"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 104
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'ThemeColorKey' is only used by dead code: themeColor — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "eaec0fdc97c2ca61"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 5,
+                  "startLine" : 109
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'themeColor' is never referenced from any entry point — confidence medium — no reference found; 1 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "b995e4bc85158670"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-property"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 153
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'ArrayBuilder' is only used by dead code: makeArray(content:) — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "e551cee56cbd5ddf"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 164
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'makeArray(content:)' is never referenced from any entry point — confidence medium — no reference found; 1 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "dff5a0a1a40137da"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 170
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "class 'ExpensiveResource' is never referenced from any entry point — confidence medium — no reference found; also named in a comment, possibly commented-out code to delete with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "a322261fb493ca4b"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIFalsePositives.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 5,
+                  "startLine" : 194
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'isEnabled' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "8cdebdebd52c1ab"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-property"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/SwiftUIViewsAreRoots.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 5,
+                  "startLine" : 122
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "method 'unusedStyle()' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "bb908d459d0745c"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/Trivial.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 13
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'distanceSquared(_:_:)' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "e80600b5b7bb50a0"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/DeadBranch.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 4
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'selectPath(_:)' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "d3c140078f4165a6"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/DeadBranch.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 8,
+                  "startLine" : 5
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "condition 'false' is provably false — the true branch never executes — confidence certain — sparse conditional constant propagation"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "3d95b4a26d7e25ed"
+          },
+          "properties" : {
+            "confidence" : "certain"
+          },
+          "ruleId" : "dead-branch"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/DeadBranch.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 11
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'gatedFeature()' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "892f036d241ac303"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/DeadBranch.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 8,
+                  "startLine" : 13
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "condition 'enabled' is provably false — the true branch never executes — confidence high — sparse conditional constant propagation"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "b2dd50e69617a240"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "dead-branch"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/DeadBranch.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 19
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'alwaysTaken()' is never referenced from any entry point — confidence medium — no reference found; 1 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "4e226273b769c730"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/DeadBranch.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 8,
+                  "startLine" : 21
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "condition 'true' is provably true — the false branch never executes — confidence certain — sparse conditional constant propagation"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "cd2792c3fad0015e"
+          },
+          "properties" : {
+            "confidence" : "certain"
+          },
+          "ruleId" : "dead-branch"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 9
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'foo()' is only used by dead code: functions — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "3866c8471d18f0c"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 12
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'handleSuccess()' is only used by dead code: CallbackManager — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "464ad038340f49e0"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 15
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'processA()' is only used by dead code: processors — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "cb4d967a205b3695"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 16
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'processB()' is only used by dead code: processors — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "4495cadeaf91d0db"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 19
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'bar()' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "e3e9a1868e11777"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 21
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'unusedHelper()' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "a6377996abeec08f"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 24
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'functions' is only used by dead code: executeAll() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "de2414216145b2d4"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 26
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'processors' is only used by dead code: executeAll() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "41a4d692fd8039fe"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 31
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "class 'CallbackManager' is never referenced from any entry point — confidence medium — no reference found; 2 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "855679d194d5cc41"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 43
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'executeAll()' is never referenced from any entry point — confidence medium — no reference found; 5 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "834d7fd37f6f026f"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 53
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'transform(_:)' is only used by dead code: doubled — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "d8c2132ccb89ee5c"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 58
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'unusedTransform(_:)' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "cbb0335697c8dc88"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 63
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'numbers' is only used by dead code: doubled — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "b5404245bb89f93e"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 64
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'doubled' is never referenced from any entry point — confidence medium — no reference found; 2 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "f1dd1fc948e8ef5c"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-property"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 66
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'optionalHandler()' is only used by dead code: setupOptionalCallback() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "3fb05a1d465121ed"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 68
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'optionalCallback' is only used by dead code: setupOptionalCallback() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "6b01d68df1862f44"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 70
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'setupOptionalCallback()' is never referenced from any entry point — confidence medium — no reference found; 2 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "2a1fcf398dc42911"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 74
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "typealias 'Handler' is only used by dead code: handlerRef — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "bf9889239f592cff"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 76
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'aliasedHandler()' is only used by dead code: handlerRef — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "b68ca74a6d46de83"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 78
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'handlerRef' is never referenced from any entry point — confidence medium — no reference found; 2 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "db687142d69c4b03"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-property"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 81
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'neverCalled1()' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "511e93ff6603a80d"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 82
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'neverCalled2()' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "fffbb8dd8b6a6e83"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 83
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'neverCalled3()' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "685b45fdbb50677d"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 85
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'unusedVariable' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "d085ca19ba5eb0e4"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-property"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 86
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "property 'unusedConstant' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "48f92e2be09fcdbb"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-property"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/IndirectReferences.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 88
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "class 'UnusedClass' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "7d680126ae417a91"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 8
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "protocol 'Displayable' is only used by dead code: User, Product, showAll(_:) and 1 more — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "ef6ea8b30324255"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 12
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "protocol 'Identifiable' is only used by dead code: User, Product, getAllIds(_:) — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "e38b7521a3c098ec"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 16
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "protocol 'Processable' is only used by dead code: Order — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "5ab5af83309c9c4"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 21
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'User' is only used by dead code: runConformanceTests() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "80abc0408f7118d7"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 35
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'Product' is only used by dead code: runConformanceTests() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "1dcf2dec392d85ca"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 48
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'Order' is only used by dead code: runConformanceTests() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "57451e07128c7f51"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 57
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'showAll(_:)' is only used by dead code: runConformanceTests() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "9aca4b77bad71452"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 63
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'getAllIds(_:)' is only used by dead code: runConformanceTests() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "ca36ceb985500b86"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 83
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'Config' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "88e81a77ff12544a"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 94
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'DebugInfo' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "1c1f299e5684085b"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 103
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'UnusedStruct' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "1654db93b6ec5422"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 115
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "class 'NonConformingClass' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "b9b463cc6b95b652"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 123
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "protocol 'Defaultable' is only used by dead code: DefaultUser — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "b665f8fdcffbfbf9"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 5,
+                  "startLine" : 130
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "method 'optionalMethod()' is only used by dead code: optionalMethod() — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "fe45a03e3dbd82fd"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ProtocolWitnesses.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 135
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'DefaultUser' is never referenced from any entry point — confidence medium — no reference found; 5 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "327e4169666ab2ec"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/StringLiteralDemotion.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 9
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "class 'LegacyMigrator' is never referenced from any entry point — confidence low — no reference found; name appears in a string literal — possible dynamic reference"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "d82b952d1885067d"
+          },
+          "properties" : {
+            "confidence" : "low"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/UnusedEnumCase.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 12
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'destination(_:)' is only used by dead code: routeSummary(_:) — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "562c21a0e1adfe14"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/UnusedEnumCase.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 16
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'label(_:)' is only used by dead code: routeSummary(_:) — confidence medium — unreachable once its dead users go; delete them together"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "56dede71e8d2b48a"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-transitively"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/UnusedEnumCase.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 24
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'routeSummary(_:)' is never referenced from any entry point — confidence medium — no reference found; 2 declaration(s) only it uses are dead with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "d5b6ac19e211d893"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/UnusedPrivateFunction.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 3
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'SyncService' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "7f2f109bb124ff04"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/UnusedProperty.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 3
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "class 'Session' is never referenced from any entry point — confidence medium — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "9af276a8296a98f"
+          },
+          "properties" : {
+            "confidence" : "medium"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/UnusedType.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 9
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "struct 'OrphanCache' is never referenced from any entry point — confidence high — no reference found"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "9eb35501b183c85f"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-type"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Production\/Helpers.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 11
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "function 'deadHelper()' is never referenced from any entry point — confidence high — no reference found; also named in a comment, possibly commented-out code to delete with it"
+          },
+          "partialFingerprints" : {
+            "deadwood\/v1" : "8eb3193d4c5a5896"
+          },
+          "properties" : {
+            "confidence" : "high"
+          },
+          "ruleId" : "unused-function"
+        },
+        {
+          "level" : "note",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Goldens\/Corpus\/Bad.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 1
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "file skipped: not valid UTF-8"
+          },
+          "partialFingerprints" : {
+
+          },
+          "ruleId" : "deadwood\/degraded-file"
+        }
+      ],
+      "tool" : {
+        "driver" : {
+          "informationUri" : "https:\/\/github.com\/g-cqd\/deadwood",
+          "name" : "deadwood",
+          "rules" : [
+            {
+              "help" : {
+                "text" : "No reference to this declaration is reachable from any detected entry point (@main, public API, @objc, IBOutlets\/IBActions, tests, SwiftUI roots, Codable synthesis). Unreachable code costs compile time, review attention, and misleads readers about what the system does. Delete it; if it is kept deliberately (upcoming feature, template), accept it with a directive so the decision is auditable."
+              },
+              "id" : "unused-function",
+              "shortDescription" : {
+                "text" : "function or method with no reference reachable from any entry point"
+              }
+            },
+            {
+              "help" : {
+                "text" : "No reference to this declaration is reachable from any detected entry point (@main, public API, @objc, IBOutlets\/IBActions, tests, SwiftUI roots, Codable synthesis). Unreachable code costs compile time, review attention, and misleads readers about what the system does. Delete it; if it is kept deliberately (upcoming feature, template), accept it with a directive so the decision is auditable."
+              },
+              "id" : "unused-type",
+              "shortDescription" : {
+                "text" : "type declaration with no reference reachable from any entry point"
+              }
+            },
+            {
+              "help" : {
+                "text" : "No reference to this declaration is reachable from any detected entry point (@main, public API, @objc, IBOutlets\/IBActions, tests, SwiftUI roots, Codable synthesis). Unreachable code costs compile time, review attention, and misleads readers about what the system does. Delete it; if it is kept deliberately (upcoming feature, template), accept it with a directive so the decision is auditable."
+              },
+              "id" : "unused-property",
+              "shortDescription" : {
+                "text" : "stored or computed property with no reachable reference"
+              }
+            },
+            {
+              "help" : {
+                "text" : "The case is never constructed and never matched outside exhaustive switches. Removing it simplifies every switch over the enum. Beware externally-decoded enums (Codable raw values): accept those with a directive naming the wire contract."
+              },
+              "id" : "unused-enum-case",
+              "shortDescription" : {
+                "text" : "enum case never constructed or matched"
+              }
+            },
+            {
+              "help" : {
+                "text" : "No symbol of the imported module is referenced in this file at the syntax level. This heuristic cannot see extensions and operator visibility, so it is opt-in; treat it as a review prompt, not a fact."
+              },
+              "id" : "unused-import",
+              "shortDescription" : {
+                "text" : "imported module whose symbols are never referenced (syntax-level heuristic)"
+              }
+            },
+            {
+              "help" : {
+                "text" : "The declaration is public\/open but nothing inside the analyzed corpus references it. For libraries this is normal surface; for applications it usually marks dead API. Opt-in because only you know which one this codebase is."
+              },
+              "id" : "unused-public-api",
+              "shortDescription" : {
+                "text" : "public\/open declaration unreferenced inside the analyzed corpus"
+              }
+            },
+            {
+              "help" : {
+                "text" : "Constant propagation proves this branch can never execute (its condition folds to a constant along every path). Dead branches hide bugs — the code reads as if it runs. Delete the branch or fix the condition it was meant to test."
+              },
+              "id" : "dead-branch",
+              "shortDescription" : {
+                "text" : "branch proven unreachable by sparse conditional constant propagation"
+              }
+            },
+            {
+              "help" : {
+                "text" : "With test entry points the declaration is reachable; without them nothing in production code uses it. It is not dead — the tests would break — but it only exists to be tested. Either the feature it belongs to was removed (delete both) or the tests cover speculative surface. Only emitted under --production."
+              },
+              "id" : "referenced-only-by-tests",
+              "shortDescription" : {
+                "text" : "declaration only tests can reach (production mode only)"
+              }
+            },
+            {
+              "help" : {
+                "text" : "Every reference to this stored property is a write: state is maintained that nothing ever consumes. Delete the property and its assignments, or wire up the read that was intended. Opt-in because member-access writes (`object.property = x`) are indistinguishable from reads at the syntax level, so only self-shaped code is judged."
+              },
+              "id" : "assign-only-property",
+              "shortDescription" : {
+                "text" : "stored property that is written but never read"
+              }
+            },
+            {
+              "help" : {
+                "text" : "Liveness analysis shows the assigned value is never read, and reaching definitions show a later store overwrites it on every path. The computation and the store are wasted work and usually mark a logic slip (wrong variable, leftover debugging). Opt-in because inout\/aliasing effects are approximated conservatively."
+              },
+              "id" : "dead-store",
+              "shortDescription" : {
+                "text" : "assignment overwritten before any read (liveness + reaching definitions)"
+              }
+            },
+            {
+              "help" : {
+                "text" : "Only #Preview bodies and PreviewProvider types reach this declaration. It is used, so it is not dead, but it ships in release builds for nothing. Move it under #if DEBUG next to the previews. Code that already sits in #if DEBUG or in a preview is never reported."
+              },
+              "id" : "preview-only",
+              "shortDescription" : {
+                "text" : "production code that only SwiftUI previews use"
+              }
+            },
+            {
+              "help" : {
+                "text" : "Only code inside #if DEBUG reaches this declaration. It is used, so it is not dead, but it ships in release builds for nothing. Move it under #if DEBUG with its callers. Code that already sits in #if DEBUG is never reported."
+              },
+              "id" : "debug-only",
+              "shortDescription" : {
+                "text" : "production code that only #if DEBUG code uses"
+              }
+            },
+            {
+              "help" : {
+                "text" : "Something uses this declaration, but everything that uses it is dead: unreachable from any entry point. Deleting the dead users leaves it unused, so it is reported in the same run, with the users named, rather than one run per link of the chain. Its confidence is the weakest along the chain. Delete it with them."
+              },
+              "id" : "unused-transitively",
+              "shortDescription" : {
+                "text" : "declaration only dead code uses: dead with it"
+              }
+            }
+          ],
+          "version" : "0.11.2"
+        }
+      }
+    }
+  ],
+  "version" : "2.1.0"
+}
