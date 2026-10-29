@@ -1,3 +1,4 @@
+public import AnalyzerConfiguration
 public import ProjectModel
 public import SourceCorpus
 
@@ -100,15 +101,46 @@ public struct Configuration: Sendable, Codable, Equatable {
 
     public static let `default` = Configuration()
 
+    /// What the shared configuration reader checks this tool's keys against (ADR-0020); the shared keys are its own.
+    public static let sharedReading = SharedConfiguration.Tool(
+        name: ToolInfo.name, fileName: ".deadwood.json", keys: ["rules", "production", "testsGlob"])
+
+    /// The configuration of a run (ADR-0020): `explicit` (`--config`) or the configuration directory's
+    /// `.swift-analyzers.json` and `.deadwood.json`, merged, every key checked; the built-in default when there is none.
+    public static func resolve(
+        explicit: String?, currentDirectory: String, analyzedPaths: [String]
+    ) throws(DeadwoodError) -> (configuration: Configuration, sources: SharedConfiguration.Resolved) {
+        let resolved: SharedConfiguration.Resolved
+        do {
+            resolved = try SharedConfiguration.resolve(
+                for: sharedReading, explicit: explicit, currentDirectory: currentDirectory, analyzedPaths: analyzedPaths
+            )
+        } catch .unreadable(let path, let reason) {
+            throw .configurationUnreadable(path: path, underlying: reason)
+        } catch {
+            throw .configurationInvalid(path: error.path, detail: error.reason)
+        }
+        guard let directory = resolved.directory, let last = resolved.sources.last else { return (.default, resolved) }
+        let configuration = try decoded(Data(resolved.json), path: last.path, root: directory)
+        return (configuration, resolved)
+    }
+
+    /// The configuration in the file at `path`, read as `--config` reads it.
     public static func load(path: String) throws(DeadwoodError) -> Configuration {
-        let data = try BoundedFileReader.read(path: path)
+        try resolve(
+            explicit: path, currentDirectory: FileManager.default.currentDirectoryPath, analyzedPaths: []
+        ).configuration
+    }
+
+    /// `data` decoded and checked: rule ids, value ranges, region names. `root` anchors `exclude` globs.
+    static func decoded(_ data: Data, path: String, root: String) throws(DeadwoodError) -> Configuration {
         var config: Configuration
         do {
             config = try JSONDecoder().decode(Configuration.self, from: data)
-            config.root = URL(fileURLWithPath: path).deletingLastPathComponent().path
         } catch {
             throw .configurationInvalid(path: path, detail: String(describing: error))
         }
+        config.root = root
         if let bogus = config.rules.keys.first(where: { RuleID(rawValue: $0) == nil }) {
             throw .configurationInvalid(path: path, detail: "unknown rule id \"\(bogus)\"")
         }
