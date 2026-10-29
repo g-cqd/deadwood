@@ -1,10 +1,5 @@
 public import AemiJSON
-
-#if canImport(FoundationEssentials)
-    import FoundationEssentials
-#else
-    import Foundation
-#endif
+import Suppression
 
 /// One parsed `@dw:` / `@deadwood:` directive comment.
 ///
@@ -59,41 +54,40 @@ public struct SuppressionDirective: Sendable, Equatable, Codable {
     /// belong to a future version) — but if a rule-scoped verb names *only*
     /// unknown rules, the directive suppresses nothing rather than everything.
     public static func parse(comment: String, line: Int) -> SuppressionDirective? {
-        var text = comment
-        if text.hasPrefix("//") { text.removeFirst(2) }
-        if text.hasPrefix("/*") { text.removeFirst(2) }
-        if text.hasSuffix("*/") { text.removeLast(2) }
-        text = text.trimmedHorizontalWhitespace
-
-        guard text.hasPrefix("@") else { return nil }
-        text.removeFirst()
-        guard let namespace = namespaces.first(where: text.hasPrefix) else { return nil }
-        text.removeFirst(namespace.count)
-
-        var reason: String?
-        if let range = text.firstRange(of: "--") {
-            reason = String(text[range.upperBound...]).trimmedHorizontalWhitespace
-            text = String(text[..<range.lowerBound])
+        guard let directive = grammar.parse(comment: comment, line: line, rule: RuleID.init(rawValue:)) else {
+            return nil
         }
-        let parts = text.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
-        guard let verb = parts.first else { return nil }
-        let ruleWords = parts.dropFirst().flatMap { $0.split(separator: ",").map(String.init) }
+        return Self(
+            rules: Set(directive.rules), kind: Kind(shared: directive.kind), line: directive.line,
+            reason: directive.reason)
+    }
 
-        let kind: Kind
-        switch verb {
-        case "accept": kind = .accept
-        case "accept:this": kind = .acceptThis
-        case "accept:next": kind = .acceptNext
-        case "disable": kind = .regionDisable
-        case "enable": kind = .regionEnable
-        default: return nil
-        }
+    // Keep wire/cache models local while the shared component owns parsing and line coverage.
+    static let grammar = DirectiveGrammar(namespaces: namespaces, trimming: .horizontal)
 
-        if ruleWords.contains("all") || ruleWords.isEmpty {
-            return SuppressionDirective(rules: [], kind: kind, line: line, reason: reason)
+    var shared: Suppression.Directive<RuleID> {
+        Suppression.Directive(rules: Array(rules), kind: kind.shared, line: line, reason: reason)
+    }
+}
+
+extension SuppressionDirective.Kind {
+    fileprivate init(shared: DirectiveKind) {
+        switch shared {
+        case .accept: self = .accept
+        case .acceptThis: self = .acceptThis
+        case .acceptNext: self = .acceptNext
+        case .regionDisable: self = .regionDisable
+        case .regionEnable: self = .regionEnable
         }
-        let rules = Set(ruleWords.compactMap(RuleID.init(rawValue:)))
-        guard !rules.isEmpty else { return nil }
-        return SuppressionDirective(rules: rules, kind: kind, line: line, reason: reason)
+    }
+
+    fileprivate var shared: DirectiveKind {
+        switch self {
+        case .accept: .accept
+        case .acceptThis: .acceptThis
+        case .acceptNext: .acceptNext
+        case .regionDisable: .regionDisable
+        case .regionEnable: .regionEnable
+        }
     }
 }
