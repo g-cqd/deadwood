@@ -21,8 +21,10 @@ import Testing
             paths.append(url.path)
         }
         let report = await Analyzer().analyze(files: paths)
-        let names = report.findings.map(\.message)
-        #expect(names.contains { $0.contains("neverCalled") }, "the ordinary file is still analysed: \(names)")
+        // An unreferenced type is reported whole, members folded in: Plain.swift and Deep.swift were both analysed.
+        let messages = report.findings.map(\.message)
+        #expect(messages.contains { $0.contains("struct 'Plain'") }, "\(messages)")
+        #expect(messages.contains { $0.contains("function 'f()'") }, "\(messages)")
         let degraded = report.degradedFiles.map { ($0.path as NSString).lastPathComponent }
         #expect(degraded == ["Deeper.swift"])
         #expect(report.degradedFiles.first.map { $0.skipped && $0.detail.contains("nested") } == true)

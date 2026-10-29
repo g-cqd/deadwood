@@ -105,12 +105,17 @@ public struct Analyzer: Sendable {
             guard let source = String(validating: data, as: UTF8.self) else {
                 return .skipped(.init(path: path, detail: "not valid UTF-8"))
             }
-            let artifacts = Self.collectArtifacts(
-                path: path,
-                source: source,
-                deadBranchesEnabled: deadBranchesEnabled,
-                deadStoresEnabled: deadStoresEnabled
-            )
+            // Parsing and every walk of the tree recurse once per level: a cache miss runs on a large stack, and a
+            // tree nested past the limit is skipped, not walked (analyzerkit roadmap 0041).
+            let artifacts = await LargeStack.run {
+                Self.collectArtifacts(
+                    path: path,
+                    source: source,
+                    deadBranchesEnabled: deadBranchesEnabled,
+                    deadStoresEnabled: deadStoresEnabled
+                )
+            }
+            guard let artifacts else { return .skipped(Self.tooDeep(path)) }
             return .analyzed(artifacts, fingerprint: fingerprint, cacheHit: false)
         }
 
@@ -618,12 +623,21 @@ public struct Analyzer: Sendable {
     // MARK: - Single-file analysis
 
     public func analyze(source: String, path: String) -> AnalysisReport {
-        let artifacts = Self.collectArtifacts(
-            path: path,
-            source: source,
-            deadBranchesEnabled: configuration.isEnabled(.deadBranch),
-            deadStoresEnabled: configuration.isEnabled(.deadStore)
-        )
+        // Runs on the caller's stack: the depth guard bounds the walk, but a caller analysing generated code nested
+        // close to the limit should prefer `analyze(files:)`, which walks on a large stack.
+        guard
+            let artifacts = Self.collectArtifacts(
+                path: path,
+                source: source,
+                deadBranchesEnabled: configuration.isEnabled(.deadBranch),
+                deadStoresEnabled: configuration.isEnabled(.deadStore)
+            )
+        else {
+            var report = AnalysisReport()
+            report.analyzedFileCount = 1
+            report.degradedFiles = [Self.tooDeep(path)]
+            return report
+        }
         let result = StaticAnalyzer.aggregate([artifacts.facts], files: [path])
         let context = CorpusContext(result: result)
 
@@ -720,15 +734,23 @@ public struct Analyzer: Sendable {
         }
     }
 
+    /// The skipped-file entry for a tree nested past ``SyntaxDepth/defaultLimit``.
+    private static func tooDeep(_ path: String) -> AnalysisReport.DegradedFile {
+        .init(path: path, detail: "nested deeper than \(SyntaxDepth.defaultLimit) levels; not analysed")
+    }
+
+    /// The file's artifacts, or nil when its tree nests past ``SyntaxDepth/defaultLimit``: every walk below
+    /// recurses once per level. Depth is measured after folding, which turns a flat `a + b + …` into a nested tree.
     private static func collectArtifacts(
         path: String,
         source: String,
         deadBranchesEnabled: Bool,
         deadStoresEnabled: Bool
-    ) -> FileArtifacts {
+    ) -> FileArtifacts? {
         // One SourceLocationConverter per file: the directive scanner, both
         // fact collectors, and the CFG builder all share this line table.
         let tree = foldedTree(Parser.parse(source: source))
+        if SyntaxDepth.exceeds(tree) { return nil }
         let converter = SourceLocationConverter(fileName: path, tree: tree)
         let directives = DirectiveScanner.scan(tree: tree, converter: converter)
         let facts = StaticAnalyzer().collectFacts(tree: tree, file: path, converter: converter)
