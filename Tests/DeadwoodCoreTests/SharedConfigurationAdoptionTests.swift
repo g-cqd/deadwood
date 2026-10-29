@@ -81,11 +81,10 @@ import Testing
     }
 
     @Test func `exclude from the shared top level, the tool's section and the tool's file add up`() throws {
-        let shared =
-            #"{"exclude": ["Sources/One/"], "deadwood": {"exclude": ["/Sources/Two/*.swift"]}, "deadwood": {}}"#
+        let shared = #"{"exclude": ["Sources/One/"], "deadwood": {"exclude": ["/Sources/Two/*.swift"]}, "arcleak": {}}"#
         let run = try Self.run([".swift-analyzers.json": shared, Self.ownFile: #"{"exclude": ["Three"]}"#])
         #expect(run.status == 0)
-        #expect(run.reported == 1, "Main and Four remain")
+        #expect(run.reported == 1, "Main and Four remain; got \(String(describing: run.reported))")
     }
 
     @Test func `run from a subdirectory, the project root's configuration is read`() throws {
