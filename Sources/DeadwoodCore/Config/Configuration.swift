@@ -1,4 +1,5 @@
 public import ProjectModel
+public import SourceCorpus
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials
@@ -24,8 +25,13 @@ public struct Configuration: Sendable, Codable, Equatable {
     /// Keyed by `RuleID` raw value. Unknown keys are rejected at load time so
     /// a typo can't silently disable nothing.
     public var rules: [String: RuleSettings]
-    /// Path substrings to exclude (matched against the file path).
+    /// Paths whose findings are not reported (ADR-0008, shared by every tool): an entry without `*`, `?` or `[` is a
+    /// substring of the path; one with them is a glob relative to ``root``, `/` anchoring it there
+    /// (`SourceCorpus.PathFilter`). Excluded files are still read: their references keep other code alive.
     public var exclude: [String]
+    /// The directory `exclude` globs are relative to: the configuration file's, set by ``load(path:)``. Not part of
+    /// the file, nor of the cache key.
+    public var root: String?
     /// Production mode: corpus reachability runs twice (with and without
     /// test roots); declarations only tests can reach get the
     /// `referenced-only-by-tests` rule. Absent means off.
@@ -43,6 +49,10 @@ public struct Configuration: Sendable, Codable, Equatable {
     /// Regions to keep out of scope even if `includeRegions` (or `all`)
     /// names them; wins where the two disagree about the same region.
     public var excludeRegions: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case rules, exclude, production, testsGlob, includeRegions, excludeRegions
+    }
 
     /// Decodes a partial configuration.
     ///
@@ -92,9 +102,10 @@ public struct Configuration: Sendable, Codable, Equatable {
 
     public static func load(path: String) throws(DeadwoodError) -> Configuration {
         let data = try BoundedFileReader.read(path: path)
-        let config: Configuration
+        var config: Configuration
         do {
             config = try JSONDecoder().decode(Configuration.self, from: data)
+            config.root = URL(fileURLWithPath: path).deletingLastPathComponent().path
         } catch {
             throw .configurationInvalid(path: path, detail: String(describing: error))
         }
@@ -117,16 +128,11 @@ public struct Configuration: Sendable, Codable, Equatable {
         rules[rule.rawValue]?.severity ?? rule.defaultSeverity
     }
 
-    /// Whether the path is excluded from analysis. Entries containing glob
-    /// wildcards (`*`, `?`) match with anchored glob semantics through
-    /// `GlobMatcher`; plain entries keep their substring semantics.
+    /// `exclude` as one filter; build it once for many paths.
+    public var pathFilter: PathFilter { PathFilter(exclude, root: root) }
+
+    /// Whether `exclude` keeps findings in `path` out of the report.
     public func isExcluded(path: String) -> Bool {
-        exclude.contains { entry in
-            guard !entry.isEmpty else { return false }
-            if entry.contains("*") || entry.contains("?") {
-                return GlobMatcher.matchesWithFastPaths(path: path, pattern: entry)
-            }
-            return path.contains(entry)
-        }
+        pathFilter.excludes(path)
     }
 }
