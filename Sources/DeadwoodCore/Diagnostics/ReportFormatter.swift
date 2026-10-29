@@ -40,6 +40,7 @@ public enum ReportFormatter {
         line += "(\(errors) error(s), \(warnings) warning(s)"
         line += notes > 0 ? ", \(notes) note(s))" : ")"
         line += " in \(report.analyzedFileCount) file(s)"
+        line += ReportSummary.notChecked(Set(report.degradedFiles.map(\.path)).count)
         if !report.suppressed.isEmpty {
             line += "; \(report.suppressed.count) suppressed"
         }
@@ -71,21 +72,28 @@ public enum ReportFormatter {
         (file.skipped ? "file skipped: " : "analysis degraded: ") + file.detail
     }
 
-    /// The JSON report: the analysis report's fields plus the shared contract version.
-    private struct VersionedReport: Encodable {
-        let report: AnalysisReport
-        private enum CodingKeys: String, CodingKey { case schemaVersion }
-        func encode(to encoder: any Encoder) throws {
-            try report.encode(to: encoder)
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(ReportSchema.version, forKey: .schemaVersion)
+    /// The JSON report: the analysis report's fields and the keys every analyzer's report carries (ADR-0017).
+    private static func envelope(_ report: AnalysisReport) -> ReportEnvelope<AnalysisReport> {
+        var seen: Set<String> = []
+        let skipped = report.degradedFiles.compactMap { file in
+            seen.insert(file.path).inserted ? SkippedFile(path: file.path, reason: .degraded) : nil
         }
+        return ReportEnvelope(
+            report, tool: ToolInfo.name, version: ToolInfo.version, runNotes: report.notes.map(runNote),
+            skippedFiles: skipped)
+    }
+
+    /// A free-text note as a run note: deadwood's `notes` stay as they are, and are listed here too (ADR-0017).
+    private static func runNote(_ note: String) -> RunNote {
+        RunNote(
+            code: "general", severity: note.hasPrefix("\(ToolInfo.name): warning: ") ? "warning" : "note", message: note
+        )
     }
 
     private static func json(_ report: AnalysisReport) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(VersionedReport(report: report)),
+        guard let data = try? encoder.encode(envelope(report)),
             let text = String(data: data, encoding: .utf8)
         else {
             return "{}"

@@ -49,7 +49,7 @@ let package = Package(
         // and test frameworks create, code regions, generated files.
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "27b767f421ee8d40e1080a808c3aedfabc8ee9f7"
+            revision: "1c7b8e2f21cd6d7267407b7812e88aaead77eee1"
         ),
     ],
     targets: [
