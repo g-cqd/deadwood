@@ -53,15 +53,17 @@ public enum ReportFormatter {
     private static func xcode(_ report: AnalysisReport) -> String {
         var lines: [String] = []
         for finding in report.findings {
-            var text = "\(finding.path):\(finding.line):\(finding.column): "
-            text += "\(finding.severity.rawValue): [\(finding.rule.rawValue)] \(finding.message)"
-            if let note = finding.note {
-                text += " — \(note)"
-            }
-            lines.append(text)
+            lines.append(
+                XcodeDiagnostic.line(
+                    path: finding.path, line: finding.line, column: finding.column, severity: finding.severity.rawValue,
+                    rule: finding.rule.rawValue,
+                    message: finding.note.map { "\(finding.message) — \($0)" } ?? finding.message))
         }
         for degraded in report.degradedFiles {
-            lines.append("\(degraded.path):1:1: warning: [deadwood] \(degradedText(degraded))")
+            lines.append(
+                XcodeDiagnostic.line(
+                    path: degraded.path, line: 1, column: 1, severity: "warning", rule: "deadwood",
+                    message: degradedText(degraded)))
         }
         return lines.joined(separator: "\n")
     }
