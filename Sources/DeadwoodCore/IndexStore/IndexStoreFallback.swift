@@ -56,6 +56,8 @@
         case buildFailed(error: String)
         /// The `libIndexStore.dylib` needed to read an index was not found.
         case dylibNotFound
+        /// The given path holds no index records (a DerivedData or `Index.noindex` directory, a wrong path).
+        case notAnIndexStore(path: String)
 
         var description: String {
             switch self {
@@ -72,6 +74,10 @@
                 "warning: index auto-build failed (\(error)); falling back to name-based reachability, which can "
                     + "conflate same-named declarations across modules. Fix the build errors and run again, or pass "
                     + "--index-store-path to an existing index store."
+            case .notAnIndexStore(let path):
+                "warning: \(path) is not an index store (no records in it, or in a vN directory below it); falling "
+                    + "back to name-based reachability, which can conflate same-named declarations across modules. "
+                    + "Pass the store directory itself, e.g. <DerivedData>/Index.noindex/DataStore."
             case .dylibNotFound:
                 "warning: libIndexStore.dylib not found on a trusted path; falling back to name-based reachability, "
                     + "which can conflate same-named declarations across modules. Install Xcode or a Swift toolchain "
@@ -197,6 +203,11 @@
             guard indexStoreDirectoryExists(atPath: path) else {
                 return .fallback(reason: .noIndexStore)
             }
+            // Opening a directory without index records makes libIndexStore create `v5/` in it and the reader an
+            // `IndexDatabase/` beside it; refuse it before anything opens it (analyzerkit roadmap 0035, probe D1).
+            guard Self.holdsIndexRecords(atPath: path) else {
+                return .fallback(reason: .notAnIndexStore(path: path))
+            }
             do {
                 let reader = try IndexStoreReader(
                     indexStorePath: path,
@@ -211,6 +222,19 @@
                 return .fallback(reason: .dylibNotFound)
             } catch {
                 return .fallback(reason: .indexStoreFailed(error: "\(error)"))
+            }
+        }
+
+        /// Whether `path` holds index records, directly or in a `vN` directory below it.
+        static func holdsIndexRecords(atPath path: String) -> Bool {
+            let manager = FileManager.default
+            func hasRecords(_ directory: String) -> Bool {
+                !((try? manager.contentsOfDirectory(atPath: directory + "/records")) ?? []).isEmpty
+            }
+            if hasRecords(path) { return true }
+            let entries = (try? manager.contentsOfDirectory(atPath: path)) ?? []
+            return entries.contains { entry in
+                entry.hasPrefix("v") && entry.dropFirst().allSatisfy(\.isNumber) && hasRecords(path + "/" + entry)
             }
         }
 
