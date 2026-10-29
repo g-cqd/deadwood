@@ -404,7 +404,7 @@ Outside the freeze: `--experimental-embedding-confidence`, `--embedding-bundle` 
 | `--relative-to <dir>` | print paths relative to `<dir>`; it also anchors fingerprints. See [Baselines and fingerprints](#baselines-and-fingerprints) |
 | `--baseline <file>`, `--write-baseline <file>` | drop the findings a baseline holds; write the current findings as a baseline, then exit `0` |
 | `--report-new-since <file>` | report findings outside `--only` that a base-branch baseline does not hold. See [Newly dead code outside the changed files](#newly-dead-code-outside-the-changed-files) |
-| `--config <file>` | configuration file; default `./.deadwood.json` when present |
+| `--config <file>` | configuration file; default: see [Configuration files](#configuration-files) |
 | `--cache-path <file>`, `--no-cache` | facts-cache file; disable the cache. See [Facts cache and parallel jobs](#facts-cache-and-parallel-jobs) |
 | `--strict` | warnings fail the gate too; notes never do |
 | `--production` | report declarations that only tests reach as `referenced-only-by-tests` instead of dead. See [Production mode](#production-mode) |
@@ -413,15 +413,20 @@ Outside the freeze: `--experimental-embedding-confidence`, `--embedding-bundle` 
 | `--index-store`, `--index-store-path <path>`, `--index-store-build` | USR-precise cross-module reachability from the compiler's index store (macOS). `--index-store-path` names the store, and `--index-store-build` runs `swift build` when none is found; each implies `--index-store` |
 | `--verbose` | Explain index-store toolchain selection and rejected candidates on stderr when index mode is requested |
 
+### Configuration files
+
+Configuration is read from one directory: the current one if it holds `.swift-analyzers.json` or `.deadwood.json`, else the nearest directory holding one, up to the repository root. `.swift-analyzers.json` is shared by arcleak, deadwood, dolly and fcheck: its top level holds `exclude`, `includeRegions`, `excludeRegions`, `defines` and `platforms`, and a `"deadwood"` section holds deadwood's own keys. The shared top level, the section and `.deadwood.json` apply in that order: `exclude` lists add up, objects merge key by key, other values replace. An unknown key, or a key given twice, exits `78` and names the file and the key. `--config FILE` reads that one file instead, in the shared format when it is named `.swift-analyzers.json`.
+
 ### Exit status
 
-The exit codes below do not change incompatibly within 1.x; [Exit codes](#exit-codes) summarizes them. deadwood does not use `74`.
+The exit codes below do not change incompatibly within 1.x; [Exit codes](#exit-codes) summarizes them.
 
 - **`0`**: the gate passed. Without `--strict`, no finding has `error` severity; with it, no finding is a `warning` or an `error`. Notes never fail a run. `--write-baseline` exits `0` whatever the findings.
 - **`1`**: findings only. Without `--strict`, it means a finding has `error` severity; with `--strict`, any finding that is a `warning` or an `error`. A rule's severity is `warning` by default (`note` for `preview-only` and `debug-only`), and the configuration can set it per rule. Only findings in the report count: one removed by `--baseline` or `--minimum-confidence`, one out of scope, and one suppressed do not. A finding promoted by `--report-new-since` does.
 - **`64`**: usage. An argument that does not parse (an unknown flag or an invalid value); `--write-baseline` with `--only` or `--only-from`; `--report-new-since` without `--only` or `--only-from`; `--only-from -` together with `-` as an input; an input path that does not exist; an input with no Swift files; an `--only-from` file that is unreadable, not a regular file, or over 4 MiB; an unknown region name on the command line.
 - **`70`**: nothing was analyzed. A cancelled run prints nothing on stdout. When every file was skipped (unreadable, not UTF-8, or over 10 MiB), the report is still printed in the requested format and the run exits `70`. A report on stdout means nothing could be analyzed; empty stdout means the run itself failed.
-- **`78`**: a configuration or baseline is unusable. The configuration file (`--config`, or `./.deadwood.json`) is unreadable, over 1 MiB, malformed, names an unknown rule, or names an unknown region. A `--baseline` or `--report-new-since` file is missing, not a regular file, over 1 MiB, malformed, or has a `version` other than `1`; the `--report-new-since` baseline is read before the analysis starts. A `--write-baseline` file that cannot be written also exits `78`.
+- **`74`**: a `--write-baseline` file cannot be written.
+- **`78`**: a configuration or baseline is unusable. A configuration file is unreadable, over 1 MiB, malformed, has an unknown or repeated key, names an unknown rule, or names an unknown region. A `--baseline` or `--report-new-since` file is missing, not a regular file, over 1 MiB, malformed, or has a `version` other than `1`; the `--report-new-since` baseline is read before the analysis starts.
 
 ### Report scope
 
@@ -657,9 +662,10 @@ reporting nothing.
 |---|---|
 | `0` | the gate passed: no error-severity finding, so warnings and notes alone pass; with `--strict`, no warning or error. Also after `--write-baseline` |
 | `1` | the gate failed on findings: an error-severity finding, or with `--strict` any warning or error — and nothing else |
-| `64` | usage error: a bad argument, a path that does not exist, an unreadable `--only-from` file |
+| `64` | usage error: a bad argument, a path that does not exist, no Swift file under the paths, an unreadable `--only-from` file |
 | `70` | nothing was analyzed: every file was skipped, and the report on stdout says which and why; or the run failed or was cancelled, and stdout is empty |
-| `78` | invalid configuration, or a missing or malformed baseline |
+| `74` | a `--write-baseline` file could not be written |
+| `78` | invalid configuration (including an unknown or repeated key), or a missing or malformed baseline |
 
 `1` means findings *only*, so a step that posts a review comment on `1` will
 not fire on a typo in the config file. Every rule defaults to warning, except
