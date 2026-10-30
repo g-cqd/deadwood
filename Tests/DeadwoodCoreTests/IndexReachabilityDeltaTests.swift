@@ -13,6 +13,7 @@
 
 #if canImport(IndexStoreDB)
     import Foundation
+    import IndexStoreSupport
     import Testing
 
     @testable import DeadwoodCore
@@ -49,6 +50,17 @@
 
         /// Whether an index can be built and read in this environment.
         static var isAvailable: Bool { dylib != nil && swiftPath != nil }
+
+        /// A reader on `store`, its database in a fresh cache root, or nil when the store covers none of `files`.
+        static func reader(store: String, files: [String]) -> IndexStoreReader? {
+            guard let dylib else { return nil }
+            let cache = FileManager.default.temporaryDirectory.appending(path: "dw-idx-cache-\(UUID().uuidString)")
+            guard
+                case .usable(let session) = IndexStoreSession.open(
+                    store, cacheRoot: cache.path, library: dylib, analyzedFiles: files)
+            else { return nil }
+            return IndexStoreReader(session: session)
+        }
     }
 
     // MARK: - Fixture builder
@@ -116,14 +128,12 @@
         /// readable. Returns the discovered store path on success.
         func buildIndex(swiftPath: String) async -> String? {
             do {
-                let result = try await ProcessExecutor.run(
-                    executable: URL(fileURLWithPath: swiftPath),
-                    arguments: ["build"],
-                    currentDirectory: root,
-                    timeout: .seconds(300)
-                )
+                let result = try await BoundedProcess.run(
+                    swiftPath, ["build"], directory: root.path,
+                    environment: BoundedProcess.scrubbedEnvironment(source: ProcessInfo.processInfo.environment),
+                    timeout: .seconds(300))
                 guard result.succeeded else { return nil }
-                return IndexStorePathFinder.findIndexStorePath(in: root.path)
+                return IndexStoreFallbackManager().discover(projectRoot: root.path)
             } catch {
                 return nil
             }
@@ -164,9 +174,7 @@
             // asserting on it (guards cross-toolchain read issues).
             let canonicalShapes = IndexBasedDependencyGraph.canonicalPath(fixture.shapesFile)
             guard
-                let reader = try? IndexStoreReader(
-                    indexStorePath: storePath, libIndexStorePath: IndexTestToolchain.dylib,
-                    allowsDirectoryCreation: true),
+                let reader = IndexTestToolchain.reader(store: storePath, files: fixture.sourceFiles),
                 !reader.rawOccurrences(inFile: canonicalShapes).isEmpty
             else {
                 print("IndexReachabilityDeltaTests: index opened empty (toolchain mismatch); skipping")
@@ -196,9 +204,10 @@
             #expect(index.findings.count == syntax.findings.count + 1)
 
             // Robustness: pointing the (real) fixture index at an UNRELATED
-            // file resolves zero declarations, so the analyzer must fall back
+            // file, which it never indexed, the analyzer must fall back
             // to syntax and still flag that file's dead code — never silently
-            // mask it behind a mismatched store. Reuses the built index.
+            // mask it behind a mismatched store. analyzerkit's session refuses
+            // such a store before any lookup. Reuses the built index.
             let strayDir = FileManager.default.temporaryDirectory
                 .appending(path: "dw-idx-stray-\(UUID().uuidString)")
             try FileManager.default.createDirectory(at: strayDir, withIntermediateDirectories: true)
@@ -211,7 +220,7 @@
                 files: [stray.path],
                 indexStore: IndexStoreOptions(enabled: true, explicitPath: storePath)
             )
-            #expect(mismatched.notes.contains { $0.contains("does not cover") })
+            #expect(mismatched.notes.contains { $0.contains("indexes none of the 1 analyzed file(s)") })
             #expect(mismatched.findings.contains { $0.message.contains("strayDead") })
         }
     }
@@ -302,14 +311,12 @@
 
         func buildIndex(swiftPath: String) async -> String? {
             do {
-                let result = try await ProcessExecutor.run(
-                    executable: URL(fileURLWithPath: swiftPath),
-                    arguments: ["build", "--build-tests"],
-                    currentDirectory: root,
-                    timeout: .seconds(300)
-                )
+                let result = try await BoundedProcess.run(
+                    swiftPath, ["build", "--build-tests"], directory: root.path,
+                    environment: BoundedProcess.scrubbedEnvironment(source: ProcessInfo.processInfo.environment),
+                    timeout: .seconds(300))
                 guard result.succeeded else { return nil }
-                return IndexStorePathFinder.findIndexStorePath(in: root.path)
+                return IndexStoreFallbackManager().discover(projectRoot: root.path)
             } catch {
                 return nil
             }
@@ -335,9 +342,7 @@
             }
             let canonicalSource = IndexBasedDependencyGraph.canonicalPath(fixture.sourceFile)
             guard
-                let reader = try? IndexStoreReader(
-                    indexStorePath: storePath, libIndexStorePath: IndexTestToolchain.dylib,
-                    allowsDirectoryCreation: true),
+                let reader = IndexTestToolchain.reader(store: storePath, files: fixture.sourceFiles),
                 !reader.rawOccurrences(inFile: canonicalSource).isEmpty
             else {
                 print("IndexFalsePositiveTests: index opened empty (toolchain mismatch); skipping")

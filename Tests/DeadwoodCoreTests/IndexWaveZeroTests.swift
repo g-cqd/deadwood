@@ -1,5 +1,6 @@
 #if canImport(IndexStoreDB)
     import Foundation
+    import IndexStoreSupport
     import Testing
 
     @testable import DeadwoodCore
@@ -45,7 +46,9 @@
             let given = directory.appending(path: "DerivedData")
             try FileManager.default.createDirectory(at: given, withIntermediateDirectories: true)
             let outcome = await IndexStoreFallbackManager(configuration: FallbackConfiguration(autoBuild: false))
-                .resolveIndexStore(projectRoot: directory.path, sourceFiles: [], explicitPath: given.path)
+                .resolveIndexStore(
+                    projectRoot: directory.path, sourceFiles: [], explicitPath: given.path,
+                    cacheRoot: directory.appending(path: "cache").path)
             guard case .fallback(let reason) = outcome else {
                 Issue.record("opened \(given.path) as an index store")
                 return
@@ -53,7 +56,9 @@
             #expect(reason.description.contains("not an index store"), "\(reason.description)")
             let created =
                 try FileManager.default.contentsOfDirectory(atPath: given.path)
-                + FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0 != "DerivedData" }
+                + FileManager.default.contentsOfDirectory(atPath: directory.path).filter {
+                    $0 != "DerivedData" && $0 != "cache"
+                }
             #expect(created.isEmpty, "created \(created)")
         }
     }

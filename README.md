@@ -216,41 +216,46 @@ Neither changes the exit code.
   with the findings' normal code. The reasons are:
   - **Not macOS.** `--index-store` is macOS-only: `IndexStoreDB` is not linked on
     other platforms.
-  - **No index store found.** Discovery looks in the project's
-    `.build/debug/index/store`, `.build/release/index/store`, `.build/index/store`
-    and `.build/out`, then in Xcode DerivedData matched by `info.plist`'s
+  - **No index store found.** Discovery (analyzerkit's `IndexStoreLocation`) looks in
+    the project's `.build`: the background index, each configuration (`debug`,
+    `release`, and each under its target triple), `.build/index/store` and `.build/out`;
+    then in Xcode DerivedData matched by `info.plist`'s
     `WorkspacePath` to a project or workspace in this checkout, newest first.
     Separate worktrees do not borrow each other's stores.
     An `--index-store-path` that is missing or is not a directory gives the same
-    warning.
-  - **The index store fails to open.** Examples: the sibling `IndexDatabase`
-    directory cannot be created, `IndexStoreDB` rejects the store, or
-    `libIndexStore.dylib` cannot be found while discovering an index.
-  - **`libIndexStore.dylib` is missing.** Reported by name when you pass
-    `--index-store-path`; otherwise it appears as a failure to open.
+    warning. One that is a directory but no store, nor a `vN`, `Index.noindex`,
+    DerivedData build root or SwiftPM build directory above one, is refused as not
+    an index store, and nothing is created in it.
+  - **The index store fails to open.** Examples: the database directory under the
+    cache root cannot be created, or `IndexStoreDB` rejects the store.
+  - **`libIndexStore.dylib` is missing** or not trusted.
   - **The auto-build fails.** `--index-store-build` runs `swift build`, which needs a
     `Package.swift` at the project root and times out after 600 seconds.
-  - **The index does not cover the analyzed files.** It opened, but resolved none of
-    the analyzed declarations (the wrong project, or files that were never built).
-  - **The index cannot be read.** It opened, but reading it failed.
+  - **The index does not cover the analyzed files.** It indexes none of them as they
+    are now (the wrong project, files never built, or all changed since), or it
+    resolved none of the analyzed declarations.
 
   A stale index is not a fallback: files edited after the last build, or never
   indexed, are skipped, a note says how many, and `swift build` (or
   `xcodebuild build`) refreshes them.
+
+  Stores are opened through analyzerkit's `IndexStoreSession`: the IndexStoreDB
+  database lives under the cache root (`<root>/index/<hash>`; `--cache-path` moves
+  it, `--no-cache` does not apply to it), never beside the store.
 
 ### Swift packages
 
 ```sh
 swift build                                  # generate the index first
 deadwood analyze --index-store Sources       # USR-precise reachability
-deadwood analyze --index-store-path .build/out Sources   # explicit store
+deadwood analyze --index-store-path .build/debug Sources # explicit store, or a build directory above it
 deadwood analyze --index-store-build Sources # run `swift build` if none found
 deadwood analyze --index-store --verbose Sources # explain dylib selection on stderr
 ```
 
-For a package, deadwood discovers the index under the project's
-`.build/debug/index/store`, the new SwiftPM build system's `.build/out`
-(versioned `vN/records`), or Xcode DerivedData. `--index-store-build` runs
+For a package, deadwood discovers the index under the project's `.build`
+(each configuration, under its target triple too, and the new SwiftPM build
+system's `.build/out`), or Xcode DerivedData. `--index-store-build` runs
 `swift build` when none is found.
 
 Toolchain discovery is shared with arcleak: `DEVELOPER_DIR`, then

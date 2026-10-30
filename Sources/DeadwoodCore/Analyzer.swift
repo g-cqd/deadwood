@@ -359,14 +359,18 @@ public struct Analyzer: Sendable {
         ) async -> (unused: [UnusedCode], notes: [String]) {
             let cwd = FileManager.default.currentDirectoryPath
             let projectRoot = IndexProjectLocator.projectRoot(for: files, fallback: cwd)
-            let fallbackConfig = FallbackConfiguration(autoBuild: indexStore.autoBuild)
-            // Resolved once, asynchronously: the readers below open the store synchronously.
-            let library = await IndexStoreReader.findLibIndexStore()
-            let manager = IndexStoreFallbackManager(configuration: fallbackConfig, libIndexStorePath: library)
+            let manager = IndexStoreFallbackManager(
+                configuration: FallbackConfiguration(autoBuild: indexStore.autoBuild))
+            let environment = ProcessInfo.processInfo.environment
+            let cacheRoot =
+                indexStore.cacheRoot
+                ?? CacheLocation.defaultRoot(
+                    tool: ToolInfo.name, environment: environment, home: environment["HOME"] ?? "/tmp")
             let outcome = await manager.resolveIndexStore(
                 projectRoot: projectRoot,
                 sourceFiles: files,
-                explicitPath: indexStore.explicitPath
+                explicitPath: indexStore.explicitPath,
+                cacheRoot: cacheRoot
             )
 
             switch outcome {
@@ -374,7 +378,8 @@ public struct Analyzer: Sendable {
                 let syntax = await detector.detectUnused(in: result, context: context)
                 return (syntax, ["\(ToolInfo.name): \(reason.description)"])
 
-            case .index(let path, let stale):
+            case .index(let reader, let stale):
+                let path = reader.indexStorePath
                 let declarations = result.declarations.declarations
                 let productionMode = engineConfig.productionMode
                 let testScoped =
@@ -383,103 +388,88 @@ public struct Analyzer: Sendable {
                         .classify(declarations: declarations, context: context)
                     : []
 
-                do {
-                    let reach = try IndexReachabilityBridge().computeReachability(
-                        result: result,
-                        context: context,
-                        configuration: engineConfig,
-                        rootConfiguration: engineConfig.rootDetection,
-                        productionMode: productionMode,
-                        testScoped: testScoped,
-                        indexStorePath: path,
-                        libIndexStorePath: library,
-                        analysisFiles: files,
-                        allowsDirectoryCreation: fallbackConfig.allowsIndexDatabaseCreation
-                    )
+                let reach = IndexReachabilityBridge().computeReachability(
+                    result: result,
+                    context: context,
+                    configuration: engineConfig,
+                    rootConfiguration: engineConfig.rootDetection,
+                    productionMode: productionMode,
+                    testScoped: testScoped,
+                    reader: reader,
+                    analysisFiles: files
+                )
 
-                    // A discovered index that resolves NONE of the analyzed
-                    // declarations does not cover this corpus (wrong project
-                    // root, unbuilt files). Using it would mark everything
-                    // reachable and silently hide real dead code — fall back.
-                    guard reach.resolvedCount > 0 || declarations.isEmpty else {
-                        let syntax = await detector.detectUnused(in: result, context: context)
-                        return (
-                            syntax,
-                            [
-                                "\(ToolInfo.name): warning: index at \(path) does not cover the analyzed "
-                                    + "files (0 declarations resolved); falling back to name-based reachability, "
-                                    + "which can conflate same-named declarations across modules. Pass the index "
-                                    + "store built from this project (for an Xcode project, its DerivedData "
-                                    + "Index.noindex/DataStore) after building or testing it."
-                            ]
-                        )
-                    }
-
-                    let extractionConfig = DependencyExtractionConfiguration(
-                        rootDetection: engineConfig.rootDetection, treatProtocolRequirementsAsRoot: true)
-                    let tail = ReachabilityBasedDetector(
-                        configuration: engineConfig, extractionConfiguration: extractionConfig)
-                    var unused = reach.deadGroupResults
-                    if productionMode, let reachableInProduction = reach.reachableInProduction {
-                        unused.append(
-                            contentsOf: tail.onlyTestedResults(
-                                declarations: declarations,
-                                reachableWithTests: reach.reachableWithTests,
-                                reachableInProduction: reachableInProduction,
-                                testScoped: testScoped,
-                                context: context
-                            ))
-                    }
-
-                    // Region notes are an independent pass over the syntax
-                    // name-graph (`DependencyExtractor.regionOnlyResults`
-                    // needs no reachability set of its own), so the index
-                    // oracle gets them exactly as the syntax oracle does,
-                    // with no index-specific region graph to build.
-                    if (engineConfig.detectPreviewOnly || engineConfig.detectDebugOnly),
-                        context.hasCodeRegions
-                    {
-                        let (_, leveledEdges) = await DependencyExtractor(configuration: extractionConfig)
-                            .buildGraph(from: result, context: context, recordingRegionLevels: true)
-                        if let leveledEdges {
-                            unused.append(
-                                contentsOf: tail.regionOnlyResults(
-                                    edges: leveledEdges, declarations: declarations, context: context))
-                        }
-                    }
-
-                    // A file the index never saw, or saw before it last
-                    // changed, cannot support a verdict: the edges it would
-                    // draw are missing or describe code that no longer
-                    // exists. Drop findings anchored there rather than
-                    // report them from stale or absent data; the note below
-                    // already says which files and why.
-                    if !stale.isEmpty {
-                        let staleFiles = Set(stale.map { IndexBasedDependencyGraph.canonicalPath($0) })
-                        unused.removeAll {
-                            staleFiles.contains(IndexBasedDependencyGraph.canonicalPath($0.declaration.location.file))
-                        }
-                    }
-
-                    var notes = ["\(ToolInfo.name): --index-store active at \(path) — \(reach.summary)"]
-                    if !stale.isEmpty {
-                        notes.append(
-                            "\(ToolInfo.name): index is stale for \(stale.count) file(s); "
-                                + "skipping their declarations — re-run `swift build`")
-                    }
-                    return (unused, notes)
-                } catch {
+                // A discovered index that resolves NONE of the analyzed
+                // declarations does not cover this corpus (wrong project
+                // root, unbuilt files). Using it would mark everything
+                // reachable and silently hide real dead code — fall back.
+                guard reach.resolvedCount > 0 || declarations.isEmpty else {
                     let syntax = await detector.detectUnused(in: result, context: context)
                     return (
                         syntax,
                         [
-                            "\(ToolInfo.name): warning: index at \(path) could not be read (\(error)); "
-                                + "falling back to name-based reachability, which can conflate same-named "
-                                + "declarations across modules. Rebuild the project, or pass --index-store-path "
-                                + "to a readable index store."
+                            "\(ToolInfo.name): warning: index at \(path) does not cover the analyzed "
+                                + "files (0 declarations resolved); falling back to name-based reachability, "
+                                + "which can conflate same-named declarations across modules. Pass the index "
+                                + "store built from this project (for an Xcode project, its DerivedData "
+                                + "Index.noindex/DataStore) after building or testing it."
                         ]
                     )
                 }
+
+                let extractionConfig = DependencyExtractionConfiguration(
+                    rootDetection: engineConfig.rootDetection, treatProtocolRequirementsAsRoot: true)
+                let tail = ReachabilityBasedDetector(
+                    configuration: engineConfig, extractionConfiguration: extractionConfig)
+                var unused = reach.deadGroupResults
+                if productionMode, let reachableInProduction = reach.reachableInProduction {
+                    unused.append(
+                        contentsOf: tail.onlyTestedResults(
+                            declarations: declarations,
+                            reachableWithTests: reach.reachableWithTests,
+                            reachableInProduction: reachableInProduction,
+                            testScoped: testScoped,
+                            context: context
+                        ))
+                }
+
+                // Region notes are an independent pass over the syntax
+                // name-graph (`DependencyExtractor.regionOnlyResults`
+                // needs no reachability set of its own), so the index
+                // oracle gets them exactly as the syntax oracle does,
+                // with no index-specific region graph to build.
+                if (engineConfig.detectPreviewOnly || engineConfig.detectDebugOnly),
+                    context.hasCodeRegions
+                {
+                    let (_, leveledEdges) = await DependencyExtractor(configuration: extractionConfig)
+                        .buildGraph(from: result, context: context, recordingRegionLevels: true)
+                    if let leveledEdges {
+                        unused.append(
+                            contentsOf: tail.regionOnlyResults(
+                                edges: leveledEdges, declarations: declarations, context: context))
+                    }
+                }
+
+                // A file the index never saw, or saw before it last
+                // changed, cannot support a verdict: the edges it would
+                // draw are missing or describe code that no longer
+                // exists. Drop findings anchored there rather than
+                // report them from stale or absent data; the note below
+                // already says which files and why.
+                if !stale.isEmpty {
+                    let staleFiles = Set(stale.map { IndexBasedDependencyGraph.canonicalPath($0) })
+                    unused.removeAll {
+                        staleFiles.contains(IndexBasedDependencyGraph.canonicalPath($0.declaration.location.file))
+                    }
+                }
+
+                var notes = ["\(ToolInfo.name): --index-store active at \(path) — \(reach.summary)"]
+                if !stale.isEmpty {
+                    notes.append(
+                        "\(ToolInfo.name): index is stale for \(stale.count) file(s); "
+                            + "skipping their declarations — re-run `swift build`")
+                }
+                return (unused, notes)
             }
         }
     #endif

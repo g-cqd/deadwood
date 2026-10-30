@@ -43,15 +43,6 @@
             #expect(edge.kind == .call)
         }
 
-        @Test func indexStoreStatusUsabilityAndPath() {
-            #expect(IndexStoreStatus.available(path: "/p").isUsable)
-            #expect(IndexStoreStatus.stale(path: "/p", staleFiles: ["a"]).isUsable)
-            #expect(!IndexStoreStatus.notFound.isUsable)
-            #expect(!IndexStoreStatus.failed(error: "x").isUsable)
-            #expect(IndexStoreStatus.available(path: "/p").path == "/p")
-            #expect(IndexStoreStatus.notFound.path == nil)
-        }
-
         @Test func fallbackReasonDescriptionsAreActionable() {
             #expect(FallbackReason.noIndexStore.description.hasPrefix("warning: "))
             #expect(FallbackReason.noIndexStore.description.contains("falling back to name-based reachability"))
@@ -60,13 +51,15 @@
             #expect(FallbackReason.indexStoreFailed(error: "x").description.hasPrefix("warning: "))
             #expect(FallbackReason.buildFailed(error: "boom").description.contains("boom"))
             #expect(FallbackReason.dylibNotFound.description.contains("libIndexStore"))
+            #expect(
+                FallbackReason.coversNoAnalyzedFile(store: "/s", analyzedCount: 3).description.contains(
+                    "none of the 3 analyzed file(s)"))
         }
 
         @Test func fallbackConfigurationDefaults() {
             let config = FallbackConfiguration.default
             #expect(!config.autoBuild)
-            #expect(config.checkFreshness)
-            #expect(config.allowsIndexDatabaseCreation)
+            #expect(config.warnOnStale)
         }
 
         @Test func pathFinderReturnsNilForProjectWithoutBuild() {
@@ -74,7 +67,7 @@
                 .appending(path: "dw-idx-empty-\(UUID().uuidString)")
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: dir) }
-            #expect(IndexStorePathFinder.findIndexStorePath(in: dir.path) == nil)
+            #expect(IndexStoreFallbackManager(derivedDataRoots: []).discover(projectRoot: dir.path) == nil)
         }
     }
 

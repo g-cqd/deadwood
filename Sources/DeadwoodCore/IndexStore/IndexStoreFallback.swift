@@ -1,48 +1,14 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — IndexStore/IndexStoreFallback.swift.
-//  Changes during the lift:
+//  Changes since the lift:
 //  - Whole file gated behind `#if canImport(IndexStoreDB)`.
-//  - `AnalysisLogger` is gone (deadwood deleted it in the M1 lift); the
-//    warn-on-stale path returns notes the CLI writes to stderr instead.
-//  - SSA's `AnalysisModeResult`/`determineAnalysisMode` dispatched on a
-//    `.indexStore` `DetectionMode` case deadwood does not have. deadwood
-//    triggers index mode from the `--index-store` CLI flag, so the mode
-//    selection is replaced by `resolveIndexStore`, which returns either a
-//    usable index path or a typed fallback reason.
-//  - Auto-build routes through the async, structured-timeout
-//    `ProcessExecutor.run`.
+//  - Mode selection is `resolveIndexStore`, which returns an open reader or a typed fallback reason.
+//  - Stores are found and named by analyzerkit's `IndexStoreLocation`, opened by its `IndexStoreSession` (database
+//    under the cache root, coverage of the analyzed files), and built by its `BoundedProcess` (roadmap 0019, ADR-0004).
 
 #if canImport(IndexStoreDB)
     import Foundation
-
-    // MARK: - IndexStoreStatus
-
-    /// Status of the index store for analysis.
-    enum IndexStoreStatus: Sendable {
-        /// Index store exists and is up-to-date.
-        case available(path: String)
-        /// Index store exists but is stale (sources modified after indexing).
-        case stale(path: String, staleFiles: [String])
-        /// Index store does not exist.
-        case notFound
-        /// Index store exists but failed to open.
-        case failed(error: String)
-
-        /// Whether the index is usable (available, or stale with warnings).
-        var isUsable: Bool {
-            switch self {
-            case .available, .stale: true
-            case .failed, .notFound: false
-            }
-        }
-
-        /// The path to the index store, if any.
-        var path: String? {
-            switch self {
-            case .available(let path), .stale(let path, _): path
-            case .failed, .notFound: nil
-            }
-        }
-    }
+    import IndexStoreSupport
+    import ProjectModel
 
     // MARK: - FallbackReason
 
@@ -58,6 +24,8 @@
         case dylibNotFound
         /// The given path holds no index records (a DerivedData or `Index.noindex` directory, a wrong path).
         case notAnIndexStore(path: String)
+        /// The store indexes none of the analyzed files as they are now: never indexed, or all changed since.
+        case coversNoAnalyzedFile(store: String, analyzedCount: Int)
 
         var description: String {
             switch self {
@@ -78,6 +46,10 @@
                 "warning: \(path) is not an index store (no records in it, or in a vN directory below it); falling "
                     + "back to name-based reachability, which can conflate same-named declarations across modules. "
                     + "Pass the store directory itself, e.g. <DerivedData>/Index.noindex/DataStore."
+            case .coversNoAnalyzedFile(let store, let count):
+                "warning: index at \(store) indexes none of the \(count) analyzed file(s) as they are now; falling back "
+                    + "to name-based reachability, which can conflate same-named declarations across modules. Rebuild "
+                    + "the project (swift build, or xcodebuild build for an Xcode project) and run again."
             case .dylibNotFound:
                 "warning: libIndexStore.dylib not found on a trusted path; falling back to name-based reachability, "
                     + "which can conflate same-named declarations across modules. Install Xcode or a Swift toolchain "
@@ -88,10 +60,10 @@
 
     // MARK: - IndexStoreOutcome
 
-    /// The resolution of an index-mode request: either a usable index at a
-    /// path, or a typed reason the analyzer fell back to the syntax graph.
+    /// The resolution of an index-mode request: either an open index and the analyzed files it is stale for, or a
+    /// typed reason the analyzer fell back to the syntax graph.
     enum IndexStoreOutcome: Sendable {
-        case index(path: String, stale: [String])
+        case index(IndexStoreReader, stale: [String])
         case fallback(reason: FallbackReason)
     }
 
@@ -103,42 +75,20 @@
         let success: Bool
         /// Build output (stdout + stderr).
         let output: String
-        /// Duration of the build in seconds.
-        let duration: TimeInterval
-        /// Path to the generated index store (if successful).
-        let indexStorePath: String?
-
-        init(success: Bool, output: String, duration: TimeInterval, indexStorePath: String?) {
-            self.success = success
-            self.output = output
-            self.duration = duration
-            self.indexStorePath = indexStorePath
-        }
     }
 
     // MARK: - FallbackConfiguration
 
     /// Configuration for fallback behavior.
     struct FallbackConfiguration: Sendable {
-        /// Whether to build the project if the index is missing/stale.
+        /// Whether to build the project if the index is missing.
         var autoBuild: Bool
-        /// Whether to check that the index is fresh.
-        var checkFreshness: Bool
-        /// Whether stale files should surface as a note.
+        /// Whether stale files should be reported (and their findings dropped).
         var warnOnStale: Bool
-        /// Whether the reader may create the sibling `IndexDatabase/` dir.
-        var allowsIndexDatabaseCreation: Bool
 
-        init(
-            autoBuild: Bool = false,
-            checkFreshness: Bool = true,
-            warnOnStale: Bool = true,
-            allowsIndexDatabaseCreation: Bool = true
-        ) {
+        init(autoBuild: Bool = false, warnOnStale: Bool = true) {
             self.autoBuild = autoBuild
-            self.checkFreshness = checkFreshness
             self.warnOnStale = warnOnStale
-            self.allowsIndexDatabaseCreation = allowsIndexDatabaseCreation
         }
 
         static let `default` = Self()
@@ -146,196 +96,115 @@
 
     // MARK: - IndexStoreFallbackManager
 
-    /// Manages index store availability and fallback strategies. All stored
-    /// state is `let` after init.
+    /// Finds, builds (opt-in) and opens the index store for a run. All stored state is `let` after init.
     final class IndexStoreFallbackManager: Sendable {
         /// Configuration for fallback behavior.
         let configuration: FallbackConfiguration
 
-        /// Path to `libIndexStore.dylib` (nil = discover).
+        /// Path to `libIndexStore.dylib` (nil = analyzerkit's resolution).
         private let libIndexStorePath: String?
 
-        init(configuration: FallbackConfiguration = .default, libIndexStorePath: String? = nil) {
+        /// Where the Xcode DerivedData stores are looked for.
+        private let derivedDataRoots: [String]
+
+        init(
+            configuration: FallbackConfiguration = .default, libIndexStorePath: String? = nil,
+            derivedDataRoots: [String]? = nil
+        ) {
             self.configuration = configuration
             self.libIndexStorePath = libIndexStorePath
+            self.derivedDataRoots =
+                derivedDataRoots ?? [
+                    (ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory())
+                        + "/Library/Developer/Xcode/DerivedData"
+                ]
         }
 
         // MARK: - Resolution
 
-        /// Resolve an index-mode request into a usable index path or a typed
-        /// fallback reason. Honors an explicit `--index-store-path` override,
-        /// then project discovery, then (opt-in) auto-build.
+        /// Resolve an index-mode request into an open index or a typed fallback reason. Honors an explicit
+        /// `--index-store-path`, then discovery, then (opt-in) auto-build. The database lives under `cacheRoot`.
         func resolveIndexStore(
             projectRoot: String,
             sourceFiles: [String],
-            explicitPath: String?
+            explicitPath: String?,
+            cacheRoot: String
         ) async -> IndexStoreOutcome {
+            let store: String
             if let explicitPath {
-                // An explicit path is trusted as-is; only its openability and
-                // freshness are checked.
-                return outcome(forPath: explicitPath, sourceFiles: sourceFiles)
-            }
-
-            var status = checkIndexStoreStatus(projectRoot: projectRoot, sourceFiles: sourceFiles)
-
-            if !status.isUsable, configuration.autoBuild {
+                // A path that is not a store is refused before anything opens it: libIndexStore would create a `v5/`
+                // in it (analyzerkit roadmap 0035, probe D1).
+                switch IndexStoreLocation.resolve(explicitPath) {
+                case .store(let resolved): store = resolved
+                case .notAStore:
+                    let isDirectory =
+                        (try? URL(fileURLWithPath: explicitPath).resourceValues(forKeys: [.isDirectoryKey]))?
+                        .isDirectory == true
+                    return .fallback(reason: isDirectory ? .notAnIndexStore(path: explicitPath) : .noIndexStore)
+                }
+            } else if let found = discover(projectRoot: projectRoot) {
+                store = found
+            } else if configuration.autoBuild {
                 let build = await autoBuild(projectRoot: projectRoot)
-                guard build.success else {
-                    return .fallback(reason: .buildFailed(error: build.output))
-                }
-                status = checkIndexStoreStatus(projectRoot: projectRoot, sourceFiles: sourceFiles)
-            }
-
-            switch status {
-            case .available(let path):
-                return .index(path: path, stale: [])
-            case .stale(let path, let staleFiles):
-                return .index(path: path, stale: configuration.warnOnStale ? staleFiles : [])
-            case .notFound:
-                return .fallback(reason: .noIndexStore)
-            case .failed(let error):
-                return .fallback(reason: .indexStoreFailed(error: error))
-            }
-        }
-
-        /// Openability + freshness check for an explicit path.
-        private func outcome(forPath path: String, sourceFiles: [String]) -> IndexStoreOutcome {
-            guard indexStoreDirectoryExists(atPath: path) else {
+                guard build.success else { return .fallback(reason: .buildFailed(error: build.output)) }
+                guard let built = discover(projectRoot: projectRoot) else { return .fallback(reason: .noIndexStore) }
+                store = built
+            } else {
                 return .fallback(reason: .noIndexStore)
             }
-            // Opening a directory without index records makes libIndexStore create `v5/` in it and the reader an
-            // `IndexDatabase/` beside it; refuse it before anything opens it (analyzerkit roadmap 0035, probe D1).
-            guard Self.holdsIndexRecords(atPath: path) else {
-                return .fallback(reason: .notAnIndexStore(path: path))
-            }
-            do {
-                let reader = try IndexStoreReader(
-                    indexStorePath: path,
-                    libIndexStorePath: libIndexStorePath,
-                    allowsDirectoryCreation: configuration.allowsIndexDatabaseCreation
-                )
-                let stale =
-                    configuration.checkFreshness
-                    ? staleFiles(sourceFiles: sourceFiles, reader: reader) : []
-                return .index(path: path, stale: configuration.warnOnStale ? stale : [])
-            } catch IndexStoreError.dylibNotFound {
-                return .fallback(reason: .dylibNotFound)
-            } catch {
-                return .fallback(reason: .indexStoreFailed(error: "\(error)"))
-            }
-        }
 
-        /// Whether `path` holds index records, directly or in a `vN` directory below it.
-        static func holdsIndexRecords(atPath path: String) -> Bool {
-            let manager = FileManager.default
-            func hasRecords(_ directory: String) -> Bool {
-                !((try? manager.contentsOfDirectory(atPath: directory + "/records")) ?? []).isEmpty
-            }
-            if hasRecords(path) { return true }
-            let entries = (try? manager.contentsOfDirectory(atPath: path)) ?? []
-            return entries.contains { entry in
-                entry.hasPrefix("v") && entry.dropFirst().allSatisfy(\.isNumber) && hasRecords(path + "/" + entry)
-            }
-        }
-
-        // MARK: - Status
-
-        /// Check the status of the index store for a project.
-        func checkIndexStoreStatus(projectRoot: String, sourceFiles: [String]) -> IndexStoreStatus {
-            guard let indexStorePath = IndexStorePathFinder.findIndexStorePath(in: projectRoot) else {
-                return .notFound
-            }
-            do {
-                let reader = try IndexStoreReader(
-                    indexStorePath: indexStorePath,
-                    libIndexStorePath: libIndexStorePath,
-                    allowsDirectoryCreation: configuration.allowsIndexDatabaseCreation
-                )
-                if configuration.checkFreshness {
-                    let stale = staleFiles(sourceFiles: sourceFiles, reader: reader)
-                    if !stale.isEmpty {
-                        return .stale(path: indexStorePath, staleFiles: stale)
-                    }
+            guard let library = await resolvedLibrary() else { return .fallback(reason: .dylibNotFound) }
+            switch IndexStoreSession.open(store, cacheRoot: cacheRoot, library: library, analyzedFiles: sourceFiles) {
+            case .usable(let session):
+                // A file the index never saw, or saw before it last changed; an unreadable one is not judged.
+                let stale = session.coverage.files.filter {
+                    $0.coverage == .notIndexed || $0.coverage == .changedSinceBuild
                 }
-                return .available(path: indexStorePath)
-            } catch {
-                return .failed(error: "\(error)")
+                .map(\.path)
+                return .index(IndexStoreReader(session: session), stale: configuration.warnOnStale ? stale : [])
+            case .notUsable(let store, _):
+                return .fallback(reason: .coversNoAnalyzedFile(store: store, analyzedCount: sourceFiles.count))
+            case .notAStore:
+                return .fallback(reason: .notAnIndexStore(path: store))
+            case .failed(let reason):
+                return .fallback(
+                    reason: reason.contains("not trusted") ? .dylibNotFound : .indexStoreFailed(error: reason))
             }
         }
 
-        /// Files whose source is newer than their most recent index unit.
-        private func staleFiles(sourceFiles: [String], reader: IndexStoreReader) -> [String] {
-            var stale: [String] = []
-            for path in sourceFiles {
-                guard let sourceModified = fileModificationTime(path) else { continue }
-                guard let indexed = reader.dateOfLatestUnit(forFile: path) else {
-                    stale.append(path)  // never indexed → stale
-                    continue
-                }
-                if sourceModified > indexed {
-                    stale.append(path)
-                }
-            }
-            return stale
+        /// The store a project has: SwiftPM's under its `.build` (each configuration, under each target triple, and
+        /// the Swift Build system's `out`), then the newest DerivedData store of its containers.
+        func discover(projectRoot: String) -> String? {
+            guard let layout = ProjectLayout.discover(paths: [projectRoot]) else { return nil }
+            return IndexStoreLocation.discover(layout: layout, derivedDataRoots: derivedDataRoots)
         }
 
-        private func fileModificationTime(_ path: String) -> Date? {
-            let values = try? URL(fileURLWithPath: path)
-                .resourceValues(forKeys: [.contentModificationDateKey])
-            return values?.contentModificationDate
+        private func resolvedLibrary() async -> String? {
+            if let libIndexStorePath { return libIndexStorePath }
+            return await IndexStoreReader.findLibIndexStore()
         }
 
         // MARK: - Auto build
 
-        /// Attempt to build the project to generate/update the index store.
+        /// `swift build` a SwiftPM project to generate the index store, through analyzerkit's `BoundedProcess`: a
+        /// scrubbed environment (no inherited `DYLD_INSERT_LIBRARIES` or `DEVELOPER_DIR`), a deadline, and a process
+        /// group terminated whole when it passes.
         func autoBuild(projectRoot: String) async -> BuildResult {
-            let startTime = Date()
-            let projectURL = URL(fileURLWithPath: projectRoot)
-            let packageSwift = projectURL.appendingPathComponent("Package.swift")
-
-            if FileManager.default.fileExists(atPath: packageSwift.path) {
-                return await buildSPMProject(at: projectRoot, startTime: startTime)
-            }
-            return BuildResult(
-                success: false,
-                output: "no Package.swift found at \(projectRoot); auto-build supports SwiftPM projects",
-                duration: Date().timeIntervalSince(startTime),
-                indexStorePath: nil
-            )
-        }
-
-        /// Build an SPM project with an explicit index-store path. Routes
-        /// through `ProcessExecutor` so the child `swift build` does not
-        /// inherit `DYLD_INSERT_LIBRARIES`, `DEVELOPER_DIR`, etc.
-        private func buildSPMProject(at projectRoot: String, startTime: Date) async -> BuildResult {
-            do {
-                let result = try await ProcessExecutor.run(
-                    executable: URL(fileURLWithPath: "/usr/bin/swift"),
-                    arguments: [
-                        "build", "-Xswiftc", "-index-store-path",
-                        "-Xswiftc", ".build/index/store",
-                    ],
-                    currentDirectory: URL(fileURLWithPath: projectRoot),
-                    timeout: .seconds(600)
-                )
-                let combined = result.stdout + result.stderr
-                let indexPath =
-                    result.succeeded
-                    ? URL(fileURLWithPath: projectRoot).appendingPathComponent(".build/index/store").path
-                    : nil
-                return BuildResult(
-                    success: result.succeeded,
-                    output: combined,
-                    duration: Date().timeIntervalSince(startTime),
-                    indexStorePath: indexPath
-                )
-            } catch {
+            guard FileManager.default.fileExists(atPath: projectRoot + "/Package.swift") else {
                 return BuildResult(
                     success: false,
-                    output: "failed to run swift build: \(error)",
-                    duration: Date().timeIntervalSince(startTime),
-                    indexStorePath: nil
-                )
+                    output: "no Package.swift found at \(projectRoot); auto-build supports SwiftPM projects")
+            }
+            do {
+                let result = try await BoundedProcess.run(
+                    "/usr/bin/swift", ["build", "-Xswiftc", "-index-store-path", "-Xswiftc", ".build/index/store"],
+                    directory: projectRoot,
+                    environment: BoundedProcess.scrubbedEnvironment(source: ProcessInfo.processInfo.environment),
+                    timeout: .seconds(600))
+                return BuildResult(
+                    success: result.succeeded, output: result.standardOutputText + result.standardErrorText)
+            } catch {
+                return BuildResult(success: false, output: "failed to run swift build: \(error)")
             }
         }
     }
