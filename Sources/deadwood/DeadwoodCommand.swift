@@ -118,7 +118,8 @@ struct Analyze: AsyncParsableCommand {
         let indexOptions = IndexStoreOptions(
             enabled: index.requested,
             explicitPath: index.indexStorePath,
-            autoBuild: index.indexStoreBuild
+            autoBuild: index.indexStoreBuild,
+            cacheRoot: cacheRoot()
         )
 
         var report = await Analyzer(configuration: configuration)
@@ -284,6 +285,15 @@ struct Analyze: AsyncParsableCommand {
         if !output.quiet { standardError.write(Data((line + "\n").utf8)) }
     }
 
+    /// `--cache-path`, or the tool's directory in the user cache directory. The index database lives under it too
+    /// (analyzerkit ADR-0004), `--no-cache` or not: it is IndexStoreDB's, not the facts cache.
+    private func cacheRoot() -> String {
+        let environment = ProcessInfo.processInfo.environment
+        return cache.cachePath.map { SourcePath.absolute($0) }
+            ?? CacheLocation.defaultRoot(
+                tool: ToolInfo.name, environment: environment, home: environment["HOME"] ?? "/tmp")
+    }
+
     /// `--rules`: only the rules named run; an unknown name is a usage error.
     private func applyRules(to configuration: inout Configuration) throws {
         guard let wanted = rules.rules else { return }
@@ -302,11 +312,7 @@ struct Analyze: AsyncParsableCommand {
     /// nil under `--no-cache`.
     private func cacheLocation() -> CacheLocation? {
         if cache.noCache { return nil }
-        let environment = ProcessInfo.processInfo.environment
-        let root =
-            cache.cachePath.map { SourcePath.absolute($0) }
-            ?? CacheLocation.defaultRoot(
-                tool: ToolInfo.name, environment: environment, home: environment["HOME"] ?? "/tmp")
+        let root = cacheRoot()
         let workspace =
             ProjectLayout.discover(paths: input.paths)?.root ?? SourcePath.absolute(input.paths.first ?? ".")
         return CacheLocation(root: root, workspace: workspace)
