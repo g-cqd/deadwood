@@ -33,9 +33,8 @@
                 try file("DD/" + name + "/info.plist", data: plist)
             }
             let expected = root.appending(path: "DD/unrelated-new/Index.noindex/DataStore").path
-            let found = IndexStorePathFinder.findIndexStorePath(
-                in: root.appending(path: "worktree/API/Sources").path,
-                derivedDataRoots: [root.appending(path: "DD").path])
+            let found = IndexStoreFallbackManager(derivedDataRoots: [root.appending(path: "DD").path])
+                .discover(projectRoot: root.appending(path: "worktree/API/Sources").path)
             #expect(found == expected)
             let project = IndexProjectLocator.projectRoot(
                 for: [root.appending(path: "worktree/API/Sources/Client.swift").path], fallback: "/not-the-project")

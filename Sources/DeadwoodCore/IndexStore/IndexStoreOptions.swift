@@ -16,10 +16,15 @@ public struct IndexStoreOptions: Sendable, Equatable {
     /// (`--index-store-build`).
     public var autoBuild: Bool
 
-    public init(enabled: Bool = false, explicitPath: String? = nil, autoBuild: Bool = false) {
+    /// The cache root the index database lives under (analyzerkit ADR-0004); nil uses the tool's directory in the user
+    /// cache directory.
+    public var cacheRoot: String?
+
+    public init(enabled: Bool = false, explicitPath: String? = nil, autoBuild: Bool = false, cacheRoot: String? = nil) {
         self.enabled = enabled
         self.explicitPath = explicitPath
         self.autoBuild = autoBuild
+        self.cacheRoot = cacheRoot
     }
 
     /// The default: index mode off — today's syntax behavior, byte-identical.

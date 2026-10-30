@@ -39,8 +39,7 @@
             let deadGroupResults: [UnusedCode]
         }
 
-        /// Compute index-backed reachability. Throws only if the index cannot
-        /// be opened — the caller then falls back to the syntax graph.
+        /// Compute index-backed reachability over the store `reader` holds open.
         func computeReachability(
             result: AnalysisResult,
             context: CorpusContext,
@@ -48,16 +47,9 @@
             rootConfiguration: RootDetectionConfiguration,
             productionMode: Bool,
             testScoped: [Bool],
-            indexStorePath: String,
-            libIndexStorePath: String?,
-            analysisFiles: [String],
-            allowsDirectoryCreation: Bool
-        ) throws(IndexStoreError) -> Result {
-            let reader = try IndexStoreReader(
-                indexStorePath: indexStorePath,
-                libIndexStorePath: libIndexStorePath,
-                allowsDirectoryCreation: allowsDirectoryCreation
-            )
+            reader: IndexStoreReader,
+            analysisFiles: [String]
+        ) -> Result {
             reader.pollForChanges()
 
             let graph = IndexBasedDependencyGraph(analysisFiles: analysisFiles)

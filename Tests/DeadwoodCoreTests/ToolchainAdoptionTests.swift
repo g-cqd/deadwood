@@ -3,6 +3,10 @@ import Testing
 
 @testable import DeadwoodCore
 
+#if canImport(IndexStoreDB)
+    import IndexStoreSupport
+#endif
+
 @Suite struct ToolchainAdoptionTests {
     #if canImport(IndexStoreDB)
         @Test func `tool trust resolves links and rejects a writable immediate parent`() throws {
@@ -19,21 +23,21 @@ import Testing
             #expect(!BinaryTrustChecker.isTrusted(at: target))
         }
 
-        @Test func `explicit untrusted library is rejected before opening the store`() throws {
-            let root = try Workspace.make(["lib/untrusted.dylib": "not a library"])
+        @Test func `explicit untrusted library is rejected before opening the store`() async throws {
+            let root = try Workspace.make(["lib/untrusted.dylib": "not a library", "Store/v5/records/r": ""])
             defer { try? FileManager.default.removeItem(at: root) }
             let library = root.appending(path: "lib/untrusted.dylib").path
             try FileManager.default.setAttributes([.posixPermissions: 0o666], ofItemAtPath: library)
-            do {
-                _ = try IndexStoreReader(
-                    indexStorePath: root.appending(path: "AbsentStore").path,
-                    libIndexStorePath: library)
-                Issue.record("opened a reader using an untrusted library")
-            } catch IndexStoreError.dylibNotFound {
-                // Rejected before any IndexStoreDB filesystem or dlopen work.
-            } catch {
-                Issue.record("wrong rejection: \(error)")
+            let cache = root.appending(path: "cache")
+            let outcome = await IndexStoreFallbackManager(libIndexStorePath: library).resolveIndexStore(
+                projectRoot: root.path, sourceFiles: [], explicitPath: root.appending(path: "Store").path,
+                cacheRoot: cache.path)
+            guard case .fallback(.dylibNotFound) = outcome else {
+                Issue.record("not rejected as an untrusted library: \(outcome)")
+                return
             }
+            // Rejected before any IndexStoreDB filesystem or dlopen work.
+            #expect(!FileManager.default.fileExists(atPath: cache.path))
             #expect(!FileManager.default.fileExists(atPath: root.appending(path: "IndexDatabase").path))
         }
     #endif

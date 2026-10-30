@@ -13,16 +13,6 @@
     import IndexStoreSupport
     import ProjectModel
 
-    /// Directory-existence check that avoids the
-    /// `UnsafeMutablePointer<ObjCBool>` out-parameter of
-    /// `fileExists(atPath:isDirectory:)` (which strict memory safety rejects).
-    /// Resolves the same question through URL resource values, which are safe.
-    func indexStoreDirectoryExists(atPath path: String) -> Bool {
-        let isDirectory = try? URL(fileURLWithPath: path)
-            .resourceValues(forKeys: [.isDirectoryKey]).isDirectory
-        return isDirectory == true
-    }
-
     // MARK: - IndexStoreError
 
     /// Errors that can occur when reading the index store.
@@ -192,66 +182,22 @@
     /// thread-safe for concurrent reads, `db` is set once in `init` and never
     /// mutated, and every method here is a read-only query.
     final class IndexStoreReader: @unchecked Sendable {
-        /// The path to the index store.
+        /// The store's root, canonical.
         let indexStorePath: String
 
+        /// The session the reader queries: the store opened by analyzerkit (ADR-0004), its database under the cache
+        /// root, and how it covered the analyzed files.
+        let session: IndexStoreSession
+
         /// The underlying IndexStoreDB database.
-        private let db: IndexStoreDB
+        private var db: IndexStoreDB { session.database }
 
-        /// Initialize with the path to the index store directory.
-        ///
-        /// - Parameters:
-        ///   - indexStorePath: Path to the index store (e.g.
-        ///     `.build/debug/index/store`).
-        ///   - libIndexStorePath: Optional path to `libIndexStore.dylib`.
-        ///   - allowsDirectoryCreation: When `true`, the sibling
-        ///     `IndexDatabase/` directory is created if missing.
-        init(
-            indexStorePath: String,
-            libIndexStorePath: String? = nil,
-            allowsDirectoryCreation: Bool = false
-        ) throws(IndexStoreError) {
-            self.indexStorePath = indexStorePath
-
-            let libPath: String
-            if let provided = libIndexStorePath {
-                let assessment = IndexStoreSupport.BinaryTrustChecker.assess(provided)
-                guard assessment.isTrusted else { throw IndexStoreError.dylibNotFound }
-                libPath = assessment.path
-            } else {
-                // Resolution is async (it runs xcode-select and xcrun through analyzerkit's BoundedProcess): callers
-                // resolve the library once with ``findLibIndexStore()`` and pass it.
-                throw IndexStoreError.dylibNotFound
-            }
-
-            let storePath = URL(fileURLWithPath: indexStorePath)
-            let databasePath = storePath.deletingLastPathComponent()
-                .appendingPathComponent("IndexDatabase")
-
-            if allowsDirectoryCreation {
-                do {
-                    try FileManager.default.createDirectory(
-                        at: databasePath, withIntermediateDirectories: true)
-                } catch {
-                    throw IndexStoreError.failedToOpenDatabase(underlying: error)
-                }
-            } else if !indexStoreDirectoryExists(atPath: databasePath.path) {
-                throw IndexStoreError.databaseDirectoryMissing(databasePath.path)
-            }
-
-            do {
-                db = try IndexStoreDB(
-                    storePath: storePath.path,
-                    databasePath: databasePath.path,
-                    library: IndexStoreLibrary(dylibPath: libPath),
-                    waitUntilDoneInitializing: true
-                )
-            } catch {
-                throw IndexStoreError.failedToOpenDatabase(underlying: error)
-            }
+        init(session: IndexStoreSession) {
+            self.session = session
+            indexStorePath = session.store
         }
 
-        /// The same ordered resolution and trust policy as arcleak, supplied by analyzerkit.
+        /// analyzerkit's ordered, audited resolution of `libIndexStore.dylib`.
         static func findLibIndexStore() async -> String? {
             await ToolchainResolution.resolve().libraryPath
         }
@@ -341,70 +287,5 @@
             if roles.contains(.implicit) { result.insert(.implicit) }
             return result
         }
-    }
-
-    // MARK: - IndexStorePathFinder
-
-    /// Utility for finding index store paths in a project.
-    enum IndexStorePathFinder {
-        /// Find the index store path for a Swift package or Xcode project.
-        ///
-        /// The returned path is the store ROOT to hand IndexStoreDB. That is
-        /// the directory that either contains `records/`+`units/` directly
-        /// (classic `.build/debug/index/store`) or contains a versioned
-        /// `vN/records` subdir (the new SwiftPM "Swift Build" system's
-        /// `.build/out`, and Xcode DerivedData's `DataStore`). IndexStoreDB
-        /// reads the versioned subdir itself, so callers must pass the ROOT,
-        /// not `.../vN` (pointing at `vN` yields an empty database).
-        static func findIndexStorePath(in projectRoot: String, derivedDataRoots: [String]? = nil) -> String? {
-            guard let layout = ProjectLayout.discover(paths: [projectRoot]) else { return nil }
-            let buildDir = URL(fileURLWithPath: layout.root).appendingPathComponent(".build")
-
-            let candidates = [
-                buildDir.appendingPathComponent("debug/index/store"),
-                buildDir.appendingPathComponent("release/index/store"),
-                buildDir.appendingPathComponent("index/store"),  // legacy explicit
-                buildDir.appendingPathComponent("out"),  // new "Swift Build" system
-            ]
-            for candidate in candidates {
-                if let root = indexStoreRoot(at: candidate) {
-                    return root
-                }
-            }
-
-            let roots =
-                derivedDataRoots ?? [
-                    URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(
-                        "Library/Developer/Xcode/DerivedData"
-                    ).path
-                ]
-            return layout.derivedDataStores(under: roots).compactMap { indexStoreRoot(at: URL(fileURLWithPath: $0)) }
-                .first
-        }
-
-        /// The store root to hand IndexStoreDB if `dir` is (or wraps) a usable
-        /// index store: `dir` itself when it holds `records/`+`units/` directly
-        /// or a versioned `vN/records` subdir; otherwise nil. IndexStoreDB
-        /// wants the root even for a versioned store — it descends into `vN`
-        /// on its own.
-        private static func indexStoreRoot(at dir: URL) -> String? {
-            let manager = FileManager.default
-            func holdsStore(_ base: URL) -> Bool {
-                manager.fileExists(atPath: base.appendingPathComponent("records").path)
-                    || manager.fileExists(atPath: base.appendingPathComponent("units").path)
-            }
-
-            if holdsStore(dir) {
-                return dir.path
-            }
-            if let contents = try? manager.contentsOfDirectory(atPath: dir.path) {
-                let versioned = contents.filter { $0.hasPrefix("v") && $0.dropFirst().allSatisfy(\.isNumber) }
-                for name in versioned where holdsStore(dir.appendingPathComponent(name)) {
-                    return dir.path
-                }
-            }
-            return nil
-        }
-
     }
 #endif
