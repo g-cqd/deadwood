@@ -69,13 +69,19 @@ struct Reference: Sendable, Hashable, Codable {
     /// The qualifier if qualified (e.g. `Module` in `Module.Type`).
     let qualifier: String?
 
+    /// When the reference is the callee of a call with arguments, their labels in order, `_` for an unlabeled one
+    /// (`location(for: x, 2)` gives `["for", "_"]`); nil otherwise. Lets a by-name match tell a function from a
+    /// property of the same base name (analyzerkit roadmap 0058).
+    let callLabels: [String]?
+
     init(
         identifier: String,
         location: SourceLocation,
         scope: ScopeID,
         context: ReferenceContext,
         isQualified: Bool = false,
-        qualifier: String? = nil
+        qualifier: String? = nil,
+        callLabels: [String]? = nil
     ) {
         self.identifier = identifier
         self.location = location
@@ -83,6 +89,7 @@ struct Reference: Sendable, Hashable, Codable {
         self.context = context
         self.isQualified = isQualified
         self.qualifier = qualifier
+        self.callLabels = callLabels
     }
 }
 
