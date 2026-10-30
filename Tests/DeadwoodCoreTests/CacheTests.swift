@@ -1,4 +1,5 @@
-import AemiJSON
+import AemiProtobuf
+import AemiProtobufCore
 import CorpusScan
 import Foundation
 import SourceCorpus
@@ -117,8 +118,13 @@ import Testing
         #expect(report.cacheMisses == 0)
     }
 
+    /// The payload as the cache stores it: protobuf (analyzerkit roadmap 0017).
     private static func payload(_ artifacts: CachedFileArtifacts) throws -> [UInt8] {
-        try AemiJSON.JSONEncoder().encodeToBytes(ExtractedArtifacts(artifacts: artifacts))
+        try ProtobufEncoder().encodeToBytes(ExtractedArtifacts(artifacts: artifacts))
+    }
+
+    private static func decoded(_ bytes: [UInt8]) throws -> ExtractedArtifacts {
+        try ProtobufDecoder().decode(ExtractedArtifacts.self, fromBytes: bytes)
     }
 
     @Test("`A corpus of references fits a compact cache without losing reachability inputs`")
@@ -141,7 +147,7 @@ import Testing
         #expect(bytes.count < 80_000)
 
         let restored = try #require(
-            try AemiJSON.JSONDecoder().decode(ExtractedArtifacts.self, from: bytes).artifacts)
+            try Self.decoded(bytes).artifacts)
         #expect(restored.facts.references.count == references.count)
         #expect(restored.facts.references[0].qualifier == "Module")
         #expect(restored.facts.references[1].context == .write)
@@ -157,34 +163,30 @@ import Testing
         let bytes = try Self.payload(
             CachedFileArtifacts(facts: facts, directives: [], deadBranches: [], degraded: []))
         let restored = try #require(
-            try AemiJSON.JSONDecoder().decode(ExtractedArtifacts.self, from: bytes).artifacts)
+            try Self.decoded(bytes).artifacts)
         #expect(restored.facts.contentRegion == facts.contentRegion)
         #expect(restored.facts.isGenerated && restored.facts.isTestCode)
     }
 
-    @Test("`Malformed optional reference fields fail to decode`")
-    func malformedReferenceQualifierIsACacheMiss() throws {
+    /// A reference context this build does not know fails the payload, so the file is a miss and extracted again.
+    @Test("`An unknown reference context fails to decode`")
+    func unknownReferenceContextIsACacheMiss() throws {
         let file = "/fixture/Example.swift"
         let bytes = try Self.payload(
             CachedFileArtifacts(
                 facts: FileAnalysisResult(
-                    file: file,
-                    declarations: [],
+                    file: file, declarations: [],
                     references: [
                         Reference(
-                            identifier: "name",
-                            location: SourceLocation(file: file, line: 1, column: 1),
-                            scope: .global,
-                            context: .read,
-                            qualifier: "Module")
+                            identifier: "name", location: SourceLocation(file: file, line: 1, column: 1),
+                            scope: .global, context: .read, qualifier: "Module")
                     ],
                     scopes: []),
                 directives: [], deadBranches: [], degraded: []))
-        let valid = String(decoding: bytes, as: UTF8.self)
-        #expect(valid.contains("\"q\":\"Module\""))
-        let invalid = valid.replacingOccurrences(of: "\"q\":\"Module\"", with: "\"q\":123")
-        #expect(throws: (any Error).self) {
-            try AemiJSON.JSONDecoder().decode(ExtractedArtifacts.self, from: Array(invalid.utf8))
-        }
+        #expect(try Self.decoded(bytes).artifacts?.facts.references.first?.qualifier == "Module")
+        let read = Array(ReferenceContext.read.rawValue.utf8)
+        let corrupt = bytes.replacing(read, with: Array("nope".utf8.prefix(read.count)))
+        #expect(corrupt != bytes)
+        #expect(throws: (any Error).self) { try Self.decoded(corrupt) }
     }
 }

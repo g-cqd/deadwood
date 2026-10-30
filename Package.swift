@@ -47,9 +47,12 @@ let package = Package(
         ),
         // The project model the analyzers share: entry points project files
         // and test frameworks create, code regions, generated files.
+        // The facts cache's payload codec; analyzerkit's revision, written as analyzerkit writes it (ADR-0025).
+        .package(
+            url: "https://github.com/g-cqd/AemiProtobuf.git", revision: "3aae025f2bf19e78dc6491915f368c6a5bd8e0f5"),
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "ed8c81588790612763b4e47cc4431e8ac357e205"
+            revision: "ef7e5952652a28c4cd4972e85995f0378bfd03cc"
         ),
     ],
     targets: [
@@ -72,8 +75,10 @@ let package = Package(
                     package: "indexstore-db",
                     condition: .when(platforms: [.macOS])
                 ),
-                // Fast JSON coders for the facts cache (FactsCache.swift).
+                // The facts cache's payload coders (Cache/FactsProtobufCoding.swift); AemiJSON is the JSON path's.
                 .product(name: "AemiJSON", package: "AemiJSON"),
+                .product(name: "AemiProtobuf", package: "AemiProtobuf"),
+                .product(name: "AemiProtobufCore", package: "AemiProtobuf"),
                 // HF tokenizer for HFSemanticEmbeddingProvider.swift (macOS only).
             ],
             swiftSettings: strictSwiftSettings
@@ -96,6 +101,8 @@ let package = Package(
             dependencies: [
                 "DeadwoodCore", .product(name: "SourceCorpus", package: "analyzerkit"),
                 .product(name: "CorpusScan", package: "analyzerkit"),
+                .product(name: "AemiJSON", package: "AemiJSON"),
+                .product(name: "AemiProtobuf", package: "AemiProtobuf"),
                 .product(name: "WordPiece", package: "analyzerkit"),
             ],
             exclude: ["Goldens"],
