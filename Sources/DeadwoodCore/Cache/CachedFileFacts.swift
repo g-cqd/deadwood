@@ -1,4 +1,5 @@
 import AemiJSON
+import ProjectModel
 
 /// A file's facts with cache-only references that omit repeated or unused fields.
 @JSONCodable
@@ -9,7 +10,8 @@ struct CachedFileFacts: Sendable, Codable {
     let scopes: [Scope]
     let stringLiteralTokens: Set<TokenLine>
     let commentTokens: Set<String>
-    let isGenerated: Bool
+    /// What the content alone says of the file's region; its project's part is joined per run.
+    let contentRegion: UInt8
     let regionSpans: [CodeRegionSpan]
 
     init(
@@ -19,7 +21,7 @@ struct CachedFileFacts: Sendable, Codable {
         scopes: [Scope],
         stringLiteralTokens: Set<TokenLine>,
         commentTokens: Set<String>,
-        isGenerated: Bool,
+        contentRegion: UInt8,
         regionSpans: [CodeRegionSpan]
     ) {
         self.file = file
@@ -28,7 +30,7 @@ struct CachedFileFacts: Sendable, Codable {
         self.scopes = scopes
         self.stringLiteralTokens = stringLiteralTokens
         self.commentTokens = commentTokens
-        self.isGenerated = isGenerated
+        self.contentRegion = contentRegion
         self.regionSpans = regionSpans
     }
 
@@ -39,7 +41,7 @@ struct CachedFileFacts: Sendable, Codable {
         scopes = facts.scopes
         stringLiteralTokens = facts.stringLiteralTokens
         commentTokens = facts.commentTokens
-        isGenerated = facts.isGenerated
+        contentRegion = facts.contentRegion
         regionSpans = facts.regionSpans
     }
 
@@ -51,7 +53,9 @@ struct CachedFileFacts: Sendable, Codable {
             scopes: scopes,
             stringLiteralTokens: stringLiteralTokens,
             commentTokens: commentTokens,
-            isGenerated: isGenerated,
+            isGenerated: CodeRegion(rawValue: contentRegion).contains(.generated),
+            isTestCode: CodeRegion(rawValue: contentRegion).contains(.test),
+            contentRegion: contentRegion,
             regionSpans: regionSpans
         )
     }

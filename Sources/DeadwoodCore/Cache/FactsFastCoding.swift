@@ -2,7 +2,7 @@
 //
 //  The `@JSONCodable` macro emits AemiJSON's reflection-free
 //  `ADJSONFast{Decodable,Encodable}` conformance for a struct (see the model
-//  types + `FactsCache.swift`). It only handles structs, so two leaf shapes get a
+//  types and `ExtractedArtifacts.swift`). It only handles structs, so two leaf shapes get a
 //  small hand-written fast conformance here so the frequent fields still decode
 //  straight off the tape (the decisive win): the String-raw-value enums, and
 //  `ScopeID` (whose unlabeled `init(_:)` the macro's `Self(id:)` can't call).

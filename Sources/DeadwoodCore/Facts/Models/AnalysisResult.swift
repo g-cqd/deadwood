@@ -4,6 +4,7 @@
 //  error-tolerant and never throws).
 
 import AemiJSON
+import ProjectModel
 
 // MARK: - AnalysisResult
 
@@ -32,6 +33,9 @@ struct AnalysisResult: Sendable {
     /// them is reported.
     let generatedFiles: Set<String>
 
+    /// Test code, by its project's targets or its content (ADR-0024): what production mode leaves out.
+    let testFiles: Set<String>
+
     /// Per file, the lines only debug builds or previews compile.
     let regionSpansByFile: [String: [CodeRegionSpan]]
 
@@ -43,6 +47,7 @@ struct AnalysisResult: Sendable {
         stringLiteralOccurrences: [String: [SourceLocation]] = [:],
         commentTokens: Set<String> = [],
         generatedFiles: Set<String> = [],
+        testFiles: Set<String> = [],
         regionSpansByFile: [String: [CodeRegionSpan]] = [:]
     ) {
         self.files = files
@@ -52,6 +57,7 @@ struct AnalysisResult: Sendable {
         self.stringLiteralOccurrences = stringLiteralOccurrences
         self.commentTokens = commentTokens
         self.generatedFiles = generatedFiles
+        self.testFiles = testFiles
         self.regionSpansByFile = regionSpansByFile
     }
 }
@@ -77,8 +83,13 @@ struct FileAnalysisResult: Sendable, Codable {
     let stringLiteralTokens: Set<TokenLine>
     /// Identifier-shaped tokens inside this file's comments.
     let commentTokens: Set<String>
-    /// Whether a generator wrote this file.
-    let isGenerated: Bool
+    /// Whether a generator wrote this file: its content, joined with its project per run.
+    var isGenerated: Bool
+    /// Whether this file is test code: its content, joined with its project per run.
+    var isTestCode: Bool
+    /// What the file's content alone says of its region (``ProjectModel/ProjectClassification/contentRegion(path:tree:)``):
+    /// the part a cache keyed by content may keep.
+    let contentRegion: UInt8
     /// The lines only debug builds or previews compile.
     let regionSpans: [CodeRegionSpan]
 
@@ -90,6 +101,8 @@ struct FileAnalysisResult: Sendable, Codable {
         stringLiteralTokens: Set<TokenLine> = [],
         commentTokens: Set<String> = [],
         isGenerated: Bool = false,
+        isTestCode: Bool = false,
+        contentRegion: UInt8? = nil,
         regionSpans: [CodeRegionSpan] = []
     ) {
         self.file = file
@@ -99,6 +112,11 @@ struct FileAnalysisResult: Sendable, Codable {
         self.stringLiteralTokens = stringLiteralTokens
         self.commentTokens = commentTokens
         self.isGenerated = isGenerated
+        self.isTestCode = isTestCode
+        var content: CodeRegion = []
+        if isGenerated { content.insert(.generated) }
+        if isTestCode { content.insert(.test) }
+        self.contentRegion = contentRegion ?? content.rawValue
         self.regionSpans = regionSpans
     }
 }

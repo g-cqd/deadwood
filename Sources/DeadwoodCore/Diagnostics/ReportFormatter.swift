@@ -19,14 +19,18 @@ public enum OutputFormat: String, CaseIterable, Sendable {
 }
 
 public enum ReportFormatter {
-    /// - Parameter root: the directory `report` was relativized to, if any.
-    ///   SARIF declares it as the base its relative uris resolve against.
+    /// - Parameters:
+    ///   - root: the directory `report` was relativized to, if any. SARIF declares it as the base its relative uris
+    ///     resolve against.
+    ///   - verbose: every path of a classification note, not the first few.
+    ///   - timings: carry the phases' times in the JSON report.
     public static func format(
-        _ report: AnalysisReport, as format: OutputFormat, relativeTo root: String? = nil
+        _ report: AnalysisReport, as format: OutputFormat, relativeTo root: String? = nil, verbose: Bool = false,
+        timings: Bool = false
     ) -> String {
         switch format {
         case .xcode: xcode(report)
-        case .json: json(report)
+        case .json: json(envelope(report, root: root.map(SourcePath.canonical), verbose: verbose, timings: timings))
         case .sarif: sarif(report, root: root.map(SourcePath.canonical))
         }
     }
@@ -75,14 +79,23 @@ public enum ReportFormatter {
     }
 
     /// The JSON report: the analysis report's fields and the keys every analyzer's report carries (ADR-0017).
-    private static func envelope(_ report: AnalysisReport) -> ReportEnvelope<AnalysisReport> {
+    private static func envelope(
+        _ report: AnalysisReport, root: String?, verbose: Bool, timings: Bool
+    ) -> ReportEnvelope<AnalysisReport> {
         var seen: Set<String> = []
         let skipped = report.degradedFiles.compactMap { file in
             seen.insert(file.path).inserted ? SkippedFile(path: file.path, reason: .degraded) : nil
         }
+        func shown(_ path: String) -> String { root.map { RepositoryRoot.relativize(path, to: $0) } ?? path }
+        let classification = report.classificationIssues.map { issue in
+            RunNote(
+                code: issue.code, severity: "note", message: issue.message, paths: issue.paths.map(shown),
+                verbose: verbose)
+        }
         return ReportEnvelope(
-            report, tool: ToolInfo.name, version: ToolInfo.version, runNotes: report.notes.map(runNote),
-            skippedFiles: skipped)
+            report, tool: ToolInfo.name, version: ToolInfo.version,
+            runNotes: classification + report.notes.map(runNote), skippedFiles: skipped,
+            timings: timings ? report.timings : nil)
     }
 
     /// A free-text note as a run note: deadwood's `notes` stay as they are, and are listed here too (ADR-0017).
@@ -92,10 +105,10 @@ public enum ReportFormatter {
         )
     }
 
-    private static func json(_ report: AnalysisReport) -> String {
+    private static func json(_ envelope: ReportEnvelope<AnalysisReport>) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(envelope(report)),
+        guard let data = try? encoder.encode(envelope),
             let text = String(data: data, encoding: .utf8)
         else {
             return "{}"
