@@ -91,6 +91,25 @@ import Testing
         #expect(report.analyzedFileCount == 1)
     }
 
+    /// `"\r\n"` is one `Character`: a scope file split on `"\n"` alone stayed one line, so a CRLF change set (a
+    /// Windows-authored diff, `core.autocrlf`) scoped every finding out and the gate passed (analyzerkit roadmap 0057).
+    @Test("A CRLF or CR --only-from file scopes like an LF one", arguments: ["\r\n", "\r"])
+    func crlfOnlyFromScopesLikeLF(ending: String) throws {
+        let root = try Workspace.make([
+            "Sources/A.swift": Self.unusedHelper("unusedA"), "Sources/B.swift": Self.unusedHelper("unusedB"),
+        ])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let scope = root.appending(path: "changed.txt")
+        try Data(("Sources/A.swift" + ending + "Sources/Other.swift" + ending).utf8).write(to: scope)
+        let run = try BuiltTool.run(
+            ["analyze", root.path, "--format", "json", "--no-cache", "--only-from", scope.path], in: root)
+
+        let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
+        #expect(report.findings.count == 1, "A.swift's finding is in scope")
+        #expect(report.findings.first?.path.hasSuffix("Sources/A.swift") == true)
+        #expect(report.outOfScope.count == 1, "B.swift's finding is out of scope")
+    }
+
     @Test("`A cache without this build's header is a miss`")
     func cacheWithoutHeaderDoesNotCrash() throws {
         let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
