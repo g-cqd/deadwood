@@ -629,7 +629,7 @@ public struct Analyzer: Sendable {
 
     /// One file's extraction as the cache stores it: what one parse produces, or why the file was not analysed (over
     /// the size cap, not UTF-8, nested too deeply), so a cached file is never parsed again only to fail again.
-    private static func extract(
+    static func extract(
         bytes: [UInt8], path: String, deadBranchesEnabled: Bool, deadStoresEnabled: Bool
     ) -> ExtractedArtifacts {
         guard bytes.count <= sourceByteCap else {
