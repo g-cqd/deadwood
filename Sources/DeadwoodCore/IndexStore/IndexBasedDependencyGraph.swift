@@ -148,13 +148,40 @@
 
         // MARK: - Building
 
-        /// Build the dependency graph from an index reader.
-        func build(from reader: IndexStoreReader) {
+        /// Build the dependency graph from an index reader: each file is queried once, in parallel, into a summary of
+        /// its definitions and uses; the summaries are then merged in file order, aliases first, so an accessor defined
+        /// in one file folds into its property wherever it is used.
+        func build(from reader: IndexStoreReader) async {
             nodes.removeAll()
             edges.removeAll()
             accessorAliases.removeAll()
-            collectDefinitions(from: reader)
-            buildEdges(from: reader)
+            let files = analysisFiles.sorted()
+            let width = max(1, ProcessInfo.processInfo.activeProcessorCount)
+            var summaries = [FileSummary?](repeating: nil, count: files.count)
+            await withTaskGroup(of: (Int, FileSummary).self) { group in
+                var next = 0
+                func schedule() {
+                    let index = next
+                    let file = files[index]
+                    group.addTask { (index, FileSummary(reader.rawOccurrences(inFile: file))) }
+                    next += 1
+                }
+                while next < min(width, files.count) { schedule() }
+                for await (index, summary) in group {
+                    summaries[index] = summary
+                    if next < files.count { schedule() }
+                }
+            }
+            for summary in summaries.compactMap(\.self) {
+                for (accessor, owner) in summary.aliases { accessorAliases[accessor] = owner }
+            }
+            var canonicalPaths: [String: String] = [:]
+            for summary in summaries.compactMap(\.self) {
+                for definition in summary.definitions { add(definition, canonicalPaths: &canonicalPaths) }
+            }
+            for summary in summaries.compactMap(\.self) {
+                for use in summary.uses { add(use) }
+            }
         }
 
         /// Definition nodes located inside the analysis scope.
@@ -222,123 +249,113 @@
 
         // MARK: - Definition + edge collection
 
-        /// Collect all symbol definitions from files in scope: the
-        /// member→enclosing-type containment edges and the protocol/override
-        /// witness edges those definitions carry, and the accessor→property
-        /// aliases that let a computed property's own body count as its use.
-        private func collectDefinitions(from reader: IndexStoreReader) {
-            for filePath in analysisFiles {
-                for occurrence in reader.rawOccurrences(inFile: filePath) {
-                    guard isDefinitionLike(occurrence.roles) else { continue }
+        /// What one file's occurrences contribute, with no reference to the graph, so files are summarised in parallel.
+        struct FileSummary: Sendable {
+            struct Definition: Sendable {
+                let usr: String
+                let name: String
+                let kind: IndexedSymbolKind
+                let path: String
+                let line: Int
+                /// The enclosing types (`childOf`) and the bases this definition overrides or witnesses (`overrideOf`).
+                let parents: [String]
+                let overridden: [String]
+            }
 
-                    // A getter or setter is defined as its own symbol, related
-                    // to its property/subscript by `.accessorOf`. Alias it and
-                    // stop: the property's own definition occurrence supplies
-                    // the node, so nothing here should shadow it.
-                    if let owner = occurrence.relations.first(where: { $0.roles.contains(.accessorOf) }) {
-                        accessorAliases[occurrence.symbol.usr] = owner.symbol.usr
-                        continue
-                    }
+            struct Use: Sendable {
+                let target: String
+                let name: String
+                let kind: IndexedSymbolKind
+                /// The symbols containing the use, with the kind of edge; the bases it extends; what it overrides.
+                let containers: [(usr: String, kind: IndexDependencyKind)]
+                let bases: [String]
+                let overrides: [String]
+            }
 
-                    let usr = occurrence.symbol.usr
+            var aliases: [(accessor: String, owner: String)] = []
+            var definitions: [Definition] = []
+            var uses: [Use] = []
 
-                    for relation in occurrence.relations {
-                        // A member's definition carries a `.childOf` relation
-                        // to its enclosing type. The edge member→type means a
-                        // reachable member (e.g. a called `init`) keeps the
-                        // type alive — the common case where `Foo()`
-                        // references the initializer, not the type name.
-                        // (Inheritance is handled conservatively in the
-                        // bridge via deadwood's parsed conformance lists,
-                        // which are more reliable than the index's
-                        // structural relations.)
-                        if relation.roles.contains(.childOf) {
-                            addEdge(from: usr, to: canonical(relation.symbol.usr), kind: .containedBy)
+            init(_ occurrences: [SymbolOccurrence]) {
+                for occurrence in occurrences {
+                    let roles = occurrence.roles
+                    if isDefinitionLike(roles) {
+                        // A getter or setter is its own symbol, related to its property or subscript by `.accessorOf`:
+                        // alias it and stop, since the property's own definition supplies the node.
+                        if let owner = occurrence.relations.first(where: { $0.roles.contains(.accessorOf) }) {
+                            aliases.append((occurrence.symbol.usr, owner.symbol.usr))
+                        } else {
+                            definitions.append(
+                                Definition(
+                                    usr: occurrence.symbol.usr, name: occurrence.symbol.name,
+                                    kind: IndexedSymbolKind(from: occurrence.symbol.kind),
+                                    path: occurrence.location.path,
+                                    line: occurrence.location.line,
+                                    parents: occurrence.relations.filter { $0.roles.contains(.childOf) }.map(
+                                        \.symbol.usr),
+                                    overridden: occurrence.relations.filter { $0.roles.contains(.overrideOf) }
+                                        .map(\.symbol.usr)))
                         }
-                        // An override or protocol witness carries an
-                        // `.overrideOf` relation straight to the base member
-                        // or protocol requirement it satisfies, by USR — no
-                        // by-name matching needed. Using the base through
-                        // dynamic dispatch must be able to reach every
-                        // conformer, so the edge runs base → override.
-                        if relation.roles.contains(.overrideOf) {
-                            addEdge(from: canonical(relation.symbol.usr), to: usr, kind: .override)
-                        }
                     }
-
-                    guard nodes[usr] == nil else { continue }
-                    nodes[usr] = IndexSymbolNode(
-                        usr: usr,
-                        name: occurrence.symbol.name,
-                        kind: IndexedSymbolKind(from: occurrence.symbol.kind),
-                        definitionFile: Self.canonicalPath(occurrence.location.path),
-                        definitionLine: occurrence.location.line,
-                        isExternal: false
+                    guard indicatesUsage(roles) else { continue }
+                    let kind: IndexDependencyKind =
+                        if roles.contains(.call) { .call } else if roles.contains(.read) {
+                            .read
+                        } else if roles.contains(.write) { .write } else { .typeReference }
+                    uses.append(
+                        Use(
+                            target: occurrence.symbol.usr, name: occurrence.symbol.name,
+                            kind: IndexedSymbolKind(from: occurrence.symbol.kind),
+                            containers: occurrence.relations.filter { $0.roles.contains(.containedBy) }
+                                .map { ($0.symbol.usr, kind) },
+                            bases: occurrence.relations.filter { $0.roles.contains(.baseOf) }.map(\.symbol.usr),
+                            overrides: occurrence.relations.filter { $0.roles.contains(.overrideOf) }.map(\.symbol.usr))
                     )
                 }
             }
         }
 
-        /// The USR a declaration keeps in the graph: a property or
-        /// subscript's own USR, or the property/subscript an accessor's USR
-        /// belongs to.
+        /// A definition in scope: its node, the member→enclosing-type edge (a reachable member, such as a called
+        /// `init`, keeps its type alive), and the base→override edge (using a base through dynamic dispatch reaches
+        /// every conformer). Inheritance is handled in the bridge from deadwood's parsed conformance lists.
+        private func add(_ definition: FileSummary.Definition, canonicalPaths: inout [String: String]) {
+            let usr = definition.usr
+            for parent in definition.parents { addEdge(from: usr, to: canonical(parent), kind: .containedBy) }
+            for base in definition.overridden { addEdge(from: canonical(base), to: usr, kind: .override) }
+            guard nodes[usr] == nil else { return }
+            let path: String
+            if let known = canonicalPaths[definition.path] {
+                path = known
+            } else {
+                path = Self.canonicalPath(definition.path)
+                canonicalPaths[definition.path] = path
+            }
+            nodes[usr] = IndexSymbolNode(
+                usr: usr, name: definition.name, kind: definition.kind, definitionFile: path,
+                definitionLine: definition.line, isExternal: false)
+        }
+
+        /// A use: the containing symbol references the target; the target is a base of, or overrides, the related one.
+        private func add(_ use: FileSummary.Use) {
+            let target = canonical(use.target)
+            for container in use.containers {
+                addEdge(from: canonical(container.usr), to: target, kind: container.kind)
+            }
+            for base in use.bases { addEdge(from: target, to: canonical(base), kind: .inheritance) }
+            for overridden in use.overrides { addEdge(from: target, to: canonical(overridden), kind: .override) }
+            if nodes[target] == nil {
+                nodes[target] = IndexSymbolNode(usr: target, name: use.name, kind: use.kind, isExternal: true)
+            }
+        }
+
+        /// The USR a declaration keeps in the graph: a property or subscript's own USR, or the property/subscript an
+        /// accessor's USR belongs to.
         private func canonical(_ usr: String) -> String {
             accessorAliases[usr] ?? usr
         }
 
-        /// Build edges from all references in scope.
-        private func buildEdges(from reader: IndexStoreReader) {
-            for filePath in analysisFiles {
-                for occurrence in reader.rawOccurrences(inFile: filePath) {
-                    processOccurrence(occurrence)
-                }
-            }
-        }
-
-        /// Extract edges from one occurrence via its containment relations.
-        private func processOccurrence(_ occurrence: SymbolOccurrence) {
-            let roles = occurrence.roles
-            let targetUSR = canonical(occurrence.symbol.usr)
-            guard indicatesUsage(roles) else { return }
-
-            for relation in occurrence.relations {
-                let relatedUSR = canonical(relation.symbol.usr)
-                let relatedRoles = relation.roles
-
-                // The containing symbol references the target.
-                if relatedRoles.contains(.containedBy) {
-                    let kind: IndexDependencyKind =
-                        if roles.contains(.call) { .call } else if roles.contains(.read) {
-                            .read
-                        } else if roles.contains(.write) { .write } else { .typeReference }
-                    addEdge(from: relatedUSR, to: targetUSR, kind: kind)
-                }
-                // The target is a base of (extended by) the related symbol.
-                if relatedRoles.contains(.baseOf) {
-                    addEdge(from: targetUSR, to: relatedUSR, kind: .inheritance)
-                }
-                // The target overrides the related symbol.
-                if relatedRoles.contains(.overrideOf) {
-                    addEdge(from: targetUSR, to: relatedUSR, kind: .override)
-                }
-            }
-
-            ensureNodeExists(usr: targetUSR, symbol: occurrence.symbol, isExternal: true)
-        }
-
-        private func ensureNodeExists(usr: String, symbol: Symbol, isExternal: Bool) {
-            guard nodes[usr] == nil else { return }
-            nodes[usr] = IndexSymbolNode(
-                usr: usr,
-                name: symbol.name,
-                kind: IndexedSymbolKind(from: symbol.kind),
-                isExternal: isExternal
-            )
-        }
-
         private func addEdge(from: String, to: String, kind: IndexDependencyKind) {
-            edges[from, default: []].insert(
-                IndexDependencyEdge(fromUSR: from, toUSR: to, kind: kind))
+            edges[from, default: []].insert(IndexDependencyEdge(fromUSR: from, toUSR: to, kind: kind))
         }
     }
 

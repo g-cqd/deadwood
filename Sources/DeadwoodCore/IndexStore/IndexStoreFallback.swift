@@ -154,6 +154,7 @@
             }
 
             guard let library = await resolvedLibrary() else { return .fallback(reason: .dylibNotFound) }
+            IndexQueryCounter.current?.countOpen()
             switch IndexStoreSession.open(store, cacheRoot: cacheRoot, library: library, analyzedFiles: sourceFiles) {
             case .usable(let session):
                 // A file the index never saw, or saw before it last changed; an unreadable one is not judged.

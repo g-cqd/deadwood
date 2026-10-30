@@ -80,8 +80,8 @@
                 try Self.write("func f\(index)() -> Int { \(index) }\n", file)
                 files.append(file)
             }
-            let main = root.appending(path: "Sources/App/main.swift")
-            try Self.write("print(f0() + f1())\n", main)
+            let main = root.appending(path: "Sources/App/App.swift")
+            try Self.write("@main\nstruct App {\n    static func main() { print(f0() + f1()) }\n}\n", main)
             files.append(main)
             let store = root.appending(path: "store")
             try SwiftcIndexFixture.build(store: store, module: "App", files: files, in: root)

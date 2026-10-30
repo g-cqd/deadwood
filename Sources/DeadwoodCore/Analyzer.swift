@@ -4,6 +4,10 @@ import SourceCorpus
 import SwiftParser
 import SwiftSyntax
 
+#if canImport(IndexStoreDB)
+    import IndexStoreSupport
+#endif
+
 #if canImport(FoundationEssentials)
     import FoundationEssentials
 #else
@@ -388,7 +392,8 @@ public struct Analyzer: Sendable {
                         .classify(declarations: declarations, context: context)
                     : []
 
-                let reach = IndexReachabilityBridge().computeReachability(
+                let coverage = reader.session.coverage
+                let reach = await IndexReachabilityBridge().computeReachability(
                     result: result,
                     context: context,
                     configuration: engineConfig,
@@ -396,7 +401,9 @@ public struct Analyzer: Sendable {
                     productionMode: productionMode,
                     testScoped: testScoped,
                     reader: reader,
-                    analysisFiles: files
+                    analysisFiles: files,
+                    uncoveredFiles: coverage.paths(.notIndexed) + coverage.paths(.changedSinceBuild),
+                    verbose: indexStore.verbose
                 )
 
                 // A discovered index that resolves NONE of the analyzed
@@ -463,11 +470,21 @@ public struct Analyzer: Sendable {
                     }
                 }
 
+                // The advice follows the coverage class (ADR-0005 item 4): a file with no unit was not built by this
+                // scheme, a file newer than its unit changed since the build.
                 var notes = ["\(ToolInfo.name): --index-store active at \(path) — \(reach.summary)"]
-                if !stale.isEmpty {
+                let unbuilt = coverage.paths(.notIndexed).count
+                let changed = coverage.paths(.changedSinceBuild).count
+                if !stale.isEmpty, unbuilt > 0 {
                     notes.append(
-                        "\(ToolInfo.name): index is stale for \(stale.count) file(s); "
-                            + "skipping their declarations — re-run `swift build`")
+                        "\(ToolInfo.name): the index has no unit for \(unbuilt) file(s), not built by this scheme or not "
+                            + "built yet; skipping their declarations, whose uses still count by name — build the "
+                            + "scheme that compiles them")
+                }
+                if !stale.isEmpty, changed > 0 {
+                    notes.append(
+                        "\(ToolInfo.name): index is stale for \(changed) file(s) changed since the build; skipping their "
+                            + "declarations, whose uses still count by name — re-run the build")
                 }
                 return (unused, notes)
             }
