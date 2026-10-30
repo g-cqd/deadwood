@@ -49,11 +49,13 @@
             productionMode: Bool,
             testScoped: [Bool],
             indexStorePath: String,
+            libIndexStorePath: String?,
             analysisFiles: [String],
             allowsDirectoryCreation: Bool
         ) throws(IndexStoreError) -> Result {
             let reader = try IndexStoreReader(
                 indexStorePath: indexStorePath,
+                libIndexStorePath: libIndexStorePath,
                 allowsDirectoryCreation: allowsDirectoryCreation
             )
             reader.pollForChanges()

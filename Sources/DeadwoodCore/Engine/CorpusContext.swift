@@ -49,12 +49,16 @@ struct CorpusContext: Sendable {
     /// Files a generator wrote.
     private let generatedFiles: Set<String>
 
+    /// Test code, by its project or its content.
+    private let testFiles: Set<String>
+
     /// Per file, the lines only debug builds or previews compile.
     private let regionSpansByFile: [String: [RegionSpan]]
 
     init(result: AnalysisResult, systemEntryPoints: Set<String> = []) {
         systemEntryPointNames = systemEntryPoints
         generatedFiles = result.generatedFiles
+        testFiles = result.testFiles
         regionSpansByFile = result.regionSpansByFile.mapValues { $0.map(\.regionSpan) }
         scopes = result.scopes
         stringLiteralOccurrences = result.stringLiteralOccurrences
@@ -123,6 +127,11 @@ struct CorpusContext: Sendable {
     /// Whether a generator wrote `file`.
     func isGeneratedFile(_ file: String) -> Bool {
         generatedFiles.contains(file)
+    }
+
+    /// Whether `file` is test code, by its project's targets or its content (ADR-0024).
+    func isTestFile(_ file: String) -> Bool {
+        testFiles.contains(file)
     }
 
     // MARK: - Code regions

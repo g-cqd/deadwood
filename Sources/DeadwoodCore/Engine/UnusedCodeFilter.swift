@@ -26,26 +26,16 @@ struct UnusedCodeFilterConfiguration: Sendable {
     /// Exclude test suite declarations (names ending with "Tests"/"Test").
     var excludeTestSuites: Bool
 
-    /// Path patterns to exclude (glob syntax).
-    var excludePathPatterns: [String]
-
-    /// Name patterns to exclude (regex).
-    var excludeNamePatterns: [String]
-
     init(
         excludeImports: Bool = false,
         excludeDeinit: Bool = false,
         excludeBacktickedEnumCases: Bool = false,
-        excludeTestSuites: Bool = false,
-        excludePathPatterns: [String] = [],
-        excludeNamePatterns: [String] = []
+        excludeTestSuites: Bool = false
     ) {
         self.excludeImports = excludeImports
         self.excludeDeinit = excludeDeinit
         self.excludeBacktickedEnumCases = excludeBacktickedEnumCases
         self.excludeTestSuites = excludeTestSuites
-        self.excludePathPatterns = excludePathPatterns
-        self.excludeNamePatterns = excludeNamePatterns
     }
 }
 
@@ -56,24 +46,8 @@ struct UnusedCodeFilter: Sendable {
     /// Filter configuration.
     let configuration: UnusedCodeFilterConfiguration
 
-    /// Pre-compiled custom path patterns (anchored whole-match globs).
-    private let compiledPathPatterns: CompiledPatterns
-
-    /// Pre-compiled name patterns.
-    private let namePatterns: CompiledPatterns
-
     init(configuration: UnusedCodeFilterConfiguration) {
         self.configuration = configuration
-
-        // Custom path globs go through the canonical `GlobMatcher`
-        // translation, anchored so substring matching behaves as a whole
-        // match. The three common globs are handled by fast paths instead.
-        compiledPathPatterns = CompiledPatterns(
-            configuration.excludePathPatterns
-                .filter { !Self.isCommonGlob($0) }
-                .map { "^\(GlobMatcher.translate(pattern: $0))$" }
-        )
-        namePatterns = CompiledPatterns(configuration.excludeNamePatterns)
     }
 
     // MARK: - Helpers
@@ -93,7 +67,6 @@ struct UnusedCodeFilter: Sendable {
     /// Check if a result should be excluded.
     func shouldExclude(_ item: UnusedCode) -> Bool {
         let name = item.declaration.name
-        let filePath = item.declaration.location.file
 
         // Underscore is Swift's "discard this value" identifier.
         if name == "_" {
@@ -116,32 +89,6 @@ struct UnusedCodeFilter: Sendable {
             return true
         }
 
-        for pattern in configuration.excludePathPatterns {
-            switch pattern {
-            case "**/Tests/**":
-                if pathMatchesTestsGlob(filePath) { return true }
-            case "**/*Tests.swift":
-                if pathMatchesTestFileSuffixGlob(filePath) { return true }
-            case "**/Fixtures/**":
-                if pathMatchesFixturesGlob(filePath) { return true }
-            default:
-                break
-            }
-        }
-
-        if compiledPathPatterns.anyMatches(filePath) {
-            return true
-        }
-
-        return namePatterns.anyMatches(name)
-    }
-
-    private static func isCommonGlob(_ pattern: String) -> Bool {
-        switch pattern {
-        case "**/Tests/**", "**/*Tests.swift", "**/Fixtures/**":
-            true
-        default:
-            false
-        }
+        return false
     }
 }

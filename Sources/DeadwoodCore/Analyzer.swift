@@ -1,12 +1,13 @@
+public import CorpusScan
 public import ProjectModel
 import SourceCorpus
 import SwiftParser
 import SwiftSyntax
 
 #if canImport(FoundationEssentials)
-    public import FoundationEssentials
+    import FoundationEssentials
 #else
-    public import Foundation
+    import Foundation
 #endif
 
 /// Entry point of the pipeline: reads each file with a bounded reader, scans
@@ -34,10 +35,9 @@ public struct Analyzer: Sendable {
 
     // MARK: - Corpus analysis
 
-    /// Analyze a corpus of files. With `cacheURL`, per-file artifacts
-    /// (facts, directives, dataflow findings) are reused when the file's
-    /// content fingerprint matches; the corpus-wide graph/BFS and every
-    /// rule always re-run, so findings can never go stale relative to rules
+    /// Analyze a corpus of files. With `cache`, per-file artifacts (facts, directives, dataflow findings) are reused
+    /// through analyzerkit's `CorpusScanner` (ADR-0011) when the file's content, the configuration and the build
+    /// match; the corpus-wide graph/BFS and every rule always re-run, so findings can never go stale relative to rules
     /// or configuration.
     /// - Parameter reportScope: narrows the *report* to a set of files; nil
     ///   reports everything. Reachability is corpus-level either way — see
@@ -48,7 +48,7 @@ public struct Analyzer: Sendable {
     public func analyze(
         files: [String],
         projectFiles: [String] = [],
-        cacheURL: URL? = nil,
+        cache: CacheLocation? = nil,
         indexStore: IndexStoreOptions = .disabled,
         embeddingConfidence: Bool = false,
         embeddingBundle: String? = nil,
@@ -58,6 +58,7 @@ public struct Analyzer: Sendable {
         // fingerprint, and the corpus must not contain the same file twice
         // under two spellings (it would enter the graph twice).
         let files = SourcePath.canonicalized(files)
+        let started = ContinuousClock.now
 
         var report = AnalysisReport()
         report.analyzedFileCount = files.count
@@ -65,90 +66,69 @@ public struct Analyzer: Sendable {
         let deadBranchesEnabled = configuration.isEnabled(.deadBranch)
         let deadStoresEnabled = configuration.isEnabled(.deadStore)
         // The entire configuration and rule settings participate in the key.
-        // A cache hit precedes UTF-8 validation, so that policy is keyed too.
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         let configurationData = try? encoder.encode(configuration)
-        let cacheURL = configurationData == nil ? nil : cacheURL
-        let salt = "utf8=strict;config=\(configurationData.map { FactsCache.fingerprint(of: $0) } ?? "")"
-        let snapshot = cacheURL.map { FactsCache.load(url: $0) } ?? FactsCache()
-        report.cacheLoadFailure = snapshot.loadFailure
+        let cache = configurationData == nil ? nil : cache
+        let salt = "utf8=strict;config=" + (configurationData.map { String(decoding: $0, as: UTF8.self) } ?? "")
 
-        // Read, fingerprint, and parse or reuse each file in parallel,
-        // bounded; skipped files are reported, never silently dropped. A
-        // cache hit never decodes the file's text: its artifacts are what the
-        // parse would produce.
-        let engineConfig = engineConfiguration(mode: .reachability)
-        let concurrency = ParallelMode.safe.concurrencyConfiguration
-        let outcomes = await ParallelProcessor.map(
-            files,
-            maxConcurrency: concurrency.maxConcurrentFiles
-        ) { path -> FileOutcome in
-            // Abort, never truncate: deadwood decides "unused" by finding no
-            // reference anywhere, so continuing with a partial corpus turns
-            // live declarations into false positives. The check below the
-            // parallel phase reports nothing instead.
-            if Task.isCancelled { return .cancelled }
-            let data: Data
-            do {
-                data = try BoundedFileReader.read(path: path, cap: Self.sourceByteCap)
-            } catch {
-                return .skipped(.init(path: path, detail: "read failed or exceeds size cap: \(error)"))
+        // Regions come from the project first (ADR-0024). The cache keeps only what the content says of a file's
+        // region; the project's part changes without the file changing, so it is joined on every run.
+        let classification = ProjectLayout.discover(paths: files).map(ProjectClassification.load) ?? .conventionsOnly
+        let scan: CorpusScan<ExtractedArtifacts>
+        do {
+            scan = try await CorpusScanner.scan(
+                paths: files, cache: cache,
+                identity: CacheIdentity.current(tool: ToolInfo.name, version: ToolInfo.version), salt: salt,
+                width: ParallelMode.safe.concurrencyConfiguration.maxConcurrentFiles
+            ) { path, bytes in
+                Self.extract(
+                    bytes: bytes, path: path, deadBranchesEnabled: deadBranchesEnabled,
+                    deadStoresEnabled: deadStoresEnabled)
             }
-            let fingerprint = FactsCache.fingerprint(of: data, salt: salt)
-            if let cached = snapshot.artifacts(for: path, fingerprint: fingerprint) {
-                return .analyzed(FileArtifacts(path: path, cached: cached), fingerprint: fingerprint, cacheHit: true)
-            }
-            // Swift sources are UTF-8. Repairing invalid bytes would analyze
-            // text that is not in the file, and hide the file from the count
-            // of skipped files.
-            guard let source = String(validating: data, as: UTF8.self) else {
-                return .skipped(.init(path: path, detail: "not valid UTF-8"))
-            }
-            // Parsing and every walk of the tree recurse once per level: a cache miss runs on a large stack, and a
-            // tree nested past the limit is skipped, not walked (analyzerkit roadmap 0041).
-            let artifacts = await LargeStack.run {
-                Self.collectArtifacts(
-                    path: path,
-                    source: source,
-                    deadBranchesEnabled: deadBranchesEnabled,
-                    deadStoresEnabled: deadStoresEnabled
-                )
-            }
-            guard let artifacts else { return .skipped(Self.tooDeep(path)) }
-            return .analyzed(artifacts, fingerprint: fingerprint, cacheHit: false)
+        } catch {
+            // Abort, never truncate: deadwood decides "unused" by finding no reference anywhere, so a partial corpus
+            // turns live declarations into false positives. The scanner does not touch the cache when cancelled.
+            report.wasCancelled = true
+            return report
         }
+        report.cacheLoadFailure = scan.cacheLoadFailure
+        let scanned = ContinuousClock.now
 
         var perFile: [FileArtifacts] = []
-        var fingerprints: [String] = []
         var cacheHits = 0
-        var observedCancellation = false
-        for outcome in outcomes {
-            switch outcome {
-            case .analyzed(let artifacts, let fingerprint, let cacheHit):
-                perFile.append(artifacts)
-                fingerprints.append(fingerprint)
-                if cacheHit { cacheHits += 1 }
-            case .skipped(let file):
-                report.degradedFiles.append(file)
-            case .cancelled:
-                observedCancellation = true
+        for file in scan.files {
+            if let failure = file.failure {
+                report.degradedFiles.append(
+                    .init(path: file.path, detail: "read failed or exceeds size cap: \(failure)"))
+                continue
             }
+            guard let extracted = file.facts else { continue }
+            guard let cached = extracted.artifacts else {
+                report.degradedFiles.append(.init(path: file.path, detail: extracted.skipped ?? "not analysed"))
+                continue
+            }
+            var artifacts = FileArtifacts(path: file.path, cached: cached)
+            let region = classification.classify(
+                file.path, content: CodeRegion(rawValue: artifacts.facts.contentRegion)
+            )
+            .region
+            artifacts.facts.isGenerated = region.contains(.generated)
+            artifacts.facts.isTestCode = region.contains(.test)
+            perFile.append(artifacts)
+            if file.cacheHit { cacheHits += 1 }
         }
-        if cacheURL != nil {
+        if cache != nil {
             report.cacheHits = cacheHits
             report.cacheMisses = perFile.count - cacheHits
         }
+        report.classificationIssues = classification.issues(for: files)
         let analyzedPaths = perFile.map(\.path)
 
-        // Cancellation may have landed *inside* the parallel phase: SCCP,
-        // liveness and frontier expansion cooperate by breaking out of their
-        // fixpoint loops, so their outputs are truncated, not merely late.
-        // Truncated artifacts fabricate findings (under-converged executability
-        // reads live code as dead) and, worse, would be persisted below keyed by
-        // the file's *content* fingerprint — replayed as cache hits on every
-        // later clean run. Abort before either can happen.
-        if Task.isCancelled || observedCancellation {
+        // Cancellation may have landed inside extraction: SCCP, liveness and frontier expansion break out of their
+        // fixpoint loops, so their outputs are truncated, not merely late. The scanner throws then, and does not
+        // persist; this catches a cancellation that lands after it.
+        if Task.isCancelled {
             report.findings = []
             report.outOfScope = []
             report.suppressed = []
@@ -156,35 +136,8 @@ public struct Analyzer: Sendable {
             return report
         }
 
-        // Persist a cache rebuilt from ONLY this run's files: absent files
-        // are pruned, and the cache stays shaped to the project.
-        if let cacheURL {
-            var freshCache = FactsCache()
-            for (artifacts, fingerprint) in zip(perFile, fingerprints) {
-                freshCache.update(
-                    path: artifacts.path,
-                    fingerprint: fingerprint,
-                    artifacts: CachedFileArtifacts(artifacts)
-                )
-            }
-            // Persist-skip guard: on a full-hit run that pruned nothing, the
-            // rebuilt cache is byte-identical to what is already on disk (every
-            // entry came from the snapshot, unchanged, and the sorted encode is
-            // deterministic), so the re-encode+write is pure cost. A changed or added file is a miss
-            // (cacheMisses > 0); a deleted file leaves the snapshot holding more
-            // entries than the rebuild — either case still persists (and prunes).
-            let unchanged =
-                snapshot.loadFailure == nil
-                && report.cacheMisses == 0
-                && freshCache.entries.count == snapshot.entries.count
-            if !unchanged {
-                if let warning = freshCache.persist(url: cacheURL) {
-                    report.notes.append(warning)
-                }
-            }
-        }
-
         // Aggregate the corpus and run detection.
+        let engineConfig = engineConfiguration(mode: .reachability)
         let result = StaticAnalyzer.aggregate(perFile.map(\.facts), files: analyzedPaths)
         let entryPoints = Self.systemEntryPoints(in: projectFiles)
         report.notes.append(contentsOf: entryPoints.notes)
@@ -270,7 +223,14 @@ public struct Analyzer: Sendable {
         if let root = RepositoryRoot.common(of: analyzedPaths) {
             report = report.fingerprintsAnchored(to: root)
         }
+        report.timings = [
+            "scan": Self.seconds(scanned - started), "detect": Self.seconds(ContinuousClock.now - scanned),
+        ]
         return report
+    }
+
+    private static func seconds(_ duration: Duration) -> Double {
+        Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
     }
 
     // MARK: - Generated code
@@ -400,7 +360,9 @@ public struct Analyzer: Sendable {
             let cwd = FileManager.default.currentDirectoryPath
             let projectRoot = IndexProjectLocator.projectRoot(for: files, fallback: cwd)
             let fallbackConfig = FallbackConfiguration(autoBuild: indexStore.autoBuild)
-            let manager = IndexStoreFallbackManager(configuration: fallbackConfig)
+            // Resolved once, asynchronously: the readers below open the store synchronously.
+            let library = await IndexStoreReader.findLibIndexStore()
+            let manager = IndexStoreFallbackManager(configuration: fallbackConfig, libIndexStorePath: library)
             let outcome = await manager.resolveIndexStore(
                 projectRoot: projectRoot,
                 sourceFiles: files,
@@ -430,6 +392,7 @@ public struct Analyzer: Sendable {
                         productionMode: productionMode,
                         testScoped: testScoped,
                         indexStorePath: path,
+                        libIndexStorePath: library,
                         analysisFiles: files,
                         allowsDirectoryCreation: fallbackConfig.allowsIndexDatabaseCreation
                     )
@@ -674,16 +637,29 @@ public struct Analyzer: Sendable {
 
     // MARK: - Shared plumbing
 
-    /// One file's result from the parallel read-and-parse phase.
-    private enum FileOutcome: Sendable {
-        /// The file's artifacts, from the cache or a fresh parse, and the
-        /// content fingerprint they are cached under.
-        case analyzed(FileArtifacts, fingerprint: String, cacheHit: Bool)
-        /// The file could not be analyzed: unreadable, over the size cap, or
-        /// not UTF-8.
-        case skipped(AnalysisReport.DegradedFile)
-        /// Cancellation was observed before the file was read.
-        case cancelled
+    /// One file's extraction as the cache stores it: what one parse produces, or why the file was not analysed (over
+    /// the size cap, not UTF-8, nested too deeply), so a cached file is never parsed again only to fail again.
+    private static func extract(
+        bytes: [UInt8], path: String, deadBranchesEnabled: Bool, deadStoresEnabled: Bool
+    ) -> ExtractedArtifacts {
+        guard bytes.count <= sourceByteCap else {
+            // Worded as the release worded it, through the configuration reader's error.
+            let error = DeadwoodError.configurationInvalid(path: path, detail: "exceeds \(sourceByteCap) byte cap")
+            return ExtractedArtifacts(skipped: "read failed or exceeds size cap: \(error)")
+        }
+        // Swift sources are UTF-8. Repairing invalid bytes would analyze text that is not in the file, and hide the
+        // file from the count of skipped files.
+        guard let source = String(validating: bytes, as: UTF8.self) else {
+            return ExtractedArtifacts(skipped: "not valid UTF-8")
+        }
+        // Parsing and every walk of the tree recurse once per level: a tree nested past the limit is skipped, not
+        // walked (analyzerkit roadmap 0041).
+        guard
+            let artifacts = collectArtifacts(
+                path: path, source: source, deadBranchesEnabled: deadBranchesEnabled,
+                deadStoresEnabled: deadStoresEnabled)
+        else { return ExtractedArtifacts(skipped: tooDeep(path).detail) }
+        return ExtractedArtifacts(artifacts: CachedFileArtifacts(artifacts))
     }
 
     /// The text of each file a finding lies in, read again for the opt-in
@@ -706,7 +682,7 @@ public struct Analyzer: Sendable {
     /// dead-branch pass skipped). This is exactly the cacheable unit.
     fileprivate struct FileArtifacts: Sendable {
         let path: String
-        let facts: FileAnalysisResult
+        var facts: FileAnalysisResult
         let directives: [SuppressionDirective]
         let deadBranches: [UnusedCode]
         let degraded: [String]

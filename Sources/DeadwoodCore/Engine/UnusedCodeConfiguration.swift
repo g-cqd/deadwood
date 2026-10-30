@@ -45,8 +45,8 @@ struct UnusedCodeConfiguration: Sendable {
     /// finding. A root never becomes a finding regardless.
     var regionSelection: RegionSelection = .none
 
-    /// Glob deciding which files are test files in production mode; nil
-    /// uses the built-in heuristics (`**/Tests/**`, `**/*Tests.swift`).
+    /// Glob deciding which files are test files in production mode, read as analyzerkit's `PathFilter` reads an
+    /// `exclude` entry (ADR-0008); nil takes the test region from the project (ADR-0024).
     var testsGlob: String?
 
     /// Detection mode to use.
@@ -54,9 +54,6 @@ struct UnusedCodeConfiguration: Sendable {
 
     /// Minimum confidence level to report.
     var minimumConfidence: Confidence
-
-    /// Patterns to ignore (regex for declaration names).
-    var ignoredPatterns: [String]
 
     /// Treat public API as entry points. Wired to the inverse of the
     /// `unused-public-api` rule toggle.
@@ -104,7 +101,6 @@ struct UnusedCodeConfiguration: Sendable {
         testsGlob: String? = nil,
         mode: DetectionMode = .reachability,
         minimumConfidence: Confidence = .low,
-        ignoredPatterns: [String] = [],
         treatPublicAsRoot: Bool = true,
         treatObjcAsRoot: Bool = true,
         treatTestsAsRoot: Bool = true,
@@ -125,7 +121,6 @@ struct UnusedCodeConfiguration: Sendable {
         self.testsGlob = testsGlob
         self.mode = mode
         self.minimumConfidence = minimumConfidence
-        self.ignoredPatterns = ignoredPatterns
         self.treatPublicAsRoot = treatPublicAsRoot
         self.treatObjcAsRoot = treatObjcAsRoot
         self.treatTestsAsRoot = treatTestsAsRoot

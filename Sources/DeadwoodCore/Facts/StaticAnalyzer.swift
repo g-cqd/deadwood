@@ -36,6 +36,7 @@ struct StaticAnalyzer: Sendable {
 
         let refCollector = ReferenceCollector(file: file, converter: converter)
         refCollector.walk(tree)
+        let content = ProjectClassification.contentRegion(path: file, tree: tree)
 
         return FileAnalysisResult(
             file: file,
@@ -45,7 +46,9 @@ struct StaticAnalyzer: Sendable {
             scopes: Array(declCollector.tracker.tree.scopes.values),
             stringLiteralTokens: refCollector.stringLiteralTokens,
             commentTokens: refCollector.commentTokens,
-            isGenerated: GeneratedCode.isGenerated(path: file, tree: tree),
+            isGenerated: content.contains(.generated),
+            isTestCode: content.contains(.test),
+            contentRegion: content.rawValue,
             regionSpans: CodeRegionScanner.scan(tree, converter: converter).map(CodeRegionSpan.init)
         )
     }
@@ -108,6 +111,7 @@ struct StaticAnalyzer: Sendable {
         var stringOccurrences: [String: [SourceLocation]] = [:]
         var commentTokens: Set<String> = []
         var generatedFiles: Set<String> = []
+        var testFiles: Set<String> = []
         var regionSpansByFile: [String: [CodeRegionSpan]] = [:]
 
         for result in results {
@@ -121,6 +125,7 @@ struct StaticAnalyzer: Sendable {
                 scopeTree.add(scope)
             }
             commentTokens.formUnion(result.commentTokens)
+            if result.isTestCode { testFiles.insert(result.file) }
             if result.isGenerated {
                 generatedFiles.insert(result.file)
             } else {
@@ -142,6 +147,7 @@ struct StaticAnalyzer: Sendable {
             stringLiteralOccurrences: stringOccurrences,
             commentTokens: commentTokens,
             generatedFiles: generatedFiles,
+            testFiles: testFiles,
             regionSpansByFile: regionSpansByFile
         )
     }
