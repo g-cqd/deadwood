@@ -132,7 +132,7 @@ struct FactsCache: Sendable {
     static let maxCacheBytes = 64 * 1024 * 1024
 
     private static func header(build: String) -> Data {
-        Data("deadwood facts 2 \(ToolInfo.version) \(build) json\n".utf8)
+        Data("deadwood facts 3 \(ToolInfo.version) \(build) json\n".utf8)
     }
 
     static func load(url: URL, build: String? = BuildIdentity.current) -> FactsCache {

@@ -148,6 +148,7 @@ struct DependencyExtractor: Sendable {
                 sortedRefsByFile: sortedRefsByFile,
                 refLevelsByFile: recordingRegionLevels ? refLevelsByFile : nil,
                 declByName: declByName,
+                declarations: allDeclarations,
                 context: context
             )
             return leveled.targets.isEmpty ? nil : (Int32(entry.offset), leveled.targets, leveled.levels)
@@ -188,6 +189,7 @@ struct DependencyExtractor: Sendable {
         sortedRefsByFile: [String: [Reference]],
         refLevelsByFile: [String: [UInt8]]?,
         declByName: [String: [Int32]],
+        declarations: [Declaration],
         context: CorpusContext
     ) -> (targets: [Int32], levels: [UInt8]) {
         // Target → the lowest level of the references drawing it.
@@ -206,7 +208,9 @@ struct DependencyExtractor: Sendable {
             let reference = fileRefs[index]
             let level = fileLevels?[index] ?? 0
             if let matches = declByName[reference.identifier] {
-                add(matches, level: level)
+                add(
+                    Self.callableMatches(matches, labels: reference.callLabels, declarations: declarations),
+                    level: level)
             }
             if let qualifier = reference.qualifier, let matches = declByName[qualifier] {
                 add(matches, level: level)
@@ -228,6 +232,42 @@ struct DependencyExtractor: Sendable {
 
         let sorted = targets.keys.sorted()
         return (sorted, sorted.map { targets[$0] ?? 0 })
+    }
+
+    /// The declarations a reference named like `matches` may mean. A call with arguments whose labels fit a function
+    /// among them does not name a variable or constant of a non-function type (analyzerkit roadmap 0058): by name,
+    /// `Converter().location(for: n)` is not a use of a property `location: String`. When no function fits the labels,
+    /// the call may be `callAsFunction` on the property's type, and every match stays.
+    /// - Complexity: O(*m* · *p*) for *m* matches of at most *p* parameters.
+    static func callableMatches(_ matches: [Int32], labels: [String]?, declarations: [Declaration]) -> [Int32] {
+        guard let labels, matches.count > 1 else { return matches }
+        let fitted = matches.contains { index in
+            declarations[Int(index)].signature.map { fits(labels, $0.parameters) } ?? false
+        }
+        guard fitted else { return matches }
+        return matches.filter { index in
+            let declaration = declarations[Int(index)]
+            guard declaration.kind == .variable || declaration.kind == .constant else { return true }
+            // A property of function type (or of a type not written down) may be what is called.
+            guard let type = declaration.typeAnnotation else { return true }
+            return type.contains("->")
+        }
+    }
+
+    /// Whether a call with `labels` fits `parameters`, in order, a defaulted or variadic parameter left out or
+    /// (variadic) given more than once.
+    static func fits(_ labels: [String], _ parameters: [FunctionSignature.Parameter]) -> Bool {
+        var next = 0
+        for parameter in parameters {
+            let label = parameter.label ?? "_"
+            if next < labels.count, labels[next] == label {
+                next += 1
+                if parameter.isVariadic { while next < labels.count, labels[next] == "_" { next += 1 } }
+            } else if !parameter.hasDefaultValue && !parameter.isVariadic {
+                return false
+            }
+        }
+        return next == labels.count
     }
 
     /// Which declaration owns each of one file's line-sorted references:

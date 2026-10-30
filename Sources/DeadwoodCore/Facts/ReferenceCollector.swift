@@ -90,6 +90,17 @@ final class ReferenceCollector: ScopeTrackingVisitor {
         return tokens
     }
 
+    // MARK: - Call labels
+
+    /// The callee of the call being walked, when it has arguments, and their labels.
+    private var pendingCallee: (id: SyntaxIdentifier, labels: [String])?
+
+    /// The labels of the call `node` is the callee of, or nil.
+    private func labels(ifCallee node: some ExprSyntaxProtocol) -> [String]? {
+        guard let pending = pendingCallee, pending.id == node.id else { return nil }
+        return pending.labels
+    }
+
     // MARK: - Identifier expressions
 
     override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
@@ -97,7 +108,8 @@ final class ReferenceCollector: ScopeTrackingVisitor {
             identifier: node.baseName.text,
             location: location(of: node),
             scope: currentScope,
-            context: currentContext
+            context: currentContext,
+            callLabels: labels(ifCallee: node)
         )
         references.append(reference)
 
@@ -119,7 +131,8 @@ final class ReferenceCollector: ScopeTrackingVisitor {
             identifier: node.declName.baseName.text,
             location: location(of: node.declName),
             scope: currentScope,
-            context: .memberAccessMember
+            context: .memberAccessMember,
+            callLabels: labels(ifCallee: node)
         )
         references.append(reference)
 
@@ -129,10 +142,15 @@ final class ReferenceCollector: ScopeTrackingVisitor {
     // MARK: - Function calls
 
     override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
-        // Track the called expression.
+        // Track the called expression; a name or member it calls with arguments carries their labels.
+        let outerCallee = pendingCallee
+        pendingCallee =
+            node.arguments.isEmpty
+            ? nil : (node.calledExpression.id, node.arguments.map { $0.label?.text ?? "_" })
         contextStack.append(.call)
         walk(node.calledExpression)
         contextStack.removeLast()
+        pendingCallee = outerCallee
 
         // Track arguments normally.
         for argument in node.arguments {

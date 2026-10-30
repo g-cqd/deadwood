@@ -8,12 +8,14 @@ struct CachedReference: Sendable, Codable {
     let line: Int
     let context: ReferenceContext
     let qualifier: String?
+    let callLabels: [String]?
 
     private enum CodingKeys: String, CodingKey {
         case identifier = "i"
         case line = "l"
         case context = "c"
         case qualifier = "q"
+        case callLabels = "a"
     }
 
     init(_ reference: Reference) {
@@ -21,6 +23,7 @@ struct CachedReference: Sendable, Codable {
         line = reference.location.line
         context = reference.context
         qualifier = reference.qualifier
+        callLabels = reference.callLabels
     }
 
     func restored(in file: String) -> Reference {
@@ -30,7 +33,8 @@ struct CachedReference: Sendable, Codable {
             scope: .global,
             context: context,
             isQualified: qualifier != nil,
-            qualifier: qualifier
+            qualifier: qualifier,
+            callLabels: callLabels
         )
     }
 }
@@ -51,6 +55,16 @@ extension CachedReference: AemiJSONFastEncodable, AemiJSONFastDecodable {
             w.key("q")
             w.string(qualifier)
         }
+        if let callLabels {
+            w.comma()
+            w.key("a")
+            w.beginArray()
+            for (index, label) in callLabels.enumerated() {
+                if index > 0 { w.comma() }
+                w.string(label)
+            }
+            w.endArray()
+        }
         w.endObject()
     }
 
@@ -64,14 +78,16 @@ extension CachedReference: AemiJSONFastEncodable, AemiJSONFastDecodable {
             identifier: try c.string("i"),
             line: try c.integer("l", Int.self),
             context: context,
-            qualifier: try c.decodeIfPresent(String.self, "q")
+            qualifier: try c.decodeIfPresent(String.self, "q"),
+            callLabels: try c.decodeIfPresent([String].self, "a")
         )
     }
 
-    private init(identifier: String, line: Int, context: ReferenceContext, qualifier: String?) {
+    private init(identifier: String, line: Int, context: ReferenceContext, qualifier: String?, callLabels: [String]?) {
         self.identifier = identifier
         self.line = line
         self.context = context
         self.qualifier = qualifier
+        self.callLabels = callLabels
     }
 }
