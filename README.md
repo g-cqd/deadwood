@@ -156,12 +156,15 @@ zero-setup pass whose findings you review rather than delete blindly.
 
 `deadwood analyze --production Sources Tests` computes reachability twice
 over the same graph: once with test entry points (test methods, XCTestCase
-subclasses, @Suite types, tests-glob files) and once without. Declarations
+subclasses, @Suite types, test files) and once without. Declarations
 only tests can reach get the `referenced-only-by-tests` rule — not dead
 (the tests would break), but nothing in production uses them. Genuinely
 unreachable declarations keep their normal rules, and the rule never points
-into test code itself. `testsGlob` in `.deadwood.json` overrides the
-built-in `**/Tests/**` + `**/*Tests.swift` heuristics.
+into test code itself. Test files are those the project says are test code
+(a SwiftPM `testTarget`, an Xcode test bundle), those importing a test
+framework, and, outside any project, those under `Tests/` or named `*Tests.swift`.
+`testsGlob` in `.deadwood.json` overrides all of that with one pattern, read as
+an `exclude` entry is.
 
 ## Index-store mode (macOS)
 
@@ -348,23 +351,17 @@ Every finding's note carries its confidence, and the same level is a structured 
 ## Facts cache
 
 Corpus runs reuse per-file artifacts (facts, directives, dataflow findings)
-through a fail-open cache. Each entry is keyed by its file content and the full
-configuration; the cache also records the executable's file identity and tool
-version. Rebuilding or replacing the executable starts a cold cache, even if
-the version string stays the same. The cache is rebuilt from the current run's
-files, so absent files are pruned. Detection always re-runs.
-
-On by default (default location `~/Library/Caches/deadwood/<workspace>/facts.json`,
-one file per repository; `--cache-path` sets an explicit file, best kept
-outside the analyzed repository, where writing it would change the working
-tree on every run; `--no-cache` disables it). The cache serializes through
-[AemiJSON](https://github.com/g-cqd/AemiJSON)'s reflection-free JSON path.
-References keep only the fields corpus-wide analysis reads, so repeated file
-paths and unused source positions do not fill the cache. A cache over the
-64 MiB read cap is not written. A full-hit run skips parsing, per-file
-extraction, and the redundant cache write. A mismatched header is a
-silent miss. A corrupt body under a matching header is reported once on
-stderr and replaced after a complete analysis.
+through analyzerkit's facts cache (its ADR-0011): a root directory,
+`~/Library/Caches/deadwood` on macOS (`$XDG_CACHE_HOME/deadwood` or
+`~/.cache/deadwood` elsewhere; `--cache-path <directory>` moves it, `--no-cache`
+disables it), holding one directory per workspace (the package or project around
+the analyzed paths) of sharded entries. Each entry is keyed by its file content
+and the full configuration, and the cache is gated by the executable's file
+identity and the tool version, so a rebuilt executable starts cold. Detection
+always re-runs. A file that could not be analysed is cached as such. The cache
+fails open: a shard that cannot be read or decoded is a miss, reported once on
+stderr and rebuilt. Caches written before the move (`<key>/facts.json`) are no
+longer read; delete them.
 
 ## CLI
 
@@ -375,7 +372,7 @@ deadwood analyze --strict Sources   # exit 1 on any warning or error; notes neve
 deadwood analyze --production .     # split "only tests reach this" findings
 deadwood analyze --no-cache .       # disable the (default-on) facts cache
 deadwood analyze --index-store .    # USR-precise cross-module reachability (macOS; needs `swift build`)
-deadwood analyze --experimental-embedding-confidence --embedding-bundle ~/Models/MiniLM .
+deadwood analyze --experimental-embeddings confidence --embedding-bundle ~/Models/MiniLM .
 deadwood analyze --minimum-confidence high .  # report only high and certain findings
 deadwood analyze --only-from changed.txt --report-new-since base.json .  # also report dead code the change created
 deadwood rules                      # list rules; `rules <id>` explains one
@@ -405,13 +402,17 @@ Outside the freeze: `--experimental-embedding-confidence`, `--embedding-bundle` 
 | `--baseline <file>`, `--write-baseline <file>` | drop the findings a baseline holds; write the current findings as a baseline, then exit `0` |
 | `--report-new-since <file>` | report findings outside `--only` that a base-branch baseline does not hold. See [Newly dead code outside the changed files](#newly-dead-code-outside-the-changed-files) |
 | `--config <file>` | configuration file; default: see [Configuration files](#configuration-files) |
-| `--cache-path <file>`, `--no-cache` | facts-cache file; disable the cache. See [Facts cache and parallel jobs](#facts-cache-and-parallel-jobs) |
+| `--cache-path <directory>`, `--no-cache` | the facts cache's root directory; disable the cache. See [Facts cache and parallel jobs](#facts-cache-and-parallel-jobs) |
 | `--strict` | warnings fail the gate too; notes never do |
 | `--production` | report declarations that only tests reach as `referenced-only-by-tests` instead of dead. See [Production mode](#production-mode) |
 | `--minimum-confidence <level>` | report only findings at or above `low`, `medium`, `high` or `certain`; findings without a confidence are always reported |
-| `--include <regions>`, `--exclude <regions>` | comma-separated `preview`, `debug`, `test`, `mock`, `generated`, `script` or `all`: analyze as first-class code, or keep out of scope |
+| `--include-regions <regions>`, `--exclude-regions <regions>` | comma-separated `preview`, `debug`, `test`, `mock`, `generated`, `script` or `all`: analyze as first-class code, or keep out of scope. `--include`/`--exclude` still work, with a deprecation note |
+| `--exclude-path <pattern>` | leave matching files out of the report, on top of the configuration's `exclude`; repeatable. Like `exclude`, it never leaves them out of the corpus, so their references still count |
+| `--rules <ids>` | run only these rules (comma-separated); an unknown id exits `64` |
+| `--quiet`, `--timings` | no stderr notes; phase times on stderr (and in JSON) |
+| `--experimental-embeddings confidence`, `--embedding-bundle <dir>` | see below; `--experimental-embedding-confidence` still works, with a deprecation note |
 | `--index-store`, `--index-store-path <path>`, `--index-store-build` | USR-precise cross-module reachability from the compiler's index store (macOS). `--index-store-path` names the store, and `--index-store-build` runs `swift build` when none is found; each implies `--index-store` |
-| `--verbose` | Explain index-store toolchain selection and rejected candidates on stderr when index mode is requested |
+| `--verbose` | Explain configuration sources, every path of a note, and index-store toolchain selection on stderr |
 
 ### Configuration files
 
@@ -471,11 +472,11 @@ Each element of `findings`:
 
 ### Facts cache and parallel jobs
 
-- **Location.** `deadwood/<key>/facts.json` under the user's caches directory (`~/Library/Caches` on macOS). The key is a hash of the git repository root that contains the working directory, or of the working directory itself outside a repository. It follows where deadwood runs, not which paths it analyzes.
-- **Validation.** Entries are keyed by absolute path and checked against the file's content (a 64-bit FNV-1a hash and its byte count) and the whole configuration. The header records the tool version and the executable's file identity, so a rebuilt executable starts with an empty cache, silently. The content hash is not cryptographic: a collision can serve stale facts for one file until that file next changes.
-- **Writes.** A run that changes the cache writes the whole file atomically, rebuilt from its own files, so deleted files are pruned. There is no lock: concurrent runs can lose each other's new entries (the last writer wins), and a reader never sees a partial file.
-- **Damage and size.** A corrupt body under a matching header is ignored with a note (on stderr, and as `cacheLoadFailure` in JSON) and replaced after a complete analysis. A cache file over 64 MiB is ignored with the same note. A payload over 64 MiB is not written, and an existing file is removed, with a note.
-- **Parallel CI jobs on one machine** should each pass their own `--cache-path`, outside the analyzed tree, so they neither lose entries nor evict each other's. `--no-cache` disables reads and writes, and overrides `--cache-path`.
+- **Location.** The cache root above, one directory per workspace: the package or project around the analyzed paths.
+- **Validation.** Entries are checked against the file's content and the whole configuration, and gated by the tool version and the executable's file identity, so a rebuilt executable starts cold, silently.
+- **Writes.** A run touches only the shards of its own files and writes them atomically; entries of files that are gone are pruned, within a size budget. Concurrent runs over different files keep each other's entries; over the same files the last writer wins, never with wrong facts.
+- **Damage.** A shard that cannot be decoded is a miss, noted once on stderr (and as `cacheLoadFailure` in JSON), and rebuilt.
+- **Parallel CI jobs** can share the default root; `--cache-path` gives a job its own, and `--no-cache` disables reads and writes.
 
 ### Baselines and fingerprints
 

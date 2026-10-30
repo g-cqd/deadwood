@@ -218,9 +218,9 @@
                 let assessment = IndexStoreSupport.BinaryTrustChecker.assess(provided)
                 guard assessment.isTrusted else { throw IndexStoreError.dylibNotFound }
                 libPath = assessment.path
-            } else if let resolved = Self.findLibIndexStore() {
-                libPath = resolved
             } else {
+                // Resolution is async (it runs xcode-select and xcrun through analyzerkit's BoundedProcess): callers
+                // resolve the library once with ``findLibIndexStore()`` and pass it.
                 throw IndexStoreError.dylibNotFound
             }
 
@@ -252,8 +252,8 @@
         }
 
         /// The same ordered resolution and trust policy as arcleak, supplied by analyzerkit.
-        static func findLibIndexStore() -> String? {
-            ToolchainResolution.resolve().libraryPath
+        static func findLibIndexStore() async -> String? {
+            await ToolchainResolution.resolve().libraryPath
         }
 
         /// Find all occurrences of a symbol by USR.

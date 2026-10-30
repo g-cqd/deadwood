@@ -1,3 +1,4 @@
+import CorpusScan
 import DeadwoodCore
 import Foundation
 import ProjectModel
@@ -49,9 +50,9 @@ import Testing
         try Data("let value = 1\n".utf8).write(to: good)
 
         // Cold, then warm: a cached run must not analyze the file either.
-        let cache = dir.appending(path: "facts.json")
+        let cache = CacheLocation(root: dir.appending(path: "cache").path, workspace: dir.path)
         for _ in 0..<2 {
-            let report = await Analyzer().analyze(files: [bad.path, good.path], cacheURL: cache)
+            let report = await Analyzer().analyze(files: [bad.path, good.path], cache: cache)
             let degraded = report.degradedFiles.map { URL(fileURLWithPath: $0.path).lastPathComponent }
             #expect(report.analyzedFileCount == 2)
             #expect(degraded == ["Bad.swift"])

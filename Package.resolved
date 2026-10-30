@@ -1,12 +1,12 @@
 {
-  "originHash" : "10fdea6c937ac5f5918001a6084ff1aafdbd8026e763c42ec850453f24ccb510",
+  "originHash" : "d8fcf1a382fd732899f7313ee30c614014f405d9813a0e07df7ddcefa7f83842",
   "pins" : [
     {
       "identity" : "aemi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Aemi-Studio/aemi.git",
       "state" : {
-        "revision" : "bfc4f5a701e8d80e5c63b13f606b578c5c0410c0"
+        "revision" : "5e5601495a2fa544661b7b9056b1141e9c3ad9dd"
       }
     },
     {
@@ -14,7 +14,15 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiJSON.git",
       "state" : {
-        "revision" : "71f101b8e287195a1d5dae6f2e039f23f418a057"
+        "revision" : "a41279b175cf17ee85ba3edb0e829ef214e2d9bf"
+      }
+    },
+    {
+      "identity" : "aemiprotobuf",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiProtobuf.git",
+      "state" : {
+        "revision" : "3aae025f2bf19e78dc6491915f368c6a5bd8e0f5"
       }
     },
     {
@@ -22,7 +30,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiRegex.git",
       "state" : {
-        "revision" : "fe9b07f00f7b52d2d210ed4df43bd2b18f4ad674"
+        "revision" : "b0ce03833ede14c903345511a8ff4ae11c5f8f8c"
       }
     },
     {
@@ -30,7 +38,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/analyzerkit.git",
       "state" : {
-        "revision" : "08f09a3c22db126ba55025b8326aa8c9bdf474c6"
+        "revision" : "ed8c81588790612763b4e47cc4431e8ac357e205"
       }
     },
     {
@@ -38,7 +46,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/indexstore-db.git",
       "state" : {
-        "revision" : "64aa0b26913249c4e7c21d351a215fba02702003"
+        "revision" : "0390867818c28241af4650eb4ef29af5669335a3"
       }
     },
     {
@@ -64,8 +72,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-lmdb.git",
       "state" : {
-        "branch" : "release/6.4.x",
-        "revision" : "a4bc87807721c1fd114bf35464457e2db0d0e6c0"
+        "branch" : "main",
+        "revision" : "7f4ee94510991a1dd30afe62a632bdd169e1ea70"
+      }
+    },
+    {
+      "identity" : "swift-subprocess",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-subprocess.git",
+      "state" : {
+        "revision" : "dbe21bd7dfd4ffef8c32588918542a8abfa1b54c",
+        "version" : "1.0.2"
       }
     },
     {

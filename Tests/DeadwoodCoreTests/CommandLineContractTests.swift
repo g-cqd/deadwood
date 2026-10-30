@@ -125,28 +125,35 @@ import Testing
         _ = try JSONDecoder().decode(SarifLog.self, from: run.standardOutput)
     }
 
-    @Test("`A cache with a valid header and corrupt body is reported once`")
+    /// The cache's files are analyzerkit's (ADR-0011): whatever they hold, a run that cannot use them reports the
+    /// same, says so once, and rebuilds them.
+    @Test("`A corrupt cache is reported once and rebuilt`")
     func corruptCurrentCacheIsRewritten() throws {
         let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
         defer { try? FileManager.default.removeItem(at: root) }
-        let cache = root.appending(path: "facts.json")
+        let cache = root.appending(path: "cache")
         let arguments = [
             "analyze", root.path, "--format", "sarif", "--relative-to", root.path, "--cache-path", cache.path,
         ]
         let cold = try BuiltTool.run(arguments, in: root)
         #expect(cold.status == 0)
-        let written = try Data(contentsOf: cache)
-        let headerEnd = try #require(written.firstIndex(of: UInt8(ascii: "\n")))
-        var corrupt = Data(written[...headerEnd])
-        corrupt.append(Data("\"x\"".utf8))
-        try corrupt.write(to: cache)
+        var corrupted = 0
+        let entries = FileManager.default.enumerator(at: cache, includingPropertiesForKeys: [.isRegularFileKey])
+        for case let file as URL in entries?.allObjects ?? []
+        where (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
+            let size = (try? Data(contentsOf: file).count) ?? 0
+            try Data(repeating: 0x7B, count: max(size, 1)).write(to: file)
+            corrupted += 1
+        }
+        #expect(corrupted > 0, "the first run wrote the cache")
 
         let recovered = try BuiltTool.run(arguments, in: root)
         let warm = try BuiltTool.run(arguments, in: root)
         #expect(recovered.status == 0)
         #expect(recovered.standardOutput == cold.standardOutput)
-        #expect(recovered.standardError.components(separatedBy: "ignored the facts cache").count == 2)
-        #expect(!warm.standardError.contains("ignored the facts cache"))
+        #expect(
+            recovered.standardError.components(separatedBy: "deadwood: note:").count == 2, "\(recovered.standardError)")
+        #expect(!warm.standardError.contains("deadwood: note:"), "\(warm.standardError)")
     }
 
     @Test("`A copied executable does not reuse another build's cache`")

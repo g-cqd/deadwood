@@ -33,6 +33,17 @@ public struct AnalysisReport: Sendable, Codable {
     /// Informational notes for stderr (e.g. the `--index-store` fallback
     /// message, or a one-line index summary). Never affects exit status.
     public var notes: [String] = []
+    /// Files classified by path conventions although a project encloses them. Not encoded; the envelope's run notes
+    /// carry them.
+    public var classificationIssues: [ClassificationIssue] = []
+    /// Seconds per phase, for `--timings`. Not encoded; the envelope carries them when asked.
+    public var timings: [String: Double] = [:]
+
+    /// The report's own keys, as before the shared surface (the envelope adds its own around them).
+    private enum CodingKeys: String, CodingKey {
+        case findings, suppressed, outOfScope, degradedFiles, analyzedFileCount, cacheHits, cacheMisses
+        case cacheLoadFailure, wasCancelled, notes
+    }
 
     public init(
         findings: [Finding] = [],

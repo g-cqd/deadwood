@@ -21,11 +21,6 @@ func pathMatchesTestFileSuffixGlob(_ path: String) -> Bool {
     URL(fileURLWithPath: path).lastPathComponent.hasSuffix("Tests.swift")
 }
 
-/// Returns `true` when the path contains a `Fixtures` directory.
-func pathMatchesFixturesGlob(_ path: String) -> Bool {
-    URL(fileURLWithPath: path).pathComponents.contains("Fixtures")
-}
-
 /// Returns `true` when the identifier is wrapped in backticks.
 /// The degenerate "``" is not an identifier.
 func isBacktickedIdentifier(_ identifier: String) -> Bool {

@@ -34,22 +34,22 @@ let package = Package(
         // is linked only on macOS (its `libIndexStore.dylib` discovery is
         // macOS-only), and every consumer sits behind `#if canImport`, so the
         // Linux build never sees a symbol from it.
+        // analyzerkit's revision, written exactly as analyzerkit writes it: SwiftPM refuses one package required in
+        // two spellings, even a revision and a branch naming the same commit (analyzerkit ADR-0025).
         .package(
-            url: "https://github.com/swiftlang/indexstore-db.git",
-            revision: "64aa0b26913249c4e7c21d351a215fba02702003"
-        ),
+            url: "https://github.com/swiftlang/indexstore-db.git", revision: "0390867818c28241af4650eb4ef29af5669335a3"),
         // The published JSON package uses Aemi's kernel and runtime products.
         // The repository identity remains ADJSON; select its AemiJSON product.
         // Only the internal facts cache uses this codec; report byte formats stay stable.
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
-            revision: "71f101b8e287195a1d5dae6f2e039f23f418a057"
+            revision: "a41279b175cf17ee85ba3edb0e829ef214e2d9bf"
         ),
         // The project model the analyzers share: entry points project files
         // and test frameworks create, code regions, generated files.
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "08f09a3c22db126ba55025b8326aa8c9bdf474c6"
+            revision: "ed8c81588790612763b4e47cc4431e8ac357e205"
         ),
     ],
     targets: [
@@ -57,6 +57,7 @@ let package = Package(
             name: "DeadwoodCore",
             dependencies: [
                 .product(name: "ProjectModel", package: "analyzerkit"),
+                .product(name: "CorpusScan", package: "analyzerkit"),
                 .product(name: "IndexStoreSupport", package: "analyzerkit", condition: .when(platforms: [.macOS])),
                 .product(name: "AnalyzerConfiguration", package: "analyzerkit"),
                 .product(name: "SourceCorpus", package: "analyzerkit"),
@@ -83,6 +84,8 @@ let package = Package(
                 "DeadwoodCore",
                 .product(name: "AnalyzerCLI", package: "analyzerkit"),
                 .product(name: "SourceCorpus", package: "analyzerkit"),
+                .product(name: "CorpusScan", package: "analyzerkit"),
+                .product(name: "ReportSupport", package: "analyzerkit"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "SystemPackage", package: "swift-system"),
             ],
@@ -92,6 +95,7 @@ let package = Package(
             name: "DeadwoodCoreTests",
             dependencies: [
                 "DeadwoodCore", .product(name: "SourceCorpus", package: "analyzerkit"),
+                .product(name: "CorpusScan", package: "analyzerkit"),
                 .product(name: "WordPiece", package: "analyzerkit"),
             ],
             exclude: ["Goldens"],

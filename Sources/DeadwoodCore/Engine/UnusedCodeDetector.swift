@@ -14,12 +14,8 @@ struct UnusedCodeDetector: Sendable {
     /// Configuration for detection.
     let configuration: UnusedCodeConfiguration
 
-    /// Pre-compiled ignore patterns for efficient matching.
-    private let compiledIgnorePatterns: CompiledPatterns
-
     init(configuration: UnusedCodeConfiguration = .default) {
         self.configuration = configuration
-        compiledIgnorePatterns = CompiledPatterns(configuration.ignoredPatterns)
     }
 
     /// Detect unused declarations in the analysis result, per the
@@ -100,8 +96,6 @@ struct UnusedCodeDetector: Sendable {
         // Protocol requirements are kept alive by their protocol.
         guard !context.isProtocolRequirement(declaration) else { return false }
 
-        guard !compiledIgnorePatterns.anyMatches(declaration.name) else { return false }
-
         return true
     }
 
@@ -167,7 +161,6 @@ struct UnusedCodeDetector: Sendable {
                 return nil
             }
             guard !context.isProtocolRequirement(declaration) else { return nil }
-            guard !compiledIgnorePatterns.anyMatches(declaration.name) else { return nil }
 
             let refs = result.references.find(identifier: declaration.name)
             guard !refs.isEmpty else { return nil }  // Never referenced → unused-property.

@@ -21,7 +21,22 @@
 
     enum IndexTestToolchain {
         /// The trusted `libIndexStore.dylib`, if any.
-        static let dylib: String? = IndexStoreReader.findLibIndexStore()
+        /// From `xcrun`, which selects as analyzerkit's `ToolchainResolution` does (`DEVELOPER_DIR`, then
+        /// `xcode-select`); that resolution is async and a static initializer is not.
+        static let dylib: String? = {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+            process.arguments = ["--find", "swift"]
+            let output = Pipe()
+            process.standardOutput = output
+            process.standardError = FileHandle.nullDevice
+            guard (try? process.run()) != nil else { return nil }
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            let swift = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            let dylib = swift.replacingOccurrences(of: "/bin/swift", with: "/lib/libIndexStore.dylib")
+            return process.terminationStatus == 0 && FileManager.default.fileExists(atPath: dylib) ? dylib : nil
+        }()
 
         /// The `swift` binary in the SAME toolchain as `dylib`, so the index we
         /// build is readable by the dylib we open it with.
@@ -150,7 +165,8 @@
             let canonicalShapes = IndexBasedDependencyGraph.canonicalPath(fixture.shapesFile)
             guard
                 let reader = try? IndexStoreReader(
-                    indexStorePath: storePath, allowsDirectoryCreation: true),
+                    indexStorePath: storePath, libIndexStorePath: IndexTestToolchain.dylib,
+                    allowsDirectoryCreation: true),
                 !reader.rawOccurrences(inFile: canonicalShapes).isEmpty
             else {
                 print("IndexReachabilityDeltaTests: index opened empty (toolchain mismatch); skipping")
@@ -319,7 +335,9 @@
             }
             let canonicalSource = IndexBasedDependencyGraph.canonicalPath(fixture.sourceFile)
             guard
-                let reader = try? IndexStoreReader(indexStorePath: storePath, allowsDirectoryCreation: true),
+                let reader = try? IndexStoreReader(
+                    indexStorePath: storePath, libIndexStorePath: IndexTestToolchain.dylib,
+                    allowsDirectoryCreation: true),
                 !reader.rawOccurrences(inFile: canonicalSource).isEmpty
             else {
                 print("IndexFalsePositiveTests: index opened empty (toolchain mismatch); skipping")
