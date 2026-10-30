@@ -48,12 +48,14 @@
             productionMode: Bool,
             testScoped: [Bool],
             reader: IndexStoreReader,
-            analysisFiles: [String]
-        ) -> Result {
+            analysisFiles: [String],
+            uncoveredFiles: [String] = [],
+            verbose: Bool = false
+        ) async -> Result {
             reader.pollForChanges()
 
             let graph = IndexBasedDependencyGraph(analysisFiles: analysisFiles)
-            graph.build(from: reader)
+            await graph.build(from: reader)
 
             let declarations = result.declarations.declarations
             let declToUSR = Self.mapDeclarationsToUSRs(
@@ -72,6 +74,11 @@
             // themselves left dangling as false positives.
             let forcedUSRs = Set(forcedReachable.compactMap { declToUSR[$0] })
 
+            // D2: a file the index does not cover draws no edge, so what only it uses would look dead. Its references,
+            // from deadwood's own parse, keep every definition of the name they use alive: conservative, by name.
+            let uncoveredRoots = Self.namedByUncoveredFiles(
+                uncoveredFiles, result: result, context: context, graph: graph)
+
             // With-test roots — deadwood's own rich root detection, projected
             // onto the USRs those roots resolve to, plus the forced seeds.
             let reachableWithTests = Self.reachableIndices(
@@ -84,7 +91,7 @@
                         context: context,
                         configuration: rootConfiguration,
                         excludingTestScoped: nil
-                    ).union(forcedUSRs)
+                    ).union(forcedUSRs).union(uncoveredRoots.all)
                 ),
                 forcedReachable: forcedReachable
             )
@@ -103,20 +110,20 @@
                             context: context,
                             configuration: productionConfig,
                             excludingTestScoped: testScoped
-                        ).union(forcedUSRs)
+                        ).union(forcedUSRs).union(uncoveredRoots.production)
                     ),
                     forcedReachable: forcedReachable
                 )
             }
 
-            // Reference-count analyzer: keeps the lifted analyzer wired and
-            // feeds the stderr summary.
-            let analyzer = IndexStoreAnalyzer(reader: reader, files: analysisFiles)
-            let zeroReference = analyzer.findUnusedSymbols().count
-            let summary =
-                "index: \(graph.definitionNodes.count) symbols in scope, "
-                + "\(zeroReference) with zero index references; "
-                + "\(declToUSR.count)/\(declarations.count) declarations resolved to USRs"
+            // The zero-reference count is a pass of its own over every file's occurrences (D5): it feeds the summary
+            // only, so only a verbose run pays for it.
+            var summary = "index: \(graph.definitionNodes.count) symbols in scope"
+            if verbose {
+                let zeroReference = IndexStoreAnalyzer(reader: reader, files: analysisFiles).findUnusedSymbols().count
+                summary += ", \(zeroReference) with zero index references"
+            }
+            summary += "; \(declToUSR.count)/\(declarations.count) declarations resolved to USRs"
 
             // Dead-code grouping shares its confidence and kind-gating logic
             // with the syntax graph; only the successor lookup differs,
@@ -145,6 +152,30 @@
                 summary: summary,
                 deadGroupResults: deadGroupResults
             )
+        }
+
+        /// The definitions named by references in `files`, by base name (`helper` names `helper()` and `helper(_:)`);
+        /// `production` leaves out the references of test files, as production roots leave out test roots.
+        private static func namedByUncoveredFiles(
+            _ files: [String], result: AnalysisResult, context: CorpusContext, graph: IndexBasedDependencyGraph
+        ) -> (all: Set<String>, production: Set<String>) {
+            guard !files.isEmpty else { return ([], []) }
+            var byName: [Substring: [String]] = [:]
+            for node in graph.definitionNodes {
+                byName[node.name.prefix { $0 != "(" }, default: []].append(node.usr)
+            }
+            var all: Set<String> = []
+            var production: Set<String> = []
+            for file in files {
+                let isTest = context.isTestFile(file)
+                for reference in result.references.find(inFile: file) {
+                    for usr in byName[Substring(reference.identifier)] ?? [] {
+                        all.insert(usr)
+                        if !isTest { production.insert(usr) }
+                    }
+                }
+            }
+            return (all, production)
         }
 
         /// The index graph's edges among `indices`, translated from USR

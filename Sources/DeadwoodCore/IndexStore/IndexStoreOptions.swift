@@ -20,11 +20,18 @@ public struct IndexStoreOptions: Sendable, Equatable {
     /// cache directory.
     public var cacheRoot: String?
 
-    public init(enabled: Bool = false, explicitPath: String? = nil, autoBuild: Bool = false, cacheRoot: String? = nil) {
+    /// `--verbose`: the index summary also counts the symbols with no index reference, a pass of its own (D5).
+    public var verbose: Bool
+
+    public init(
+        enabled: Bool = false, explicitPath: String? = nil, autoBuild: Bool = false, cacheRoot: String? = nil,
+        verbose: Bool = false
+    ) {
         self.enabled = enabled
         self.explicitPath = explicitPath
         self.autoBuild = autoBuild
         self.cacheRoot = cacheRoot
+        self.verbose = verbose
     }
 
     /// The default: index mode off — today's syntax behavior, byte-identical.

@@ -229,6 +229,7 @@
         func allOccurrencesByUSR(in files: Set<String>) -> [String: [IndexedOccurrence]] {
             var byUSR: [String: [IndexedOccurrence]] = [:]
             for filePath in files {
+                IndexQueryCounter.current?.countQuery()
                 let occurrences = db.symbolOccurrences(inFilePath: filePath)
                 for occurrence in occurrences {
                     byUSR[occurrence.symbol.usr, default: []].append(Self.convert(occurrence))
@@ -240,7 +241,8 @@
         /// Raw IndexStoreDB occurrences for one file (used by the dependency
         /// graph, which needs relations the converted form drops).
         func rawOccurrences(inFile filePath: String) -> [SymbolOccurrence] {
-            db.symbolOccurrences(inFilePath: filePath)
+            IndexQueryCounter.current?.countQuery()
+            return db.symbolOccurrences(inFilePath: filePath)
         }
 
         /// Poll for changes to the index.
