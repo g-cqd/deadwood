@@ -421,14 +421,15 @@ struct Analyze: AsyncParsableCommand {
             }
             text = contents
         }
-        return text.split(separator: "\n")
+        // Every line end, not "\n" alone: "\r\n" is one Character, so splitting on "\n" kept a CRLF file one line
+        // and scoped every finding out (analyzerkit roadmap 0057). A lone CR ends a line too.
+        return text.split(whereSeparator: \.isNewline)
             // Standard library rather than trimmingCharacters(in:), which is
             // corelibs-only: deadwood builds against FoundationEssentials on Linux.
             // DeadwoodCore's helper is internal, so this target inlines it.
             .map { line -> String in
-                // \r too: a CRLF scope file (Windows-authored diff, autocrlf) would
-                // otherwise match nothing — every finding lands out of scope and the
-                // gate silently passes.
+                // Spaces and tabs at either end; a stray \r too, though the split above
+                // already ends lines at CRLF and CR.
                 let trimmable: (Character) -> Bool = { $0 == " " || $0 == "\t" || $0 == "\r" }
                 var entry = String(
                     line.drop(while: trimmable).reversed().drop(while: trimmable).reversed())
