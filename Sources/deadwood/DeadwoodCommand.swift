@@ -119,7 +119,8 @@ struct Analyze: AsyncParsableCommand {
             enabled: index.requested,
             explicitPath: index.indexStorePath,
             autoBuild: index.indexStoreBuild,
-            cacheRoot: cacheRoot()
+            cacheRoot: cacheRoot(),
+            verbose: output.verbose
         )
 
         var report = await Analyzer(configuration: configuration)

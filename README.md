@@ -235,9 +235,14 @@ Neither changes the exit code.
     are now (the wrong project, files never built, or all changed since), or it
     resolved none of the analyzed declarations.
 
-  A stale index is not a fallback: files edited after the last build, or never
-  indexed, are skipped, a note says how many, and `swift build` (or
-  `xcodebuild build`) refreshes them.
+  A stale index is not a fallback. Declarations in files the index does not
+  cover are not judged, and the note gives advice per class: a file with no
+  unit was not built by this scheme (build the scheme that compiles it), a file
+  newer than its unit changed since the build (re-run the build). What those
+  files use still counts, by name: a declaration of the same base name is kept
+  alive, which is conservative, and may hide dead code that shares a name with
+  something an uncovered file uses. `--verbose` adds the count of symbols with
+  no index reference to the summary, at the cost of a pass of its own.
 
   Stores are opened through analyzerkit's `IndexStoreSession`: the IndexStoreDB
   database lives under the cache root (`<root>/index/<hash>`; `--cache-path` moves
