@@ -52,7 +52,7 @@ let package = Package(
             url: "https://github.com/g-cqd/AemiProtobuf.git", revision: "5d6e868179262f0b1a48297808953730e97cd720"),
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "28bbdb3552ff7e6ded2b9d831b90354a42c0ccbd"
+            revision: "b09abe14bedb35ee861c2be3647edb3f4fb5329b"
         ),
     ],
     targets: [
@@ -61,6 +61,7 @@ let package = Package(
             dependencies: [
                 .product(name: "ProjectModel", package: "analyzerkit"),
                 .product(name: "CorpusScan", package: "analyzerkit"),
+                .product(name: "SymbolFacts", package: "analyzerkit"),
                 .product(name: "IndexStoreSupport", package: "analyzerkit", condition: .when(platforms: [.macOS])),
                 .product(name: "AnalyzerConfiguration", package: "analyzerkit"),
                 .product(name: "SourceCorpus", package: "analyzerkit"),
@@ -101,6 +102,7 @@ let package = Package(
             dependencies: [
                 "DeadwoodCore", .product(name: "SourceCorpus", package: "analyzerkit"),
                 .product(name: "CorpusScan", package: "analyzerkit"),
+                .product(name: "SymbolFacts", package: "analyzerkit"),
                 .product(name: "AemiJSON", package: "AemiJSON"),
                 .product(name: "AemiProtobuf", package: "AemiProtobuf"),
                 .product(name: "WordPiece", package: "analyzerkit"),
