@@ -319,6 +319,7 @@ struct Analyze: AsyncParsableCommand {
         return CacheLocation(root: root, workspace: workspace)
     }
 
+    // @dw:accept unused-function -- ArgumentParser calls it before run()
     func validate() throws {
         // A baseline records the whole corpus's accepted debt. Writing one from
         // a scoped run would silently accept only the scoped subset and drop

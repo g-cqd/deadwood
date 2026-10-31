@@ -13,19 +13,6 @@
     import IndexStoreSupport
     import ProjectModel
 
-    // MARK: - IndexStoreError
-
-    /// Errors that can occur when reading the index store.
-    enum IndexStoreError: Error, Sendable {
-        /// The index database could not be opened.
-        case failedToOpenDatabase(underlying: any Error)
-        /// The sibling `IndexDatabase/` directory does not exist and the
-        /// caller did not opt into creation.
-        case databaseDirectoryMissing(String)
-        /// `libIndexStore.dylib` could not be located at any trusted path.
-        case dylibNotFound
-    }
-
     // MARK: - IndexedSymbol
 
     /// Information about a symbol from the index store.

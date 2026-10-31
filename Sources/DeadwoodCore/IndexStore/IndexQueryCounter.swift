@@ -8,7 +8,9 @@ final class IndexQueryCounter: Sendable {
 
     private let counts = Mutex((opens: 0, queries: 0))
 
+    // @dw:accept unused-property -- the tests read them; the seam exists for them
     var storeOpens: Int { counts.withLock { $0.opens } }
+    // @dw:accept unused-property -- the tests read them; the seam exists for them
     var occurrenceQueries: Int { counts.withLock { $0.queries } }
 
     func countOpen() { counts.withLock { $0.opens += 1 } }
