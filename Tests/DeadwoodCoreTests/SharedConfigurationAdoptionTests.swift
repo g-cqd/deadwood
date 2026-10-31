@@ -59,8 +59,8 @@ import Testing
         defer { try? FileManager.default.removeItem(at: root) }
         let output = root.appending(path: "stdout.json")
         let errors = root.appending(path: "stderr.txt")
-        FileManager.default.createFile(atPath: output.path, contents: nil)
-        FileManager.default.createFile(atPath: errors.path, contents: nil)
+        _ = FileManager.default.createFile(atPath: output.path, contents: nil)
+        _ = FileManager.default.createFile(atPath: errors.path, contents: nil)
         let process = Process()
         process.executableURL = try executable()
         process.arguments =
