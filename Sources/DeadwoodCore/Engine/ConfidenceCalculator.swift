@@ -11,6 +11,8 @@
 //    machinery may still reach them)
 //  - a name found in a comment adds a note, not a demotion
 
+import SymbolFacts
+
 // MARK: - Base confidence
 
 extension Declaration {

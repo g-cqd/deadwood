@@ -2,6 +2,7 @@
 //  Trimmed: the debug-description extension.
 
 import SwiftSyntax
+import SymbolFacts
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials

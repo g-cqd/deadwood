@@ -1,11 +1,9 @@
-import AemiJSON
 import ProjectModel
 
 // MARK: - CodeRegionSpan
 
 /// Cacheable form of a `ProjectModel.RegionSpan`: lines of one file that
 /// only debug builds or previews compile.
-@JSONCodable
 struct CodeRegionSpan: Sendable, Hashable, Codable {
     let startLine: Int
     let endLine: Int

@@ -4,6 +4,7 @@
 
 import SwiftParser
 import SwiftSyntax
+import SymbolFacts
 import Testing
 
 @testable import DeadwoodCore

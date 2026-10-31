@@ -1,6 +1,7 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — UnusedCodeDetector/DataFlow/CFGBuilder.swift.
 
 import SwiftSyntax
+import SymbolFacts
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials
