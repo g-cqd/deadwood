@@ -59,8 +59,8 @@ import Testing
         defer { try? FileManager.default.removeItem(at: scratch) }
         let outputURL = scratch.appending(path: "stdout")
         let errorURL = scratch.appending(path: "stderr")
-        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
-        FileManager.default.createFile(atPath: errorURL.path, contents: nil)
+        _ = FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+        _ = FileManager.default.createFile(atPath: errorURL.path, contents: nil)
         let output = try FileHandle(forWritingTo: outputURL)
         let errors = try FileHandle(forWritingTo: errorURL)
         let process = Process()
