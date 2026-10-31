@@ -179,9 +179,13 @@
         /// The underlying IndexStoreDB database.
         private var db: IndexStoreDB { session.database }
 
+        /// analyzerkit's queries over the database (roadmap 0054): paths in the corpus's spelling.
+        private let queries: IndexQueries
+
         init(session: IndexStoreSession) {
             self.session = session
             indexStorePath = session.store
+            queries = IndexQueries(session: session)
         }
 
         /// analyzerkit's ordered, audited resolution of `libIndexStore.dylib`.
@@ -191,23 +195,13 @@
 
         /// Find all occurrences of a symbol by USR.
         func findOccurrences(ofUSR usr: String) -> [IndexedOccurrence] {
-            var occurrences: [IndexedOccurrence] = []
-            db.forEachSymbolOccurrence(byUSR: usr, roles: .all) { occurrence in
-                occurrences.append(Self.convert(occurrence))
-                return true
-            }
-            return occurrences
+            queries.occurrences(ofUSR: usr).map(Self.convert)
         }
 
         /// Check if a symbol (by USR) has any references (not just
         /// definitions).
         func hasReferences(usr: String) -> Bool {
-            var hasRef = false
-            db.forEachSymbolOccurrence(byUSR: usr, roles: .reference) { _ in
-                hasRef = true
-                return false  // Stop iteration
-            }
-            return hasRef
+            queries.hasOccurrences(ofUSR: usr, roles: .reference)
         }
 
         /// All index occurrences across `files`, grouped by USR. Iterating
@@ -217,19 +211,18 @@
             var byUSR: [String: [IndexedOccurrence]] = [:]
             for filePath in files {
                 IndexQueryCounter.current?.countQuery()
-                let occurrences = db.symbolOccurrences(inFilePath: filePath)
-                for occurrence in occurrences {
-                    byUSR[occurrence.symbol.usr, default: []].append(Self.convert(occurrence))
+                for occurrence in queries.occurrences(inFile: filePath) {
+                    byUSR[occurrence.usr, default: []].append(Self.convert(occurrence))
                 }
             }
             return byUSR
         }
 
-        /// Raw IndexStoreDB occurrences for one file (used by the dependency
+        /// One file's occurrences, IndexStoreDB's records with the file in the corpus's spelling (used by the dependency
         /// graph, which needs relations the converted form drops).
-        func rawOccurrences(inFile filePath: String) -> [SymbolOccurrence] {
+        func occurrences(inFile filePath: String) -> [IndexQueries.Occurrence] {
             IndexQueryCounter.current?.countQuery()
-            return db.symbolOccurrences(inFilePath: filePath)
+            return queries.occurrences(inFile: filePath)
         }
 
         /// Poll for changes to the index.
@@ -245,12 +238,12 @@
 
         // MARK: - Private helpers
 
-        private static func convert(_ occurrence: SymbolOccurrence) -> IndexedOccurrence {
+        private static func convert(_ occurrence: IndexQueries.Occurrence) -> IndexedOccurrence {
             IndexedOccurrence(
-                symbol: convertSymbol(occurrence.symbol),
-                file: occurrence.location.path,
-                line: occurrence.location.line,
-                column: occurrence.location.utf8Column,
+                symbol: convertSymbol(occurrence.record.symbol),
+                file: occurrence.file,
+                line: occurrence.line,
+                column: occurrence.column,
                 roles: convertRoles(occurrence.roles)
             )
         }

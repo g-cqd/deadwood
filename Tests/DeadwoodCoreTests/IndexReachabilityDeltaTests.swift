@@ -175,7 +175,7 @@
             let canonicalShapes = IndexBasedDependencyGraph.canonicalPath(fixture.shapesFile)
             guard
                 let reader = IndexTestToolchain.reader(store: storePath, files: fixture.sourceFiles),
-                !reader.rawOccurrences(inFile: canonicalShapes).isEmpty
+                !reader.occurrences(inFile: canonicalShapes).isEmpty
             else {
                 print("IndexReachabilityDeltaTests: index opened empty (toolchain mismatch); skipping")
                 return
@@ -343,7 +343,7 @@
             let canonicalSource = IndexBasedDependencyGraph.canonicalPath(fixture.sourceFile)
             guard
                 let reader = IndexTestToolchain.reader(store: storePath, files: fixture.sourceFiles),
-                !reader.rawOccurrences(inFile: canonicalSource).isEmpty
+                !reader.occurrences(inFile: canonicalSource).isEmpty
             else {
                 print("IndexFalsePositiveTests: index opened empty (toolchain mismatch); skipping")
                 return

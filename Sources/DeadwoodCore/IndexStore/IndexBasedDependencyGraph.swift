@@ -18,6 +18,7 @@
 #if canImport(IndexStoreDB)
     import Foundation
     import IndexStoreDB
+    import IndexStoreSupport
 
     // MARK: - IndexSymbolNode
 
@@ -163,7 +164,7 @@
                 func schedule() {
                     let index = next
                     let file = files[index]
-                    group.addTask { (index, FileSummary(reader.rawOccurrences(inFile: file))) }
+                    group.addTask { (index, FileSummary(reader.occurrences(inFile: file))) }
                     next += 1
                 }
                 while next < min(width, files.count) { schedule() }
@@ -276,8 +277,11 @@
             var definitions: [Definition] = []
             var uses: [Use] = []
 
-            init(_ occurrences: [SymbolOccurrence]) {
-                for occurrence in occurrences {
+            /// Each occurrence's file is in the corpus's spelling (analyzerkit `IndexQueries`); the rest is IndexStoreDB's
+            /// record, relations included.
+            init(_ occurrences: [IndexQueries.Occurrence]) {
+                for found in occurrences {
+                    let occurrence = found.record
                     let roles = occurrence.roles
                     if isDefinitionLike(roles) {
                         // A getter or setter is its own symbol, related to its property or subscript by `.accessorOf`:
@@ -289,7 +293,7 @@
                                 Definition(
                                     usr: occurrence.symbol.usr, name: occurrence.symbol.name,
                                     kind: IndexedSymbolKind(from: occurrence.symbol.kind),
-                                    path: occurrence.location.path,
+                                    path: found.file,
                                     line: occurrence.location.line,
                                     parents: occurrence.relations.filter { $0.roles.contains(.childOf) }.map(
                                         \.symbol.usr),
