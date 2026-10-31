@@ -124,7 +124,10 @@ import Testing
         var actual = try Self.object(run.output)
         for key in Self.addedKeys { actual[key] = nil }
         let expected = try Self.object(Data(contentsOf: Self.goldens.appending(path: "report.json")))
-        let same = NSDictionary(dictionary: actual).isEqual(to: expected)
+        // Compared as canonical JSON: NSDictionary's equality bridges numbers and booleans differently on Linux.
+        let same =
+            try JSONSerialization.data(withJSONObject: actual, options: [.sortedKeys])
+            == JSONSerialization.data(withJSONObject: expected, options: [.sortedKeys])
         #expect(same)
     }
 
