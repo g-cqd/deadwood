@@ -1,6 +1,7 @@
 //  An extension's access level is the default for its members, not a cap on them: a public member of an
 //  internal extension, and an unannotated member of a public extension, are public API.
 
+import SymbolFacts
 import Testing
 
 @testable import DeadwoodCore

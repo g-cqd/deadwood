@@ -7,6 +7,8 @@
 //    `DeclarationKind`.
 //  - Toolchain resolution and trust now delegate to analyzerkit's IndexStoreSupport (roadmap 0009).
 
+import SymbolFacts
+
 #if canImport(IndexStoreDB)
     import Foundation
     import IndexStoreDB

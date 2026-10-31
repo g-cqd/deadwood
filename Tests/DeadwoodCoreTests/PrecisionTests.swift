@@ -3,6 +3,7 @@
 //  2. Operator function declarations are roots.
 //  3. Shorthand `.caseName` construction and patterns count as references.
 
+import SymbolFacts
 import Testing
 
 @testable import DeadwoodCore

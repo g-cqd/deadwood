@@ -9,6 +9,8 @@
 //    string hashing on edge insert, flatten, or projection. Unreachable
 //    results are indices; callers map back through the declaration array.
 
+import SymbolFacts
+
 // MARK: - DependencyEdge
 
 /// An edge in the reachability graph. Endpoints are dense declaration

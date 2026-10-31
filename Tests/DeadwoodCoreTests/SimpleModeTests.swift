@@ -3,6 +3,7 @@
 //  prevention scenarios run through the same simple mode the single-file
 //  Analyzer path uses).
 
+import SymbolFacts
 import Testing
 
 @testable import DeadwoodCore

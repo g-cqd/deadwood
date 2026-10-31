@@ -8,6 +8,8 @@
 //    reachability pipeline, so the reference-count analyzer's job here is to
 //    supply per-symbol reference counts that enrich the index-mode note.
 
+import SymbolFacts
+
 #if canImport(IndexStoreDB)
     import Foundation
 

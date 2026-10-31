@@ -3,6 +3,7 @@ import AemiProtobufCore
 import CorpusScan
 import Foundation
 import SourceCorpus
+import SymbolFacts
 import Testing
 
 @testable import DeadwoodCore

@@ -3,6 +3,7 @@
 //  BacktickedIdentifier/GlobPatternMatching/IgnoredPatterns suites,
 //  consolidated against the trimmed filter surface.
 
+import SymbolFacts
 import Testing
 
 @testable import DeadwoodCore

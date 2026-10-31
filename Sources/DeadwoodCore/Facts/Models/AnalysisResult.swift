@@ -3,8 +3,8 @@
 //  (deadwood's typed failure surface is `DeadwoodError`; parsing itself is
 //  error-tolerant and never throws).
 
-import AemiJSON
 import ProjectModel
+import SymbolFacts
 
 // MARK: - AnalysisResult
 
@@ -65,7 +65,6 @@ struct AnalysisResult: Sendable {
 // MARK: - FileAnalysisResult
 
 /// Collected facts for a single file.
-@JSONCodable
 struct FileAnalysisResult: Sendable, Codable {
     /// The file path.
     let file: String

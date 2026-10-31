@@ -1,4 +1,5 @@
 import Foundation
+import SymbolFacts
 
 @testable import DeadwoodCore
 

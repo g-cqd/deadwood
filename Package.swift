@@ -38,9 +38,7 @@ let package = Package(
         // two spellings, even a revision and a branch naming the same commit (analyzerkit ADR-0025).
         .package(
             url: "https://github.com/swiftlang/indexstore-db.git", revision: "0390867818c28241af4650eb4ef29af5669335a3"),
-        // The published JSON package uses Aemi's kernel and runtime products.
-        // The repository identity remains ADJSON; select its AemiJSON product.
-        // Only the internal facts cache uses this codec; report byte formats stay stable.
+        // AemiJSON: the payload tests measure the protobuf payload against the JSON one it replaced (roadmap 0017).
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
             revision: "08695007cbd23d2b6dbb2181e6f9b3dcf1666f83"
@@ -76,8 +74,7 @@ let package = Package(
                     package: "indexstore-db",
                     condition: .when(platforms: [.macOS])
                 ),
-                // The facts cache's payload coders (Cache/FactsProtobufCoding.swift); AemiJSON is the JSON path's.
-                .product(name: "AemiJSON", package: "AemiJSON"),
+                // The facts cache's payload coder (Cache/FactsProtobufCoding.swift).
                 .product(name: "AemiProtobuf", package: "AemiProtobuf"),
                 .product(name: "AemiProtobufCore", package: "AemiProtobuf"),
                 // HF tokenizer for HFSemanticEmbeddingProvider.swift (macOS only).

@@ -1,8 +1,8 @@
 //  Lifted from SwiftStaticAnalysis (MIT) — UnusedCodeDetector/Models/UnusedCodeTypes.swift.
 //  Trimmed: `UnusedCodeReport` (deadwood reports through `AnalysisReport`).
 
-import AemiJSON
 import ProjectModel
+import SymbolFacts
 
 // MARK: - UnusedReason
 
@@ -71,7 +71,6 @@ public enum Confidence: String, Sendable, Comparable, CaseIterable, Codable {
 // MARK: - UnusedCode
 
 /// A piece of unused code, as detected by the engine.
-@JSONCodable
 struct UnusedCode: Sendable, Codable {
     /// The unused declaration (synthetic for dead branches).
     let declaration: Declaration

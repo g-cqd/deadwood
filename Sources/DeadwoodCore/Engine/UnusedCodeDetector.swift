@@ -7,6 +7,8 @@
 //  - simple mode routes its skip decisions through the shared
 //    `RootDetector`, so both modes agree on what an entry point is.
 
+import SymbolFacts
+
 // MARK: - UnusedCodeDetector
 
 /// Detects unused code in collected analysis facts.
@@ -111,7 +113,7 @@ struct UnusedCodeDetector: Sendable {
             true
         case .import,
             .parameter, .initializer, .deinitializer, .subscript,
-            .operator, .extension, .associatedtype, .topLevelCode:
+            .operator, .extension, .associatedtype, .topLevelCode, .macro:
             // Imports have their own rule; the rest have no rule —
             // name-level reference tracking cannot judge them reliably.
             false

@@ -1,4 +1,5 @@
 import SourceCorpus
+import SymbolFacts
 
 //  New in deadwood (production mode): decides which declarations belong to
 //  test code, so the second reachability pass can drop their roots and the

@@ -3,6 +3,7 @@
 //  every file inside the reachability detector.
 
 import SwiftSyntax
+import SymbolFacts
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials

@@ -14,6 +14,7 @@
 //    trees instead of re-reading files).
 
 import ProjectModel
+import SymbolFacts
 
 #if canImport(FoundationEssentials)
     import FoundationEssentials
@@ -776,7 +777,7 @@ struct ReachabilityBasedDetector: Sendable {
             true
         case .import,
             .parameter, .initializer, .deinitializer, .subscript,
-            .operator, .extension, .associatedtype, .topLevelCode:
+            .operator, .extension, .associatedtype, .topLevelCode, .macro:
             // Imports have their own pass; the rest have no rule —
             // name-level reference tracking cannot judge them reliably.
             false

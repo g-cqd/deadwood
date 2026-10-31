@@ -3,6 +3,8 @@
 //  deadwood suppression is the `@dw:` table applied by the Analyzer after
 //  mapping. The `production()` preset and array conveniences are trimmed.
 
+import SymbolFacts
+
 // MARK: - UnusedCodeFilterConfiguration
 
 /// Configuration for filtering unused code results.
