@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   ci:
-    uses: Aemi-Studio/aemi/.github/workflows/swift-tool.yml@f6da05cd0efdf60700e854efb5b6092eae89b8c5 # aemi f6da05c
+    uses: Aemi-Studio/aemi/.github/workflows/swift-tool.yml@18b02d36ed4bafd68afab7ea3894cc822c86e2f7 # aemi 18b02d3
     permissions:
       contents: write
     with:
