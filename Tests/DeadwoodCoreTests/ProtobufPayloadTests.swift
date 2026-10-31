@@ -2,6 +2,7 @@ import AemiJSON
 import AemiProtobuf
 import CorpusScan
 import Foundation
+import SymbolFacts
 import Testing
 
 @testable import DeadwoodCore

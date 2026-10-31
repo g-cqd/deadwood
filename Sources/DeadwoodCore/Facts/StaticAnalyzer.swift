@@ -10,6 +10,7 @@
 import ProjectModel
 import SwiftParser
 import SwiftSyntax
+import SymbolFacts
 
 // MARK: - StaticAnalyzer
 
@@ -31,21 +32,18 @@ struct StaticAnalyzer: Sendable {
         file: String,
         converter: SourceLocationConverter
     ) -> FileAnalysisResult {
-        let declCollector = DeclarationCollector(file: file, converter: converter)
-        declCollector.walk(tree)
-
-        let refCollector = ReferenceCollector(file: file, converter: converter)
-        refCollector.walk(tree)
+        // analyzerkit's collectors (roadmap 0055); deadwood does not report macro declarations, so it does not read them.
+        let symbols = FileSymbolFacts.collect(tree: tree, file: file, converter: converter)
         let content = ProjectClassification.contentRegion(path: file, tree: tree)
 
         return FileAnalysisResult(
             file: file,
-            declarations: declCollector.declarations + declCollector.imports
+            declarations: symbols.declarations.filter { $0.kind != .macro } + symbols.imports
                 + Self.topLevelCodeDeclarations(tree: tree, file: file, converter: converter),
-            references: refCollector.references,
-            scopes: Array(declCollector.tracker.tree.scopes.values),
-            stringLiteralTokens: refCollector.stringLiteralTokens,
-            commentTokens: refCollector.commentTokens,
+            references: symbols.references,
+            scopes: symbols.scopes,
+            stringLiteralTokens: symbols.stringLiteralTokens,
+            commentTokens: symbols.commentTokens,
             isGenerated: content.contains(.generated),
             isTestCode: content.contains(.test),
             contentRegion: content.rawValue,

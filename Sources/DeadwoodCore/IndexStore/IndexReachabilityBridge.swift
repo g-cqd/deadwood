@@ -9,6 +9,8 @@
 //  member collapse, suppression) is identical to syntax mode, so the finding
 //  *set* differs exactly where — and only where — the index is more precise.
 
+import SymbolFacts
+
 #if canImport(IndexStoreDB)
     import Foundation
     import ProjectModel

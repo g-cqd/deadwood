@@ -3,6 +3,8 @@
 //  same-named symbols the syntax graph conflates. Ported/adapted from
 //  SwiftStaticAnalysis's IndexStoreTests. Gated: the types are macOS-only.
 
+import SymbolFacts
+
 #if canImport(IndexStoreDB)
     import Foundation
     import Testing

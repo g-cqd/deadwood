@@ -1,5 +1,6 @@
 //  The facts cache's payload on AemiProtobuf's wire (analyzerkit roadmap 0017), written by hand with analyzerkit's field
-//  helpers so the models keep their `let`s and String-raw enumerations.
+//  helpers so the models keep their `let`s and String-raw enumerations. The declarations, scopes and locations are
+//  analyzerkit's `SymbolFactsWire` messages (roadmap 0055); the references are deadwood's compact form of them.
 //
 //  Field numbers are the format: never renumber one, and give a new field a new number. A location's file is left out
 //  when it is the file the facts describe, which is nearly always; the JSON path wrote it in every location.
@@ -8,6 +9,7 @@ public import AemiProtobuf
 public import AemiProtobufCore
 import CorpusScan
 import ProjectModel
+import SymbolFacts
 
 extension ExtractedArtifacts: AemiProtoFastEncodable, AemiProtoFastDecodable {
     func __aepbEncode(into writer: inout WireWriter) throws(WireError) {
@@ -126,7 +128,7 @@ enum FactsWire {
         writer.field(1, file)
         for declaration in facts.declarations {
             try writer.appendMessage(field: 2) { writer throws(WireError) in
-                try write(declaration, file: file, into: &writer)
+                try SymbolFactsWire.write(declaration, file: file, into: &writer)
             }
         }
         for reference in facts.references {
@@ -134,7 +136,7 @@ enum FactsWire {
         }
         for scope in facts.scopes {
             try writer.appendMessage(field: 4) { writer throws(WireError) in
-                try write(scope, file: file, into: &writer)
+                try SymbolFactsWire.write(scope, file: file, into: &writer)
             }
         }
         for token in facts.stringLiteralTokens.sorted(by: { ($0.token, $0.line) < ($1.token, $1.line) }) {
@@ -169,13 +171,17 @@ enum FactsWire {
             case 1: file = try reader.readString()
             case 2:
                 declarations.append(
-                    try reader.readMessage { reader throws(WireError) in try readDeclaration(&reader, file: known) })
+                    try reader.readMessage { reader throws(WireError) in
+                        try SymbolFactsWire.readDeclaration(&reader, file: known)
+                    })
             case 3:
                 references.append(
                     try reader.readMessage { reader throws(WireError) in try readReference(&reader, file: known) })
             case 4:
                 scopes.append(
-                    try reader.readMessage { reader throws(WireError) in try readScope(&reader, file: known) })
+                    try reader.readMessage { reader throws(WireError) in
+                        try SymbolFactsWire.readScope(&reader, file: known)
+                    })
             case 5:
                 strings.insert(
                     try reader.readMessage { reader throws(WireError) in
@@ -218,42 +224,10 @@ enum FactsWire {
             isTestCode: content.contains(.test), contentRegion: contentRegion, regionSpans: spans)
     }
 
-    // MARK: Locations
-
-    static func write(_ location: SourceLocation, file: String, into writer: inout WireWriter) {
-        if location.file != file { writer.field(1, location.file) }
-        writer.field(2, location.line)
-        writer.field(3, location.column)
-        writer.field(4, location.offset)
-    }
-
-    static func readLocation(_ reader: inout WireReader, file: String) throws(WireError) -> SourceLocation {
-        var path = file
-        var line = 0
-        var column = 0
-        var offset = 0
-        try reader.forEachField { tag, reader throws(WireError) in
-            switch tag.fieldNumber {
-            case 1: path = try reader.readString()
-            case 2: line = try reader.readInt()
-            case 3: column = try reader.readInt()
-            case 4: offset = try reader.readInt()
-            default: try reader.skipField(tag)
-            }
-        }
-        return SourceLocation(file: path, line: line, column: column, offset: offset)
-    }
-
-    private static func location(
-        _ field: FieldNumber, _ location: SourceLocation, file: String, into writer: inout WireWriter
-    ) throws(WireError) {
-        try writer.appendMessage(field: field) { writer throws(WireError) in write(location, file: file, into: &writer)
-        }
-    }
-
     // MARK: References
 
-    /// Only what corpus-wide detection reads, as `CachedReference` kept it: the scope and the column are not stored.
+    /// Only what corpus-wide detection reads: the scope and the column are not stored. These are fields 1 to 6 of
+    /// `SymbolFactsWire`'s reference, so either reader reads it.
     static func write(_ reference: Reference, into writer: inout WireWriter) {
         writer.field(1, reference.identifier)
         writer.field(2, reference.location.line)
@@ -289,227 +263,11 @@ enum FactsWire {
             callLabels: hasLabels ? labels : nil)
     }
 
-    // MARK: Scopes
-
-    static func write(_ scope: Scope, file: String, into writer: inout WireWriter) throws(WireError) {
-        writer.field(1, scope.id.id)
-        writer.field(2, scope.kind)
-        writer.field(3, scope.name)
-        writer.field(4, scope.parent?.id)
-        try location(5, scope.location, file: file, into: &writer)
-    }
-
-    static func readScope(_ reader: inout WireReader, file: String) throws(WireError) -> Scope {
-        var id = ""
-        var kind = ScopeKind.global
-        var name: String?
-        var parent: String?
-        var location = SourceLocation(file: file, line: 0, column: 0)
-        try reader.forEachField { tag, reader throws(WireError) in
-            switch tag.fieldNumber {
-            case 1: id = try reader.readString()
-            case 2: kind = try reader.readEnum(ScopeKind.self)
-            case 3: name = try reader.readString()
-            case 4: parent = try reader.readString()
-            case 5:
-                location = try reader.readMessage { reader throws(WireError) in try readLocation(&reader, file: file) }
-            default: try reader.skipField(tag)
-            }
-        }
-        return Scope(id: ScopeID(id), kind: kind, name: name, parent: parent.map(ScopeID.init), location: location)
-    }
-
-    // MARK: Declarations
-
-    static func write(_ declaration: Declaration, file: String, into writer: inout WireWriter) throws(WireError) {
-        writer.field(1, declaration.name)
-        writer.field(2, declaration.kind)
-        writer.field(3, declaration.accessLevel)
-        writer.field(4, UInt64(declaration.modifiers.rawValue))
-        try location(5, declaration.location, file: file, into: &writer)
-        try writer.appendMessage(field: 6) { writer throws(WireError) in
-            try location(1, declaration.range.start, file: file, into: &writer)
-            try location(2, declaration.range.end, file: file, into: &writer)
-        }
-        writer.field(7, declaration.scope.id)
-        writer.field(8, declaration.typeAnnotation)
-        writer.field(9, declaration.genericParameters)
-        if let signature = declaration.signature {
-            try writer.appendMessage(field: 10) { writer throws(WireError) in try write(signature, into: &writer) }
-        }
-        writer.field(11, declaration.documentation)
-        for wrapper in declaration.propertyWrappers {
-            try writer.appendMessage(field: 12) { writer throws(WireError) in
-                writer.field(1, wrapper.kind)
-                writer.field(2, wrapper.attributeText)
-                writer.field(3, wrapper.arguments)
-            }
-        }
-        if let info = declaration.swiftUIInfo {
-            try writer.appendMessage(field: 13) { writer throws(WireError) in
-                for conformance in info.conformances.sorted(by: { $0.rawValue < $1.rawValue }) {
-                    writer.field(1, conformance)
-                }
-            }
-        }
-        writer.field(14, declaration.conformances)
-        writer.field(15, declaration.attributes)
-    }
-
-    static func readDeclaration(_ reader: inout WireReader, file: String) throws(WireError) -> Declaration {
-        var name = ""
-        var kind = DeclarationKind.function
-        var access = AccessLevel.internal
-        var modifiers: UInt64 = 0
-        var location = SourceLocation(file: file, line: 0, column: 0)
-        var range = SourceRange(start: location, end: location)
-        var scope = ""
-        var typeAnnotation: String?
-        var generics: [String] = []
-        var signature: FunctionSignature?
-        var documentation: String?
-        var wrappers: [PropertyWrapperInfo] = []
-        var swiftUI: SwiftUITypeInfo?
-        var conformances: [String] = []
-        var attributes: [String] = []
-        try reader.forEachField { tag, reader throws(WireError) in
-            switch tag.fieldNumber {
-            case 1: name = try reader.readString()
-            case 2: kind = try reader.readEnum(DeclarationKind.self)
-            case 3: access = try reader.readEnum(AccessLevel.self)
-            case 4: modifiers = try reader.readVarint()
-            case 5:
-                location = try reader.readMessage { reader throws(WireError) in try readLocation(&reader, file: file) }
-            case 6:
-                range = try reader.readMessage { reader throws(WireError) in
-                    var start = SourceLocation(file: file, line: 0, column: 0)
-                    var end = start
-                    try reader.forEachField { tag, reader throws(WireError) in
-                        switch tag.fieldNumber {
-                        case 1:
-                            start = try reader.readMessage { reader throws(WireError) in
-                                try readLocation(&reader, file: file)
-                            }
-                        case 2:
-                            end = try reader.readMessage { reader throws(WireError) in
-                                try readLocation(&reader, file: file)
-                            }
-                        default: try reader.skipField(tag)
-                        }
-                    }
-                    return SourceRange(start: start, end: end)
-                }
-            case 7: scope = try reader.readString()
-            case 8: typeAnnotation = try reader.readString()
-            case 9: generics.append(try reader.readString())
-            case 10: signature = try reader.readMessage { reader throws(WireError) in try readSignature(&reader) }
-            case 11: documentation = try reader.readString()
-            case 12:
-                wrappers.append(
-                    try reader.readMessage { reader throws(WireError) in
-                        var kind = PropertyWrapperKind.unknown
-                        var text = ""
-                        var arguments: String?
-                        try reader.forEachField { tag, reader throws(WireError) in
-                            switch tag.fieldNumber {
-                            case 1: kind = try reader.readEnum(PropertyWrapperKind.self)
-                            case 2: text = try reader.readString()
-                            case 3: arguments = try reader.readString()
-                            default: try reader.skipField(tag)
-                            }
-                        }
-                        return PropertyWrapperInfo(kind: kind, attributeText: text, arguments: arguments)
-                    })
-            case 13:
-                swiftUI = try reader.readMessage { reader throws(WireError) in
-                    var conformances: Set<SwiftUIConformance> = []
-                    try reader.forEachField { tag, reader throws(WireError) in
-                        switch tag.fieldNumber {
-                        case 1: conformances.insert(try reader.readEnum(SwiftUIConformance.self))
-                        default: try reader.skipField(tag)
-                        }
-                    }
-                    return SwiftUITypeInfo(conformances: conformances)
-                }
-            case 14: conformances.append(try reader.readString())
-            case 15: attributes.append(try reader.readString())
-            default: try reader.skipField(tag)
-            }
-        }
-        return Declaration(
-            name: name, kind: kind, accessLevel: access,
-            modifiers: DeclarationModifiers(rawValue: UInt32(truncatingIfNeeded: modifiers)), location: location,
-            range: range, scope: ScopeID(scope), typeAnnotation: typeAnnotation, genericParameters: generics,
-            signature: signature, documentation: documentation, propertyWrappers: wrappers, swiftUIInfo: swiftUI,
-            conformances: conformances, attributes: attributes)
-    }
-
-    static func write(_ signature: FunctionSignature, into writer: inout WireWriter) throws(WireError) {
-        for parameter in signature.parameters {
-            try writer.appendMessage(field: 1) { writer throws(WireError) in
-                writer.field(1, parameter.label)
-                writer.field(2, parameter.name)
-                writer.field(3, parameter.type)
-                writer.field(4, parameter.hasDefaultValue)
-                writer.field(5, parameter.isVariadic)
-                writer.field(6, parameter.isInout)
-            }
-        }
-        writer.field(2, signature.returnType)
-        writer.field(3, signature.isAsync)
-        writer.field(4, signature.isThrowing)
-        writer.field(5, signature.isRethrowing)
-    }
-
-    static func readSignature(_ reader: inout WireReader) throws(WireError) -> FunctionSignature {
-        var parameters: [FunctionSignature.Parameter] = []
-        var returnType: String?
-        var isAsync = false
-        var isThrowing = false
-        var isRethrowing = false
-        try reader.forEachField { tag, reader throws(WireError) in
-            switch tag.fieldNumber {
-            case 1:
-                parameters.append(
-                    try reader.readMessage { reader throws(WireError) in
-                        var label: String?
-                        var name = ""
-                        var type = ""
-                        var hasDefault = false
-                        var isVariadic = false
-                        var isInout = false
-                        try reader.forEachField { tag, reader throws(WireError) in
-                            switch tag.fieldNumber {
-                            case 1: label = try reader.readString()
-                            case 2: name = try reader.readString()
-                            case 3: type = try reader.readString()
-                            case 4: hasDefault = try reader.readBool()
-                            case 5: isVariadic = try reader.readBool()
-                            case 6: isInout = try reader.readBool()
-                            default: try reader.skipField(tag)
-                            }
-                        }
-                        return FunctionSignature.Parameter(
-                            label: label, name: name, type: type, hasDefaultValue: hasDefault, isVariadic: isVariadic,
-                            isInout: isInout)
-                    })
-            case 2: returnType = try reader.readString()
-            case 3: isAsync = try reader.readBool()
-            case 4: isThrowing = try reader.readBool()
-            case 5: isRethrowing = try reader.readBool()
-            default: try reader.skipField(tag)
-            }
-        }
-        return FunctionSignature(
-            parameters: parameters, returnType: returnType, isAsync: isAsync, isThrowing: isThrowing,
-            isRethrowing: isRethrowing)
-    }
-
     // MARK: Unused code
 
     static func write(_ item: UnusedCode, file: String, into writer: inout WireWriter) throws(WireError) {
         try writer.appendMessage(field: 1) { writer throws(WireError) in
-            try write(item.declaration, file: file, into: &writer)
+            try SymbolFactsWire.write(item.declaration, file: file, into: &writer)
         }
         writer.field(2, item.reason)
         writer.field(3, item.confidence)
@@ -529,7 +287,7 @@ enum FactsWire {
             switch tag.fieldNumber {
             case 1:
                 declaration = try reader.readMessage { reader throws(WireError) in
-                    try readDeclaration(&reader, file: file)
+                    try SymbolFactsWire.readDeclaration(&reader, file: file)
                 }
             case 2: reason = try reader.readEnum(UnusedReason.self)
             case 3: confidence = try reader.readEnum(Confidence.self)

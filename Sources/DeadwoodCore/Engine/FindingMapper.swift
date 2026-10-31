@@ -3,6 +3,7 @@
 //  findings into their flagged enclosing type.
 
 import ProjectModel
+import SymbolFacts
 
 // MARK: - FindingMapper
 

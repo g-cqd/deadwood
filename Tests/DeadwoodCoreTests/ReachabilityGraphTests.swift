@@ -2,6 +2,7 @@
 //  (adapted: single-edge mutators and path finding were trimmed, so edges go
 //  in as batches; node identity is the dense declaration index).
 
+import SymbolFacts
 import Testing
 
 @testable import DeadwoodCore

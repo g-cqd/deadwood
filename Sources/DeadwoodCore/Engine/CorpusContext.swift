@@ -8,6 +8,7 @@
 //  precise scope → declaration mapping.
 
 import ProjectModel
+import SymbolFacts
 
 // MARK: - CorpusContext
 

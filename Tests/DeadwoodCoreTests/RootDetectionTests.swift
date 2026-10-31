@@ -2,6 +2,7 @@
 //  (adapted: root reasons are asserted on the extracted `RootDetector`
 //  rather than through the graph actor), plus the deadwood precision roots.
 
+import SymbolFacts
 import Testing
 
 @testable import DeadwoodCore

@@ -3,6 +3,7 @@ public import ProjectModel
 import SourceCorpus
 import SwiftParser
 import SwiftSyntax
+import SymbolFacts
 
 #if canImport(IndexStoreDB)
     import IndexStoreSupport

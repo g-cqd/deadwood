@@ -19,6 +19,7 @@
 //    file is a root, because one file alone cannot prove it unused
 
 import ProjectModel
+import SymbolFacts
 
 // MARK: - RootReason
 
