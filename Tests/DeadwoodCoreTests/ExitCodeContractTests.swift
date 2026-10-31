@@ -100,7 +100,11 @@ import Testing
         try Self.expect([(["clean", "--no-such-option"], 64), (["absent"], 64), (["empty"], 64)])
     }
 
-    @Test func `a run that could read no file it found is an internal failure, 70`() throws {
+    /// Not as root (the Linux CI container): root reads a file whatever its mode, so `locked` is not unreadable.
+
+    @Test(.enabled(if: ProcessInfo.processInfo.userName != "root"))
+
+    func `a run that could read no file it found is an internal failure, 70`() throws {
         try Self.expect([(["locked"], 70), (["locked", "clean"], 0)])
     }
 
