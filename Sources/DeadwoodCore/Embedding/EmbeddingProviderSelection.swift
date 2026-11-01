@@ -8,6 +8,7 @@
 
 #if canImport(NaturalLanguage)
     import Foundation
+    import SemanticEmbedding
 
     // MARK: - EmbeddingProviderSelection
 
@@ -38,7 +39,7 @@
                                 + "loaded (\(error)); falling back to the on-device provider"
                         )
                     }
-                } else if let bundled = bundledModelDirectory() {
+                } else if let bundled = EmbeddingBundleLocator.directory(tool: ToolInfo.name) {
                     // A model laid out next to the binary is used with no flag.
                     // A load failure here is silent: nothing was asked for, so
                     // there is nothing to report — just take the default.
@@ -58,12 +59,7 @@
                 }
             #endif
 
-            if #available(macOS 14.0, *) {
-                if let provider = try? NLContextualSemanticEmbeddingProvider() {
-                    return (provider, notes)
-                }
-            }
-            return (DeterministicEmbeddingProvider(), notes)
+            return (SemanticEmbeddingProviders.onDeviceOrFallback(), notes)
         }
 
         /// Cap on post-tokenization sequence length for bundle providers. 128 is
@@ -72,65 +68,5 @@
         /// Longer declaration snippets are truncated — the anomaly score reads
         /// a declaration's shape, which its opening lines already carry.
         private static let bundleMaxLength = 128
-
-        #if canImport(CoreML)
-            /// Locates a Core ML embedding bundle shipped alongside the
-            /// executable, so a distribution that ships a model uses it with no
-            /// flag. `DEADWOOD_EMBEDDING_BUNDLE` overrides the location for
-            /// installs that separate the binary from its resources.
-            ///
-            /// Returns `nil` for the plain binary and for dev/test builds —
-            /// whose executable directory holds no model — which leaves the
-            /// on-device NLContextual default in charge.
-            static func bundledModelDirectory() -> URL? {
-                let executableURL =
-                    (Bundle.main.executableURL
-                    ?? URL(fileURLWithPath: CommandLine.arguments.first ?? ToolInfo.name))
-                    .resolvingSymlinksInPath()
-                return bundledModelDirectory(
-                    executableDir: executableURL.deletingLastPathComponent(),
-                    override: ProcessInfo.processInfo.environment["DEADWOOD_EMBEDDING_BUNDLE"]
-                )
-            }
-
-            /// Pure candidate search behind ``bundledModelDirectory()`` — no
-            /// process globals, so it is unit-testable. Order: `override` (the
-            /// `DEADWOOD_EMBEDDING_BUNDLE` value) → `<executableDir>/Models/MiniLM`
-            /// → `<executableDir>/../share/deadwood/Models/MiniLM`. The first
-            /// candidate holding a `.mlpackage`/`.mlmodelc` wins; `nil` when
-            /// none do.
-            static func bundledModelDirectory(executableDir: URL, override: String?) -> URL? {
-                let manager = FileManager.default
-                func hasModel(_ directory: URL) -> Bool {
-                    guard
-                        let contents = try? manager.contentsOfDirectory(
-                            at: directory,
-                            includingPropertiesForKeys: nil
-                        )
-                    else { return false }
-                    return contents.contains {
-                        $0.pathExtension == "mlpackage" || $0.pathExtension == "mlmodelc"
-                    }
-                }
-
-                var candidates: [URL] = []
-                if let override, !override.isEmpty {
-                    candidates.append(URL(fileURLWithPath: override))
-                }
-                candidates.append(executableDir.appending(path: "Models/MiniLM"))
-                // FHS / Homebrew-style `bin/deadwood` next to
-                // `share/deadwood/Models/MiniLM`.
-                candidates.append(
-                    executableDir.deletingLastPathComponent()
-                        .appending(path: "share/deadwood/Models/MiniLM")
-                )
-
-                // Resolve each candidate so a symlinked model directory reaches
-                // the provider as its real path: `contentsOfDirectory` (here and
-                // in the provider's own model lookup) does not traverse a URL
-                // that is itself a symlink to a directory.
-                return candidates.map { $0.resolvingSymlinksInPath() }.first(where: hasModel)
-            }
-        #endif
     }
 #endif
