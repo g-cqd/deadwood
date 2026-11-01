@@ -1,4 +1,5 @@
 public import ProjectModel
+public import ReportSupport
 
 /// The complete result of one analysis run.
 public struct AnalysisReport: Sendable, Codable {
@@ -36,6 +37,9 @@ public struct AnalysisReport: Sendable, Codable {
     /// Files classified by path conventions although a project encloses them. Not encoded; the envelope's run notes
     /// carry them.
     public var classificationIssues: [ClassificationIssue] = []
+    /// Files the index store does not describe (no unit, or older than their unit): judged by name instead. Not encoded;
+    /// the envelope lists them under `skippedFiles`, as arcleak does.
+    public var uncoveredFiles: [SkippedFile] = []
     /// Seconds per phase, for `--timings`. Not encoded; the envelope carries them when asked.
     public var timings: [String: Double] = [:]
 

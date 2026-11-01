@@ -1,6 +1,7 @@
 #if os(macOS)
     import CorpusScan
     import Foundation
+    import ReportSupport
     import Testing
 
     @testable import DeadwoodCore
@@ -97,6 +98,9 @@
             let messages = report.findings.map(\.message)
             #expect(messages.contains { $0.contains("deadInUnbuilt") }, "\(messages)")
             #expect(!messages.contains { $0.contains("usedByName") }, "\(messages)")
+            // The files judged by name are listed, not only counted in a note.
+            let skipped = report.uncoveredFiles.map { "\($0.path) \($0.reason.rawValue)" }
+            #expect(skipped.contains { $0.hasSuffix("Unbuilt.swift notIndexed") }, "\(skipped)")
         }
 
         /// One store open per run, and one occurrence query per analyzed file.
