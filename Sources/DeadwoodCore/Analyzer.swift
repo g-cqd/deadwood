@@ -487,16 +487,21 @@ public struct Analyzer: Sendable {
                 }
 
                 // A file the index never saw, or saw before it last
-                // changed, cannot support a verdict: the edges it would
-                // draw are missing or describe code that no longer
+                // changed, cannot support an index verdict: the edges it
+                // would draw are missing or describe code that no longer
                 // exists. Drop findings anchored there rather than
-                // report them from stale or absent data; the note below
-                // already says which files and why.
+                // report them from stale or absent data (D4), and judge
+                // its declarations as the syntax graph does instead: by
+                // name, over every file, so a name any file uses keeps
+                // all its declarations alive and the verdict errs
+                // towards "used". The note below says which files and why.
                 if !stale.isEmpty {
                     let staleFiles = Set(stale.map { IndexBasedDependencyGraph.canonicalPath($0) })
-                    unused.removeAll {
+                    let isStale: (UnusedCode) -> Bool = {
                         staleFiles.contains(IndexBasedDependencyGraph.canonicalPath($0.declaration.location.file))
                     }
+                    unused.removeAll(where: isStale)
+                    unused.append(contentsOf: await detector.detectUnused(in: result, context: context).filter(isStale))
                 }
 
                 // The advice follows the coverage class (ADR-0005 item 4): a file with no unit was not built by this
@@ -507,14 +512,14 @@ public struct Analyzer: Sendable {
                 if !stale.isEmpty, unbuilt > 0 {
                     notes.append(
                         "\(ToolInfo.name): the index has no unit for \(unbuilt) file(s), not built by this scheme or not "
-                            + "built yet; skipping their declarations, whose uses still count by name — build the "
-                            + "scheme that compiles them"
+                            + "built yet; judging their declarations by name, and their uses count by name — build the "
+                            + "scheme that compiles them for the index's verdict"
                     )
                 }
                 if !stale.isEmpty, changed > 0 {
                     notes.append(
-                        "\(ToolInfo.name): index is stale for \(changed) file(s) changed since the build; skipping their "
-                            + "declarations, whose uses still count by name — re-run the build"
+                        "\(ToolInfo.name): index is stale for \(changed) file(s) changed since the build; judging their "
+                            + "declarations by name, and their uses count by name — re-run the build"
                     )
                 }
                 return (unused, notes)
