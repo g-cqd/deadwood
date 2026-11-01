@@ -331,7 +331,11 @@
         /// every conformer). Inheritance is handled in the bridge from deadwood's parsed conformance lists.
         private func add(_ definition: FileSummary.Definition, canonicalPaths: inout [String: String]) {
             let usr = definition.usr
-            for parent in definition.parents { addEdge(from: usr, to: canonical(parent), kind: .containedBy) }
+            // A parameter or a local only describes its function: it does not keep the function alive, as a member keeps its
+            // type. With the edge, the forced locals that seed the walk reached every function that has one.
+            if definition.kind != .parameter, definition.kind != .variable {
+                for parent in definition.parents { addEdge(from: usr, to: canonical(parent), kind: .containedBy) }
+            }
             for base in definition.overridden { addEdge(from: canonical(base), to: usr, kind: .override) }
             guard nodes[usr] == nil else { return }
             let path: String

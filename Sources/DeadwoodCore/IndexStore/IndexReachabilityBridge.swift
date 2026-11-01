@@ -82,11 +82,20 @@ import SymbolFacts
 
             // D2: a file the index does not cover draws no edge, so what only it uses would look dead. Its references,
             // from deadwood's own parse, keep every definition of the name they use alive: conservative, by name.
+            // D3: code the compiler attributes to no declaration of the corpus (a `#Preview` body, top-level statements) draws
+            // no edge either, and the nodes deadwood roots for it have no USR. What it names is rooted by name, as D2 does.
             let uncoveredRoots = Self.namedByUncoveredFiles(
                 uncoveredFiles,
                 result: result,
                 context: context,
                 graph: graph
+            ).merged(
+                with: Self.namedByRootCode(
+                    result: result,
+                    context: context,
+                    configuration: rootConfiguration,
+                    graph: graph
+                )
             )
 
             // With-test roots — deadwood's own rich root detection, projected
@@ -172,31 +181,77 @@ import SymbolFacts
             )
         }
 
-        /// The definitions named by references in `files`, by base name (`helper` names `helper()` and `helper(_:)`);
-        /// `production` leaves out the references of test files, as production roots leave out test roots.
+        /// Definitions rooted by name: every definition of a base name a root's code uses. `production` leaves out the roots
+        /// that are test code, as production roots leave out test roots.
+        struct NameRoots {
+            var all: Set<String> = []
+            var production: Set<String> = []
+
+            func merged(with other: NameRoots) -> NameRoots {
+                NameRoots(all: all.union(other.all), production: production.union(other.production))
+            }
+        }
+
+        /// The USRs of the graph's definitions by base name (`helper` names `helper()` and `helper(_:)`).
+        private static func definitionsByBaseName(_ graph: IndexBasedDependencyGraph) -> [Substring: [String]] {
+            var byName: [Substring: [String]] = [:]
+            for node in graph.definitionNodes {
+                byName[node.name.prefix { $0 != "(" }, default: []].append(node.usr)
+            }
+            return byName
+        }
+
+        /// The definitions named by references in `files`, by base name; `production` leaves out the references of test
+        /// files.
         private static func namedByUncoveredFiles(
             _ files: [String],
             result: AnalysisResult,
             context: CorpusContext,
             graph: IndexBasedDependencyGraph
-        ) -> (all: Set<String>, production: Set<String>) {
-            guard !files.isEmpty else { return ([], []) }
-            var byName: [Substring: [String]] = [:]
-            for node in graph.definitionNodes {
-                byName[node.name.prefix { $0 != "(" }, default: []].append(node.usr)
-            }
-            var all: Set<String> = []
-            var production: Set<String> = []
+        ) -> NameRoots {
+            guard !files.isEmpty else { return NameRoots() }
+            let byName = definitionsByBaseName(graph)
+            var roots = NameRoots()
             for file in files {
                 let isTest = context.isTestFile(file)
                 for reference in result.references.find(inFile: file) {
                     for usr in byName[Substring(reference.identifier)] ?? [] {
-                        all.insert(usr)
-                        if !isTest { production.insert(usr) }
+                        roots.all.insert(usr)
+                        if !isTest { roots.production.insert(usr) }
                     }
                 }
             }
-            return (all, production)
+            return roots
+        }
+
+        /// The definitions named by the code of the root nodes deadwood synthesizes for code that belongs to no declaration
+        /// (`#Preview` bodies, top-level statements): the references inside each node's line range.
+        private static func namedByRootCode(
+            result: AnalysisResult,
+            context: CorpusContext,
+            configuration: RootDetectionConfiguration,
+            graph: IndexBasedDependencyGraph
+        ) -> NameRoots {
+            let detector = RootDetector(configuration: configuration)
+            let nodes = result.declarations.declarations.filter {
+                $0.kind == .topLevelCode && detector.rootReason(for: $0, context: context) != nil
+            }
+            guard !nodes.isEmpty else { return NameRoots() }
+            let byName = definitionsByBaseName(graph)
+            var roots = NameRoots()
+            for node in nodes {
+                let file = node.location.file
+                let isTest = context.isTestFile(file)
+                for reference in result.references.find(inFile: file)
+                where reference.location.line >= node.range.start.line && reference.location.line <= node.range.end.line
+                {
+                    for usr in byName[Substring(reference.identifier)] ?? [] {
+                        roots.all.insert(usr)
+                        if !isTest { roots.production.insert(usr) }
+                    }
+                }
+            }
+            return roots
         }
 
         /// The index graph's edges among `indices`, translated from USR
