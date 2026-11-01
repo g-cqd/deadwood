@@ -63,14 +63,6 @@ public struct AnalysisReport: Sendable, Codable {
 
     public var maxSeverity: Severity? { findings.map(\.severity).max() }
 
-    /// Set when every file the run was given was skipped — unreadable, not
-    /// UTF-8, or over the size cap — so it analyzed nothing. A file whose
-    /// analysis was only cut short does not count.
-    public var everyFileSkipped: Bool {
-        analyzedFileCount > 0
-            && Set(degradedFiles.lazy.filter(\.skipped).map(\.path)).count >= analyzedFileCount
-    }
-
     public struct SuppressedFinding: Sendable, Codable {
         public let finding: Finding
         /// The reason text from `-- reason`, if the author gave one.

@@ -1,6 +1,7 @@
 import DeadwoodCore
 import Foundation
 import ProjectModel
+import ReportSupport
 import Testing
 
 /// A finding carries its confidence as data. Confidence is not part of the

@@ -1,6 +1,7 @@
 import DeadwoodCore
 import Foundation
 import ProjectModel
+import ReportSupport
 import Testing
 
 /// Pins the 1.x field names of the `--format json` report. The key sets are
