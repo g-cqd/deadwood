@@ -2,6 +2,7 @@
 //  (adapted to the nested result types and the BinaryHeap worklists; the
 //  CombinedDataFlowAnalysis suite went with the trimmed type).
 
+import ReportSupport
 import SwiftParser
 import SwiftSyntax
 import SymbolFacts

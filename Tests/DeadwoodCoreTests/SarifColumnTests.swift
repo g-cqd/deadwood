@@ -1,5 +1,6 @@
 import DeadwoodCore
 import Foundation
+import ReportSupport
 import Testing
 
 /// SARIF regions count columns in UTF-16 code units, while deadwood's own

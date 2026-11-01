@@ -54,7 +54,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "a8c9d638039c13b11adaa0803669746fda64dd51"
+            revision: "b15fdbe9435bd5af0d1821e1396fce1fed0750a8"
         ),
     ],
     targets: [
