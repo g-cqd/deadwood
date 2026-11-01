@@ -242,8 +242,8 @@ enum ExternalProtocolCatalog {
         "PreferenceKey": ["defaultValue", "reduce", "Value"],
         "ObservableObject": ["objectWillChange", "ObjectWillChangePublisher"],
         // ArgumentParser
-        "ParsableCommand": ["configuration", "run", "init"],
-        "AsyncParsableCommand": ["configuration", "run", "init"],
+        "ParsableCommand": ["configuration", "run", "validate", "init"],
+        "AsyncParsableCommand": ["configuration", "run", "validate", "init"],
         "ParsableArguments": ["init", "validate"],
         "ExpressibleByArgument": ["init", "defaultValueDescription", "allValueStrings"],
     ]
