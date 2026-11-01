@@ -1,5 +1,6 @@
 public import CorpusScan
 public import ProjectModel
+import ReportSupport
 import SourceCorpus
 import SwiftParser
 import SwiftSyntax
@@ -168,6 +169,7 @@ public struct Analyzer: Sendable {
             indexStore: indexStore
         )
         report.notes.append(contentsOf: reachability.notes)
+        report.uncoveredFiles = reachability.uncovered
         var unused = reachability.unused
         unused = UnusedCodeFilter(configuration: .sensibleDefaults).filter(unused)
         if engineConfig.detectImports {
@@ -336,9 +338,9 @@ public struct Analyzer: Sendable {
         files: [String],
         detector: UnusedCodeDetector,
         indexStore: IndexStoreOptions
-    ) async -> (unused: [UnusedCode], notes: [String]) {
+    ) async -> (unused: [UnusedCode], notes: [String], uncovered: [SkippedFile]) {
         guard indexStore.enabled else {
-            return (await detector.detectUnused(in: result, context: context), [])
+            return (await detector.detectUnused(in: result, context: context), [], [])
         }
 
         #if canImport(IndexStoreDB)
@@ -376,7 +378,7 @@ public struct Analyzer: Sendable {
             files: [String],
             detector: UnusedCodeDetector,
             indexStore: IndexStoreOptions
-        ) async -> (unused: [UnusedCode], notes: [String]) {
+        ) async -> (unused: [UnusedCode], notes: [String], uncovered: [SkippedFile]) {
             let cwd = FileManager.default.currentDirectoryPath
             let projectRoot = IndexProjectLocator.projectRoot(for: files, fallback: cwd)
             let manager = IndexStoreFallbackManager(
@@ -400,7 +402,7 @@ public struct Analyzer: Sendable {
             switch outcome {
             case .fallback(let reason):
                 let syntax = await detector.detectUnused(in: result, context: context)
-                return (syntax, ["\(ToolInfo.name): \(reason.description)"])
+                return (syntax, ["\(ToolInfo.name): \(reason.description)"], [])
 
             case .index(let reader, let stale):
                 let path = reader.indexStorePath
@@ -440,7 +442,8 @@ public struct Analyzer: Sendable {
                                 + "which can conflate same-named declarations across modules. Pass the index "
                                 + "store built from this project (for an Xcode project, its DerivedData "
                                 + "Index.noindex/DataStore) after building or testing it."
-                        ]
+                        ],
+                        []
                     )
                 }
 
@@ -522,7 +525,7 @@ public struct Analyzer: Sendable {
                             + "declarations by name, and their uses count by name — re-run the build"
                     )
                 }
-                return (unused, notes)
+                return (unused, notes, coverage.skippedFiles)
             }
         }
     #endif

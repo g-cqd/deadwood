@@ -100,9 +100,11 @@ public enum ReportFormatter {
         timings: Bool
     ) -> ReportEnvelope<AnalysisReport> {
         var seen: Set<String> = []
-        let skipped = report.degradedFiles.compactMap { file in
-            seen.insert(file.path).inserted ? SkippedFile(path: file.path, reason: .degraded) : nil
-        }
+        let skipped =
+            report.degradedFiles.compactMap { file in
+                seen.insert(file.path).inserted ? SkippedFile(path: file.path, reason: .degraded) : nil
+            }
+            + report.uncoveredFiles.filter { seen.insert($0.path).inserted }
         func shown(_ path: String) -> String { root.map { RepositoryRoot.relativize(path, to: $0) } ?? path }
         let classification = report.classificationIssues.map { issue in
             RunNote(
