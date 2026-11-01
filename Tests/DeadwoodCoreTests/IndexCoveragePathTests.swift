@@ -73,6 +73,32 @@
             #expect(report.notes.contains { $0.contains("not built by this scheme") }, "\(report.notes)")
         }
 
+        /// A file the index does not cover still has deadwood's own verdict, by name: what nothing names is dead, and a name
+        /// that any file uses keeps every declaration of it alive.
+        @Test func `a dead declaration in a file the index does not cover is reported by name`() async throws {
+            let root = try Self.directory()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let app = root.appending(path: "Sources/App/App.swift")
+            try Self.write(Self.app, app)
+            let store = root.appending(path: "store")
+            try SwiftcIndexFixture.build(store: store, module: "App", files: [app], in: root)
+            let unbuilt = root.appending(path: "Sources/Unbuilt/Unbuilt.swift")
+            try Self.write(
+                "func deadInUnbuilt() -> Int {\n    1\n}\n\nfunc usedByName() -> Int {\n    2\n}\n",
+                unbuilt
+            )
+            let test = root.appending(path: "Tests/AppTests/UnbuiltTests.swift")
+            try Self.write("import Testing\n\n@Test func usesIt() {\n    #expect(usedByName() == 2)\n}\n", test)
+
+            let report = await Analyzer().analyze(
+                files: [app.path, unbuilt.path, test.path],
+                indexStore: Self.options(store, root)
+            )
+            let messages = report.findings.map(\.message)
+            #expect(messages.contains { $0.contains("deadInUnbuilt") }, "\(messages)")
+            #expect(!messages.contains { $0.contains("usedByName") }, "\(messages)")
+        }
+
         /// One store open per run, and one occurrence query per analyzed file.
         @Test func `the store opens once and each file is queried once`() async throws {
             let root = try Self.directory()
