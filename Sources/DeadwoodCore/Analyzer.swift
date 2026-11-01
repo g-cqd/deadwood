@@ -362,7 +362,8 @@ public struct Analyzer: Sendable {
                     "\(ToolInfo.name): warning: --index-store is macOS-only; falling back to name-based "
                         + "reachability on this platform, which can conflate same-named declarations across "
                         + "modules. Run the analysis on macOS to use the index store."
-                ]
+                ],
+                []
             )
         #endif
     }
