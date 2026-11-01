@@ -22,8 +22,11 @@
             let canonical = SourcePath.canonical(file.path)
             guard
                 case .usable(let session) = IndexStoreSession.open(
-                    store.path, cacheRoot: directory.appending(path: "cache").path, library: library,
-                    analyzedFiles: [canonical])
+                    store.path,
+                    cacheRoot: directory.appending(path: "cache").path,
+                    library: library,
+                    analyzedFiles: [canonical]
+                )
             else {
                 Issue.record("the store did not open")
                 return
@@ -32,7 +35,8 @@
             let files = reader.allOccurrencesByUSR(in: [canonical]).values.flatMap { $0.map(\.file) }
             #expect(!files.isEmpty && files.allSatisfy { $0 == canonical }, "\(Set(files))")
             let used = try #require(
-                reader.allOccurrencesByUSR(in: [canonical]).first { $0.value.contains { $0.symbol.name == "used()" } })
+                reader.allOccurrencesByUSR(in: [canonical]).first { $0.value.contains { $0.symbol.name == "used()" } }
+            )
             #expect(reader.findOccurrences(ofUSR: used.key).allSatisfy { $0.file == canonical })
         }
     }

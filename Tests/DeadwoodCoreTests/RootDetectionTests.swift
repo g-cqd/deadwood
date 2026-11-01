@@ -69,7 +69,11 @@ struct RootDetectionTests {
     @Test("Interface Builder attributes are roots")
     func interfaceBuilderAsRoot() {
         let decl = makeDecl(
-            name: "didTapButton", kind: .method, access: .private, attributes: ["IBAction"])
+            name: "didTapButton",
+            kind: .method,
+            access: .private,
+            attributes: ["IBAction"]
+        )
         // @objc check runs first for IBAction-annotated members without
         // @objc; the reason must be one of the two runtime-exposure kinds.
         #expect([RootReason.interfaceBuilder, .objcExposed].contains(reason(decl)))
@@ -85,16 +89,23 @@ struct RootDetectionTests {
     func crossLanguageAttributesAsRoots() {
         #expect(
             reason(makeDecl(name: "f", kind: .function, access: .private, attributes: ["_silgen_name"]))
-                == .silgenName)
+                == .silgenName
+        )
         #expect(
             reason(makeDecl(name: "g", kind: .function, access: .private, attributes: ["_cdecl"]))
-                == .cdecl)
+                == .cdecl
+        )
         #expect(
             reason(
                 makeDecl(
-                    name: "h", kind: .function, access: .private,
-                    attributes: ["_dynamicReplacement"]))
-                == .dynamicReplacement)
+                    name: "h",
+                    kind: .function,
+                    access: .private,
+                    attributes: ["_dynamicReplacement"]
+                )
+            )
+                == .dynamicReplacement
+        )
     }
 
     // MARK: - Precision roots added during the lift
@@ -119,11 +130,19 @@ struct RootDetectionTests {
     @Test("Raw-value enum cases are roots")
     func rawValueEnumCasesAsRoots() {
         let rawCase = makeDecl(
-            name: "active", kind: .enumCase, access: .private, conformances: ["String", "Codable"])
+            name: "active",
+            kind: .enumCase,
+            access: .private,
+            conformances: ["String", "Codable"]
+        )
         #expect(reason(rawCase) == .externallyConstructedCase)
 
         let caseIterable = makeDecl(
-            name: "north", kind: .enumCase, access: .private, conformances: ["CaseIterable"])
+            name: "north",
+            kind: .enumCase,
+            access: .private,
+            conformances: ["CaseIterable"]
+        )
         #expect(reason(caseIterable) == .externallyConstructedCase)
     }
 
@@ -242,7 +261,8 @@ struct RootDetectionTests {
         #expect(cases.count == 2)
         for enumCase in cases {
             #expect(
-                detector.rootReason(for: enumCase, context: context) == .externallyConstructedCase)
+                detector.rootReason(for: enumCase, context: context) == .externallyConstructedCase
+            )
         }
     }
 

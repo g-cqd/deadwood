@@ -15,7 +15,9 @@ import Testing
         let dir = try makeScratchDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         try FileManager.default.createDirectory(
-            at: dir.appending(path: "App.xcodeproj"), withIntermediateDirectories: true)
+            at: dir.appending(path: "App.xcodeproj"),
+            withIntermediateDirectories: true
+        )
 
         #expect(XcodeProjectDetection.containsXcodeProject(in: [dir.path]))
     }
@@ -33,9 +35,14 @@ import Testing
         let dir = try makeScratchDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         try "// swift-tools-version: 6.0\n".write(
-            to: dir.appending(path: "Package.swift"), atomically: true, encoding: .utf8)
+            to: dir.appending(path: "Package.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
         try FileManager.default.createDirectory(
-            at: dir.appending(path: "Sources"), withIntermediateDirectories: true)
+            at: dir.appending(path: "Sources"),
+            withIntermediateDirectories: true
+        )
 
         #expect(!XcodeProjectDetection.containsXcodeProject(in: [dir.path]))
     }

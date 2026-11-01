@@ -129,7 +129,8 @@ struct StaticAnalyzer: Sendable {
             } else {
                 for occurrence in result.stringLiteralTokens {
                     stringOccurrences[occurrence.token, default: []].append(
-                        SourceLocation(file: result.file, line: occurrence.line, column: 1))
+                        SourceLocation(file: result.file, line: occurrence.line, column: 1)
+                    )
                 }
             }
             if !result.regionSpans.isEmpty {

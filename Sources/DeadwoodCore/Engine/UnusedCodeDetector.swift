@@ -215,7 +215,8 @@ struct UnusedCodeDetector: Sendable {
                         confidence: .low,
                         suggestion:
                             "Import '\(moduleName)' has no module-qualified reference in the analyzed sources."
-                    ))
+                    )
+                )
             }
         }
 

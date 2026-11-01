@@ -44,7 +44,9 @@
         static let swiftPath: String? = {
             guard let dylib else { return nil }
             let candidate = dylib.replacingOccurrences(
-                of: "/lib/libIndexStore.dylib", with: "/bin/swift")
+                of: "/lib/libIndexStore.dylib",
+                with: "/bin/swift"
+            )
             return FileManager.default.isExecutableFile(atPath: candidate) ? candidate : nil
         }()
 
@@ -57,7 +59,11 @@
             let cache = FileManager.default.temporaryDirectory.appending(path: "dw-idx-cache-\(UUID().uuidString)")
             guard
                 case .usable(let session) = IndexStoreSession.open(
-                    store, cacheRoot: cache.path, library: dylib, analyzedFiles: files)
+                    store,
+                    cacheRoot: cache.path,
+                    library: dylib,
+                    analyzedFiles: files
+                )
             else { return nil }
             return IndexStoreReader(session: session)
         }
@@ -118,7 +124,10 @@
 
             completed = true
             return IndexDeltaFixture(
-                root: root, shapesFile: shapes.path, entryFile: entry.path)
+                root: root,
+                shapesFile: shapes.path,
+                entryFile: entry.path
+            )
         }
 
         var sourceFiles: [String] { [shapesFile, entryFile] }
@@ -129,9 +138,12 @@
         func buildIndex(swiftPath: String) async -> String? {
             do {
                 let result = try await BoundedProcess.run(
-                    swiftPath, ["build"], directory: root.path,
+                    swiftPath,
+                    ["build"],
+                    directory: root.path,
                     environment: BoundedProcess.scrubbedEnvironment(source: ProcessInfo.processInfo.environment),
-                    timeout: .seconds(300))
+                    timeout: .seconds(300)
+                )
                 guard result.succeeded else { return nil }
                 return IndexStoreFallbackManager().discover(projectRoot: root.path)
             } catch {
@@ -157,7 +169,8 @@
             // logic on CI; this end-to-end proof runs locally before release.
             .enabled(
                 if: IndexTestToolchain.isAvailable
-                    && ProcessInfo.processInfo.environment["CI"] == nil)
+                    && ProcessInfo.processInfo.environment["CI"] == nil
+            )
         )
         func indexResolvesSameNamedSymbolsSyntaxConflates() async throws {
             guard let swiftPath = IndexTestToolchain.swiftPath else { return }
@@ -312,9 +325,12 @@
         func buildIndex(swiftPath: String) async -> String? {
             do {
                 let result = try await BoundedProcess.run(
-                    swiftPath, ["build", "--build-tests"], directory: root.path,
+                    swiftPath,
+                    ["build", "--build-tests"],
+                    directory: root.path,
                     environment: BoundedProcess.scrubbedEnvironment(source: ProcessInfo.processInfo.environment),
-                    timeout: .seconds(300))
+                    timeout: .seconds(300)
+                )
                 guard result.succeeded else { return nil }
                 return IndexStoreFallbackManager().discover(projectRoot: root.path)
             } catch {
@@ -328,7 +344,8 @@
             "Index mode roots computed-property chains, backtick test names, and macro-conforming types",
             .enabled(
                 if: IndexTestToolchain.isAvailable
-                    && ProcessInfo.processInfo.environment["CI"] == nil)
+                    && ProcessInfo.processInfo.environment["CI"] == nil
+            )
         )
         func indexAvoidsMappingFalsePositives() async throws {
             guard let swiftPath = IndexTestToolchain.swiftPath else { return }

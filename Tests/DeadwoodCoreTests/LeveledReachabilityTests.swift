@@ -12,7 +12,10 @@ import Testing
         edges.add(source: 3, targets: [2, 4], levels: [0, 0])
 
         let levels = LeveledReachability.levels(
-            of: edges, roots: [(0, 0), (3, 2)], levelCount: 3)
+            of: edges,
+            roots: [(0, 0), (3, 2)],
+            levelCount: 3
+        )
 
         #expect(levels == [0, 0, 1, 2, 2, LeveledReachability.unreached])
     }

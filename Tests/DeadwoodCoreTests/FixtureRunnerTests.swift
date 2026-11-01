@@ -29,7 +29,8 @@ import Testing
     func cleanFixturesStayClean() throws {
         let cleanDir = Self.fixtureRoot.appending(path: "Clean")
         let files = try FileManager.default.contentsOfDirectory(
-            at: cleanDir, includingPropertiesForKeys: nil
+            at: cleanDir,
+            includingPropertiesForKeys: nil
         ).filter { $0.pathExtension == "swift" }
         #expect(!files.isEmpty)
         for file in files {
@@ -37,7 +38,8 @@ import Testing
             let report = Analyzer().analyze(source: source, path: file.lastPathComponent)
             #expect(
                 report.findings.isEmpty,
-                "unexpected findings in \(file.lastPathComponent): \(report.findings)")
+                "unexpected findings in \(file.lastPathComponent): \(report.findings)"
+            )
         }
     }
 
@@ -46,7 +48,8 @@ import Testing
         let dir = Self.fixtureRoot.appending(path: "Findings")
         guard FileManager.default.fileExists(atPath: dir.path) else { return }
         let files = try FileManager.default.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: nil
+            at: dir,
+            includingPropertiesForKeys: nil
         ).filter { $0.pathExtension == "swift" }
         for file in files {
             let source = try String(contentsOf: file, encoding: .utf8)
@@ -56,7 +59,8 @@ import Testing
             let actual = report.findings.map { "\($0.line):\($0.rule.rawValue)" }.sorted()
             #expect(
                 actual == expected,
-                "\(file.lastPathComponent): expected \(expected), got \(actual)")
+                "\(file.lastPathComponent): expected \(expected), got \(actual)"
+            )
         }
     }
 }

@@ -52,12 +52,18 @@
                 .resolvingSymlinksInPath()
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             try "// swift-tools-version: 6.0\nimport PackageDescription\nlet package = Package(name: \"A\")\n".write(
-                to: root.appending(path: "Package.swift"), atomically: true, encoding: .utf8)
+                to: root.appending(path: "Package.swift"),
+                atomically: true,
+                encoding: .utf8
+            )
             let sources = root.appending(path: "Sources/A")
             try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
             let file = sources.appending(path: "A.swift")
             try "public func entry() { used() }\nfunc used() {}\nfunc unused() {}\n".write(
-                to: file, atomically: true, encoding: .utf8)
+                to: file,
+                atomically: true,
+                encoding: .utf8
+            )
             let storeURL = root.appending(path: store)
             try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: true)
             try SwiftcIndexFixture.build(store: storeURL, module: "A", files: [file], in: root)
@@ -72,7 +78,9 @@
                 [
                     "analyze", "Sources", "--index-store-path", root.appending(path: "store").path, "--cache-path",
                     cache.path,
-                ], in: root)
+                ],
+                in: root
+            )
 
             #expect(run.standardError.contains("--index-store active"), "\(run.standardError)")
             #expect(!FileManager.default.fileExists(atPath: root.appending(path: "IndexDatabase").path))
@@ -88,7 +96,9 @@
                 [
                     "analyze", "Sources", "--index-store-path", root.appending(path: "build/debug").path,
                     "--cache-path", root.appending(path: "cache").path,
-                ], in: root)
+                ],
+                in: root
+            )
 
             #expect(run.standardError.contains("--index-store active"), "\(run.standardError)")
             #expect(String(decoding: run.standardOutput, as: UTF8.self).contains("unused()"))
@@ -99,7 +109,9 @@
             let root = try Self.package(storeAt: ".build/arm64-apple-macosx/debug/index/store")
             defer { try? FileManager.default.removeItem(at: root) }
             let run = try BuiltTool.run(
-                ["analyze", "Sources", "--index-store", "--cache-path", root.appending(path: "cache").path], in: root)
+                ["analyze", "Sources", "--index-store", "--cache-path", root.appending(path: "cache").path],
+                in: root
+            )
 
             #expect(run.standardError.contains("--index-store active"), "\(run.standardError)")
         }

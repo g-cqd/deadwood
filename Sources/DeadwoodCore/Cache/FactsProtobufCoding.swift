@@ -60,7 +60,8 @@ extension CachedFileArtifacts: AemiProtoFastEncodable, AemiProtoFastDecodable {
                 deadBranches.append(
                     try reader.readMessage { reader throws(WireError) in
                         try FactsWire.readUnusedCode(&reader, file: file)
-                    })
+                    }
+                )
             case 4: degraded.append(try reader.readString())
             default: try reader.skipField(tag)
             }
@@ -173,15 +174,18 @@ enum FactsWire {
                 declarations.append(
                     try reader.readMessage { reader throws(WireError) in
                         try SymbolFactsWire.readDeclaration(&reader, file: known)
-                    })
+                    }
+                )
             case 3:
                 references.append(
-                    try reader.readMessage { reader throws(WireError) in try readReference(&reader, file: known) })
+                    try reader.readMessage { reader throws(WireError) in try readReference(&reader, file: known) }
+                )
             case 4:
                 scopes.append(
                     try reader.readMessage { reader throws(WireError) in
                         try SymbolFactsWire.readScope(&reader, file: known)
-                    })
+                    }
+                )
             case 5:
                 strings.insert(
                     try reader.readMessage { reader throws(WireError) in
@@ -195,7 +199,8 @@ enum FactsWire {
                             }
                         }
                         return TokenLine(token: token, line: line)
-                    })
+                    }
+                )
             case 6: comments.insert(try reader.readString())
             case 7: contentRegion = UInt8(truncatingIfNeeded: try reader.readInt())
             case 8:
@@ -213,15 +218,24 @@ enum FactsWire {
                             }
                         }
                         return CodeRegionSpan(startLine: start, endLine: end, region: UInt8(truncatingIfNeeded: region))
-                    })
+                    }
+                )
             default: try reader.skipField(tag)
             }
         }
         let content = CodeRegion(rawValue: contentRegion)
         return FileAnalysisResult(
-            file: file, declarations: declarations, references: references, scopes: scopes,
-            stringLiteralTokens: strings, commentTokens: comments, isGenerated: content.contains(.generated),
-            isTestCode: content.contains(.test), contentRegion: contentRegion, regionSpans: spans)
+            file: file,
+            declarations: declarations,
+            references: references,
+            scopes: scopes,
+            stringLiteralTokens: strings,
+            commentTokens: comments,
+            isGenerated: content.contains(.generated),
+            isTestCode: content.contains(.test),
+            contentRegion: contentRegion,
+            regionSpans: spans
+        )
     }
 
     // MARK: References
@@ -258,9 +272,14 @@ enum FactsWire {
             }
         }
         return Reference(
-            identifier: identifier, location: SourceLocation(file: file, line: line, column: 1), scope: .global,
-            context: context, isQualified: qualifier != nil, qualifier: qualifier,
-            callLabels: hasLabels ? labels : nil)
+            identifier: identifier,
+            location: SourceLocation(file: file, line: line, column: 1),
+            scope: .global,
+            context: context,
+            isQualified: qualifier != nil,
+            qualifier: qualifier,
+            callLabels: hasLabels ? labels : nil
+        )
     }
 
     // MARK: Unused code
@@ -299,7 +318,12 @@ enum FactsWire {
         }
         guard let declaration else { throw .missingRequired(path: "UnusedCode.declaration") }
         return UnusedCode(
-            declaration: declaration, reason: reason, confidence: confidence, suggestion: suggestion, detail: detail,
-            regionTag: UInt8(truncatingIfNeeded: regionTag))
+            declaration: declaration,
+            reason: reason,
+            confidence: confidence,
+            suggestion: suggestion,
+            detail: detail,
+            regionTag: UInt8(truncatingIfNeeded: regionTag)
+        )
     }
 }

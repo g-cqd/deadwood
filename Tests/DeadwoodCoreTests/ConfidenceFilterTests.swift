@@ -8,9 +8,14 @@ import Testing
 @Suite struct ConfidenceFilterTests {
     private static func finding(_ name: String, _ confidence: Confidence?) -> Finding {
         Finding(
-            rule: .unusedFunction, severity: .warning,
-            path: "Sources/\(name).swift", line: 1, column: 1, message: name,
-            confidence: confidence)
+            rule: .unusedFunction,
+            severity: .warning,
+            path: "Sources/\(name).swift",
+            line: 1,
+            column: 1,
+            message: name,
+            confidence: confidence
+        )
     }
 
     @Test("Findings below the minimum are dropped and counted, and unscored findings are kept")
@@ -47,7 +52,9 @@ import Testing
     @Test("Suppressed findings are kept whatever their confidence")
     func leavesSuppressedFindingsAlone() {
         let suppressed = AnalysisReport.SuppressedFinding(
-            finding: Self.finding("low", .low), reason: "because")
+            finding: Self.finding("low", .low),
+            reason: "because"
+        )
         let report = AnalysisReport(suppressed: [suppressed])
 
         let filtered = report.keeping(minimumConfidence: .certain)

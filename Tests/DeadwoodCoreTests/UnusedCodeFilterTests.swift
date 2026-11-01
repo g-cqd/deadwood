@@ -40,7 +40,8 @@ struct UnusedCodeFilterTests {
     @Test("Import exclusion honors configuration")
     func importExclusion() {
         let excluding = UnusedCodeFilter(
-            configuration: UnusedCodeFilterConfiguration(excludeImports: true))
+            configuration: UnusedCodeFilterConfiguration(excludeImports: true)
+        )
         let keeping = UnusedCodeFilter(configuration: UnusedCodeFilterConfiguration())
 
         #expect(excluding.shouldExclude(item(name: "Foundation", kind: .import)))

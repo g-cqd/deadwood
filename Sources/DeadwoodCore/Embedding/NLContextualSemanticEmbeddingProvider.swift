@@ -30,11 +30,13 @@
         init(language: NLLanguage = .english) throws {
             guard let probe = NLContextualEmbedding(language: language) else {
                 throw SemanticEmbeddingError.modelLoadFailed(
-                    underlying: NLContextualEmbeddingError.unsupportedLanguage(language))
+                    underlying: NLContextualEmbeddingError.unsupportedLanguage(language)
+                )
             }
             if !probe.hasAvailableAssets {
                 throw SemanticEmbeddingError.modelLoadFailed(
-                    underlying: NLContextualEmbeddingError.assetsUnavailable)
+                    underlying: NLContextualEmbeddingError.assetsUnavailable
+                )
             }
             do {
                 try probe.load()
@@ -48,7 +50,8 @@
         func embed(snippet: String) async throws -> [Float] {
             guard let embedding = NLContextualEmbedding(language: language) else {
                 throw SemanticEmbeddingError.modelLoadFailed(
-                    underlying: NLContextualEmbeddingError.unsupportedLanguage(language))
+                    underlying: NLContextualEmbeddingError.unsupportedLanguage(language)
+                )
             }
             do {
                 try embedding.load()

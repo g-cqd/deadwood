@@ -65,7 +65,11 @@ struct DependencyExtractor: Sendable {
         )
 
         let leveled = await buildEdges(
-            graph: graph, result: result, context: context, recordingRegionLevels: recordingRegionLevels)
+            graph: graph,
+            result: result,
+            context: context,
+            recordingRegionLevels: recordingRegionLevels
+        )
 
         return (graph, leveled)
     }
@@ -211,7 +215,8 @@ struct DependencyExtractor: Sendable {
             if let matches = declByName[reference.identifier] {
                 add(
                     Self.callableMatches(matches, labels: reference.callLabels, declarations: declarations),
-                    level: level)
+                    level: level
+                )
             }
             if let qualifier = reference.qualifier, let matches = declByName[qualifier] {
                 add(matches, level: level)
@@ -412,7 +417,10 @@ struct DependencyExtractor: Sendable {
                 for witness in declByName[requirementName] ?? [] {
                     guard
                         isWitness(
-                            allDeclarations[Int(witness)], ofProtocol: proto.name, context: context)
+                            allDeclarations[Int(witness)],
+                            ofProtocol: proto.name,
+                            context: context
+                        )
                     else { continue }
                     edges.append(DependencyEdge(from: requirement, to: witness))
                 }
@@ -497,7 +505,10 @@ struct ReachabilityBasedDetector: Sendable {
         let wantsRegions =
             (configuration.detectPreviewOnly || configuration.detectDebugOnly) && context.hasCodeRegions
         let (graph, leveledEdges) = await extractor.buildGraph(
-            from: result, context: context, recordingRegionLevels: wantsRegions)
+            from: result,
+            context: context,
+            recordingRegionLevels: wantsRegions
+        )
 
         // BFS backend: forced by `useParallelBFS`, else auto-selected
         // against the node-count threshold.
@@ -517,14 +528,22 @@ struct ReachabilityBasedDetector: Sendable {
         let own = deadCandidates(declarations: declarations, reachable: reachableWithTests, context: context)
         let successors = await graph.deadSuccessors(of: Set(own.keys))
         var results = deadGroupResults(
-            declarations: declarations, own: own, successors: successors, context: context)
+            declarations: declarations,
+            own: own,
+            successors: successors,
+            context: context
+        )
 
         if configuration.productionMode {
             let classifier = TestScopeClassifier(testsGlob: configuration.testsGlob)
             let testScoped = classifier.classify(declarations: declarations, context: context)
             let reachableInProduction = await graph.computeReachable(
                 fromRoots: productionRootIndices(
-                    declarations: declarations, testScoped: testScoped, context: context))
+                    declarations: declarations,
+                    testScoped: testScoped,
+                    context: context
+                )
+            )
             results.append(
                 contentsOf: onlyTestedResults(
                     declarations: declarations,
@@ -532,12 +551,14 @@ struct ReachabilityBasedDetector: Sendable {
                     reachableInProduction: reachableInProduction,
                     testScoped: testScoped,
                     context: context
-                ))
+                )
+            )
         }
 
         if let leveledEdges {
             results.append(
-                contentsOf: regionOnlyResults(edges: leveledEdges, declarations: declarations, context: context))
+                contentsOf: regionOnlyResults(edges: leveledEdges, declarations: declarations, context: context)
+            )
         }
 
         return results
@@ -605,7 +626,8 @@ struct ReachabilityBasedDetector: Sendable {
                         detail: isCycle
                             ? Self.listing(users)
                             : count > 0 ? "\(count) declaration(s) only it uses are dead with it" : nil
-                    ))
+                    )
+                )
             } else {
                 let parentConfidence = groups.parentOf[node].flatMap { chain[$0] } ?? ownConfidence
                 let confidence = min(ownConfidence, parentConfidence)
@@ -617,7 +639,8 @@ struct ReachabilityBasedDetector: Sendable {
                         confidence: confidence,
                         suggestion: "Only dead code uses '\(declaration.name)' - remove it with its users",
                         detail: Self.listing(users)
-                    ))
+                    )
+                )
             }
         }
         return results
@@ -652,7 +675,10 @@ struct ReachabilityBasedDetector: Sendable {
             }
         }
         let reachedAt = LeveledReachability.levels(
-            of: edges, roots: roots, levelCount: RegionLevel.allCases.count)
+            of: edges,
+            roots: roots,
+            levelCount: RegionLevel.allCases.count
+        )
 
         var results: [UnusedCode] = []
         for (index, declaration) in declarations.enumerated() where declaredLevels[index] == .production {
@@ -680,7 +706,8 @@ struct ReachabilityBasedDetector: Sendable {
                             "Only \(onlyDebug ? "#if DEBUG code" : "previews") reach"
                             + " '\(declaration.name)' outside #if DEBUG — consider removing it",
                         regionTag: region
-                    ))
+                    )
+                )
             } else {
                 results.append(
                     UnusedCode(
@@ -690,7 +717,8 @@ struct ReachabilityBasedDetector: Sendable {
                         suggestion: onlyDebug
                             ? "Only #if DEBUG code reaches '\(declaration.name)' — move it under #if DEBUG"
                             : "Only previews reach '\(declaration.name)' — move it under #if DEBUG"
-                    ))
+                    )
+                )
             }
         }
         return results
@@ -724,7 +752,8 @@ struct ReachabilityBasedDetector: Sendable {
                     confidence: confidence,
                     suggestion:
                         "Only test code reaches '\(declaration.name)' — production code never uses it"
-                ))
+                )
+            )
         }
         return results
     }

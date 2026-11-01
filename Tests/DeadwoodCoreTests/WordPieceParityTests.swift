@@ -86,7 +86,8 @@ import WordPiece
 
         @Test(
             "Vocabulary loads with BERT's canonical special-token ids",
-            .enabled(if: WordPieceParityTests.bundleAvailable))
+            .enabled(if: WordPieceParityTests.bundleAvailable)
+        )
         func vocabularyLoads() throws {
             let tokenizer = try WordPieceTokenizer(bundleDir: URL(fileURLWithPath: Self.bundle))
             // [CLS] … [SEP] wrapping, per the model's TemplateProcessing config.
@@ -98,7 +99,8 @@ import WordPiece
 
         @Test(
             "Known BERT tokenizations are reproduced exactly",
-            .enabled(if: WordPieceParityTests.bundleAvailable))
+            .enabled(if: WordPieceParityTests.bundleAvailable)
+        )
         func goldenVectors() throws {
             let tokenizer = try WordPieceTokenizer(bundleDir: URL(fileURLWithPath: Self.bundle))
             // bert-base-uncased is a fixed, published vocabulary, so these ids are
@@ -114,11 +116,13 @@ import WordPiece
         #if canImport(Tokenizers)
             @Test(
                 "DIFFERENTIAL: matches swift-transformers token-for-token on the deadwood corpus",
-                .enabled(if: WordPieceParityTests.bundleAvailable))
+                .enabled(if: WordPieceParityTests.bundleAvailable)
+            )
             func matchesSwiftTransformers() async throws {
                 let mine = try WordPieceTokenizer(bundleDir: URL(fileURLWithPath: Self.bundle))
                 let reference = try await AutoTokenizer.from(
-                    modelFolder: URL(fileURLWithPath: Self.bundle))
+                    modelFolder: URL(fileURLWithPath: Self.bundle)
+                )
 
                 var checked = 0
                 var mismatches: [(String, [Int], [Int])] = []

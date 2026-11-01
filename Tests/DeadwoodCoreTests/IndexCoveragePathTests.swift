@@ -19,7 +19,9 @@
 
         private static func write(_ text: String, _ url: URL) throws {
             try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try text.write(to: url, atomically: true, encoding: .utf8)
         }
 
@@ -60,7 +62,8 @@
             let test = root.appending(path: "Tests/AppTests/HelperTests.swift")
             try Self.write(
                 "import Testing\n@testable import App\n\n@Test func usesHelper() {\n    #expect(helper() == 42)\n}\n",
-                test)
+                test
+            )
 
             let report = await Analyzer().analyze(files: [app.path, test.path], indexStore: Self.options(store, root))
             let messages = report.findings.map(\.message)
@@ -107,7 +110,8 @@
                     let next = (index + 1) % count
                     try Self.write(
                         "struct T\(index) {\n    var value = \(index)\n    func call() -> Int { T\(next)().value + value }\n}\n",
-                        file)
+                        file
+                    )
                     files.append(file)
                 }
                 let store = root.appending(path: "\(name)-store")
@@ -116,8 +120,11 @@
             }
             func buildTime(_ corpus: (store: URL, files: [String])) async throws -> Duration {
                 let outcome = await IndexStoreFallbackManager().resolveIndexStore(
-                    projectRoot: root.path, sourceFiles: corpus.files, explicitPath: corpus.store.path,
-                    cacheRoot: root.appending(path: "cache").path)
+                    projectRoot: root.path,
+                    sourceFiles: corpus.files,
+                    explicitPath: corpus.store.path,
+                    cacheRoot: root.appending(path: "cache").path
+                )
                 guard case .index(let reader, _) = outcome else { throw CocoaError(.fileReadUnknown) }
                 let graph = IndexBasedDependencyGraph(analysisFiles: corpus.files)
                 let clock = ContinuousClock()

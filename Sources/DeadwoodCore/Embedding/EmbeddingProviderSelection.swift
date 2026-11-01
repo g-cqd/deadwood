@@ -28,20 +28,24 @@
                 if let bundlePath, !bundlePath.isEmpty {
                     do {
                         let provider = try await HFSemanticEmbeddingProvider(
-                            bundleDir: URL(fileURLWithPath: bundlePath), maxLength: bundleMaxLength)
+                            bundleDir: URL(fileURLWithPath: bundlePath),
+                            maxLength: bundleMaxLength
+                        )
                         return (provider, notes)
                     } catch {
                         notes.append(
                             "\(ToolInfo.name): --embedding-bundle at \(bundlePath) could not be "
-                                + "loaded (\(error)); falling back to the on-device provider")
+                                + "loaded (\(error)); falling back to the on-device provider"
+                        )
                     }
                 } else if let bundled = bundledModelDirectory() {
                     // A model laid out next to the binary is used with no flag.
                     // A load failure here is silent: nothing was asked for, so
                     // there is nothing to report — just take the default.
                     if let provider = try? await HFSemanticEmbeddingProvider(
-                        bundleDir: bundled, maxLength: bundleMaxLength)
-                    {
+                        bundleDir: bundled,
+                        maxLength: bundleMaxLength
+                    ) {
                         return (provider, notes)
                     }
                 }
@@ -49,7 +53,8 @@
                 if let bundlePath, !bundlePath.isEmpty {
                     notes.append(
                         "\(ToolInfo.name): --embedding-bundle requires macOS (CoreML); "
-                            + "falling back to the on-device provider")
+                            + "falling back to the on-device provider"
+                    )
                 }
             #endif
 
@@ -84,7 +89,8 @@
                     .resolvingSymlinksInPath()
                 return bundledModelDirectory(
                     executableDir: executableURL.deletingLastPathComponent(),
-                    override: ProcessInfo.processInfo.environment["DEADWOOD_EMBEDDING_BUNDLE"])
+                    override: ProcessInfo.processInfo.environment["DEADWOOD_EMBEDDING_BUNDLE"]
+                )
             }
 
             /// Pure candidate search behind ``bundledModelDirectory()`` — no
@@ -98,7 +104,9 @@
                 func hasModel(_ directory: URL) -> Bool {
                     guard
                         let contents = try? manager.contentsOfDirectory(
-                            at: directory, includingPropertiesForKeys: nil)
+                            at: directory,
+                            includingPropertiesForKeys: nil
+                        )
                     else { return false }
                     return contents.contains {
                         $0.pathExtension == "mlpackage" || $0.pathExtension == "mlmodelc"
@@ -114,7 +122,8 @@
                 // `share/deadwood/Models/MiniLM`.
                 candidates.append(
                     executableDir.deletingLastPathComponent()
-                        .appending(path: "share/deadwood/Models/MiniLM"))
+                        .appending(path: "share/deadwood/Models/MiniLM")
+                )
 
                 // Resolve each candidate so a symlinked model directory reaches
                 // the provider as its real path: `contentsOfDirectory` (here and

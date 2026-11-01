@@ -137,7 +137,8 @@
 
         init(analysisFiles: [String], configuration: IndexGraphConfiguration = .default) {
             self.analysisFiles = Set(
-                analysisFiles.map { Self.canonicalPath($0) })
+                analysisFiles.map { Self.canonicalPath($0) }
+            )
             self.configuration = configuration
         }
 
@@ -291,14 +292,18 @@
                         } else {
                             definitions.append(
                                 Definition(
-                                    usr: occurrence.symbol.usr, name: occurrence.symbol.name,
+                                    usr: occurrence.symbol.usr,
+                                    name: occurrence.symbol.name,
                                     kind: IndexedSymbolKind(from: occurrence.symbol.kind),
                                     path: found.file,
                                     line: occurrence.location.line,
                                     parents: occurrence.relations.filter { $0.roles.contains(.childOf) }.map(
-                                        \.symbol.usr),
+                                        \.symbol.usr
+                                    ),
                                     overridden: occurrence.relations.filter { $0.roles.contains(.overrideOf) }
-                                        .map(\.symbol.usr)))
+                                        .map(\.symbol.usr)
+                                )
+                            )
                         }
                     }
                     guard indicatesUsage(roles) else { continue }
@@ -308,12 +313,14 @@
                         } else if roles.contains(.write) { .write } else { .typeReference }
                     uses.append(
                         Use(
-                            target: occurrence.symbol.usr, name: occurrence.symbol.name,
+                            target: occurrence.symbol.usr,
+                            name: occurrence.symbol.name,
                             kind: IndexedSymbolKind(from: occurrence.symbol.kind),
                             containers: occurrence.relations.filter { $0.roles.contains(.containedBy) }
                                 .map { ($0.symbol.usr, kind) },
                             bases: occurrence.relations.filter { $0.roles.contains(.baseOf) }.map(\.symbol.usr),
-                            overrides: occurrence.relations.filter { $0.roles.contains(.overrideOf) }.map(\.symbol.usr))
+                            overrides: occurrence.relations.filter { $0.roles.contains(.overrideOf) }.map(\.symbol.usr)
+                        )
                     )
                 }
             }
@@ -335,8 +342,13 @@
                 canonicalPaths[definition.path] = path
             }
             nodes[usr] = IndexSymbolNode(
-                usr: usr, name: definition.name, kind: definition.kind, definitionFile: path,
-                definitionLine: definition.line, isExternal: false)
+                usr: usr,
+                name: definition.name,
+                kind: definition.kind,
+                definitionFile: path,
+                definitionLine: definition.line,
+                isExternal: false
+            )
         }
 
         /// A use: the containing symbol references the target; the target is a base of, or overrides, the related one.

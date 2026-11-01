@@ -47,8 +47,11 @@
             try FileManager.default.createDirectory(at: given, withIntermediateDirectories: true)
             let outcome = await IndexStoreFallbackManager(configuration: FallbackConfiguration(autoBuild: false))
                 .resolveIndexStore(
-                    projectRoot: directory.path, sourceFiles: [], explicitPath: given.path,
-                    cacheRoot: directory.appending(path: "cache").path)
+                    projectRoot: directory.path,
+                    sourceFiles: [],
+                    explicitPath: given.path,
+                    cacheRoot: directory.appending(path: "cache").path
+                )
             guard case .fallback(let reason) = outcome else {
                 Issue.record("opened \(given.path) as an index store")
                 return

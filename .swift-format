@@ -5,7 +5,7 @@
   "maximumBlankLines": 1,
   "respectsExistingLineBreaks": true,
   "lineBreakBeforeControlFlowKeywords": false,
-  "lineBreakBeforeEachArgument": false,
+  "lineBreakBeforeEachArgument": true,
   "indentConditionalCompilationBlocks": true,
   "rules": {
     "AllPublicDeclarationsHaveDocumentation": false,

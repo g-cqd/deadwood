@@ -20,7 +20,8 @@ import Testing
                 }
                 return false
             }
-            """)
+            """
+        )
 
         #expect(findings.isEmpty)
     }
@@ -44,7 +45,8 @@ import Testing
                 }
                 return failures
             }
-            """)
+            """
+        )
 
         #expect(findings.isEmpty)
     }
@@ -60,7 +62,8 @@ import Testing
                 }
                 return 0
             }
-            """)
+            """
+        )
 
         #expect(findings.isEmpty)
     }
@@ -80,7 +83,8 @@ import Testing
                 }
                 return 0
             }
-            """)
+            """
+        )
 
         #expect(findings.count == 1)
         #expect(findings.first?.line == 8)

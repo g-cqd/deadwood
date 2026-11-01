@@ -56,8 +56,11 @@ public struct SuppressionDirective: Sendable, Equatable, Codable {
             return nil
         }
         return Self(
-            rules: Set(directive.rules), kind: Kind(shared: directive.kind), line: directive.line,
-            reason: directive.reason)
+            rules: Set(directive.rules),
+            kind: Kind(shared: directive.kind),
+            line: directive.line,
+            reason: directive.reason
+        )
     }
 
     // Keep wire/cache models local while the shared component owns parsing and line coverage.

@@ -72,7 +72,9 @@ import Testing
         let root = try workspace()
         defer {
             try? FileManager.default.setAttributes(
-                [.posixPermissions: 0o644], ofItemAtPath: root.appending(path: "locked/A.swift").path)
+                [.posixPermissions: 0o644],
+                ofItemAtPath: root.appending(path: "locked/A.swift").path
+            )
             try? FileManager.default.removeItem(at: root)
         }
         for row in table {

@@ -13,7 +13,9 @@ import Testing
                 SuppressionDirective.parse(
                     comment:
                         "/* @\(prefix)accept:this unused-function, unused-type unused-function future -- reviewed */",
-                    line: 7))
+                    line: 7
+                )
+            )
             #expect(parsed.kind == .acceptThis)
             #expect(parsed.line == 7)
             #expect(parsed.reason == "reviewed")

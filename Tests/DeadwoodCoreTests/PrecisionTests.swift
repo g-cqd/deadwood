@@ -23,7 +23,8 @@ struct PrecisionTests {
                 }
                 @objc private func handleTick(_ timer: Any) {}
             }
-            """)
+            """
+        )
 
         #expect(result.references.uniqueIdentifiers.contains("handleTick"))
     }
@@ -39,7 +40,8 @@ struct PrecisionTests {
                     _ = key
                 }
             }
-            """)
+            """
+        )
 
         #expect(result.references.uniqueIdentifiers.contains("progress"))
     }
@@ -59,7 +61,8 @@ struct PrecisionTests {
                 }
                 private func handleTick(_ timer: Any) {}
             }
-            """)
+            """
+        )
         let context = CorpusContext(result: result)
         let findings = UnusedCodeDetector(configuration: config)
             .detectFromResult(result, context: context)
@@ -75,7 +78,8 @@ struct PrecisionTests {
             func names(_ users: [User]) -> [String] {
                 users.map(\\.name)
             }
-            """)
+            """
+        )
 
         #expect(result.references.uniqueIdentifiers.contains("name"))
     }
@@ -91,11 +95,14 @@ struct PrecisionTests {
                 Money(cents: lhs.cents + rhs.cents)
             }
             func total(_ a: Money, _ b: Money) -> Money { a + b }
-            """)
+            """
+        )
         let context = CorpusContext(result: result)
         let findings = UnusedCodeDetector(
             configuration: UnusedCodeConfiguration(
-                mode: .simple, treatVisibleOutsideFileAsRoot: true)
+                mode: .simple,
+                treatVisibleOutsideFileAsRoot: true
+            )
         )
         .detectFromResult(result, context: context)
 
@@ -110,7 +117,8 @@ struct PrecisionTests {
             """
             private enum Mode { case fast, careful }
             func pick() -> Mode { .fast }
-            """)
+            """
+        )
 
         #expect(result.references.uniqueIdentifiers.contains("fast"))
     }
@@ -126,7 +134,8 @@ struct PrecisionTests {
                 case .careful: 2
                 }
             }
-            """)
+            """
+        )
 
         #expect(result.references.uniqueIdentifiers.contains("fast"))
         #expect(result.references.uniqueIdentifiers.contains("careful"))
@@ -141,11 +150,14 @@ struct PrecisionTests {
                 case debugMenu
             }
             func start() -> Route { .home }
-            """)
+            """
+        )
         let context = CorpusContext(result: result)
         let findings = UnusedCodeDetector(
             configuration: UnusedCodeConfiguration(
-                mode: .simple, treatVisibleOutsideFileAsRoot: true)
+                mode: .simple,
+                treatVisibleOutsideFileAsRoot: true
+            )
         )
         .detectFromResult(result, context: context)
 

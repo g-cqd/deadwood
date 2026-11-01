@@ -44,7 +44,9 @@ import Testing
             guard FileManager.default.fileExists(atPath: source.path) else { continue }
             let target = corpus.appending(path: part)
             try FileManager.default.createDirectory(
-                at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: target.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try FileManager.default.copyItem(at: source, to: target)
         }
         let entries = FileManager.default.enumerator(at: corpus, includingPropertiesForKeys: nil)
@@ -75,8 +77,10 @@ import Testing
         try output.close()
         try errors.close()
         return Run(
-            status: process.terminationStatus, output: try Data(contentsOf: outputURL),
-            errors: String(decoding: try Data(contentsOf: errorURL), as: UTF8.self))
+            status: process.terminationStatus,
+            output: try Data(contentsOf: outputURL),
+            errors: String(decoding: try Data(contentsOf: errorURL), as: UTF8.self)
+        )
     }
 
     private static func recordedStatus(_ format: String) throws -> Int32 {
@@ -93,7 +97,9 @@ import Testing
     private static func placeholdingRoot(_ output: Data) -> Data {
         let text = String(decoding: output, as: UTF8.self)
         let replaced = text.replacing(
-            /("SRCROOT" : \{\s*"uri" : ")[^"]*(")/, with: { "\($0.output.1)file:\\/\\/\\/SRCROOT\\/\($0.output.2)" })
+            /("SRCROOT" : \{\s*"uri" : ")[^"]*(")/,
+            with: { "\($0.output.1)file:\\/\\/\\/SRCROOT\\/\($0.output.2)" }
+        )
         return Data(replaced.utf8)
     }
 
@@ -110,7 +116,8 @@ import Testing
 
     @Test func `the baseline file is byte for byte the recorded one`() throws {
         let path = FileManager.default.temporaryDirectory.appending(
-            path: "\(Self.tool)-baseline-\(UUID().uuidString).json")
+            path: "\(Self.tool)-baseline-\(UUID().uuidString).json"
+        )
         defer { try? FileManager.default.removeItem(at: path) }
         let run = try Self.run(["--write-baseline", path.path])
         #expect(run.status == (try Self.recordedStatus("write-baseline")))
@@ -140,7 +147,8 @@ import Testing
         let degraded = try #require(report["degradedFiles"] as? [[String: Any]])
         #expect(
             Set(skipped.filter { $0["reason"] == "degraded" }.compactMap { $0["path"] })
-                == Set(degraded.compactMap { $0["path"] as? String }))
+                == Set(degraded.compactMap { $0["path"] as? String })
+        )
         #expect(report["timings"] == nil)
     }
 

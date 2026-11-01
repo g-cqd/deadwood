@@ -35,7 +35,8 @@ struct SimpleModeTests {
                 private func helper() -> Int { 1 }
                 private func orphan() -> Int { 2 }
             }
-            """)
+            """
+        )
 
         #expect(findings.map(\.declaration.name) == ["orphan"])
         #expect(findings.first?.reason == .neverReferenced)
@@ -49,7 +50,8 @@ struct SimpleModeTests {
             private var unusedVariable = 2
             private let usedConstant = 3
             func use() -> Int { usedConstant }
-            """)
+            """
+        )
 
         #expect(Set(findings.map(\.declaration.name)) == ["unusedConstant", "unusedVariable"])
     }
@@ -61,7 +63,8 @@ struct SimpleModeTests {
             private struct Orphan {}
             private struct Used {}
             func make() -> Used { Used() }
-            """)
+            """
+        )
 
         #expect(findings.map(\.declaration.name) == ["Orphan"])
         #expect(findings.first?.declaration.kind == .struct)
@@ -72,7 +75,8 @@ struct SimpleModeTests {
         let findings = detect(
             """
             private func orphan() {}
-            """)
+            """
+        )
 
         #expect(findings.first?.confidence == .high)
     }
@@ -85,7 +89,8 @@ struct SimpleModeTests {
                 func neverCalled() {}
             }
             func make() -> Used { Used() }
-            """)
+            """
+        )
 
         // `neverCalled` is declared internal but sits inside a private
         // struct — effectively private, hence high confidence.
@@ -119,7 +124,9 @@ struct SimpleModeTests {
             """
             private func orphan() {}
             private let unusedValue = 1
-            """, configuration: config)
+            """,
+            configuration: config
+        )
 
         #expect(findings.map(\.declaration.name) == ["unusedValue"])
     }
@@ -133,7 +140,9 @@ struct SimpleModeTests {
             """
             private func orphan() {}
             private let unusedValue = 1
-            """, configuration: config)
+            """,
+            configuration: config
+        )
 
         #expect(findings.map(\.declaration.name) == ["orphan"])
     }
@@ -156,7 +165,8 @@ struct SimpleModeTests {
             """
             private func broken( {
             struct ???
-            """)
+            """
+        )
         _ = findings
     }
 
@@ -170,7 +180,8 @@ struct SimpleModeTests {
                 func run() { step() }
                 private func step() {}
             }
-            """)
+            """
+        )
 
         #expect(findings.isEmpty)
     }
@@ -183,7 +194,8 @@ struct SimpleModeTests {
             func apply(_ values: [Int]) -> [Int] {
                 values.map { $0 * factor }
             }
-            """)
+            """
+        )
 
         #expect(findings.isEmpty)
     }
@@ -196,7 +208,8 @@ struct SimpleModeTests {
             private struct App {
                 static func main() {}
             }
-            """)
+            """
+        )
 
         #expect(findings.isEmpty)
     }
@@ -207,7 +220,8 @@ struct SimpleModeTests {
             """
             private func handler() {}
             let callbacks: [() -> Void] = [handler]
-            """)
+            """
+        )
 
         #expect(findings.isEmpty)
     }

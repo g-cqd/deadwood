@@ -19,8 +19,10 @@ import Testing
     private static func run(_ arguments: [String], in root: URL) throws -> Run {
         let run = try BuiltTool.run(arguments, in: root)
         return Run(
-            status: run.status, output: String(decoding: run.standardOutput, as: UTF8.self),
-            errors: run.standardError)
+            status: run.status,
+            output: String(decoding: run.standardOutput, as: UTF8.self),
+            errors: run.standardError
+        )
     }
 
     private static func workspace(_ files: [String: String], _ body: (URL) throws -> Void) throws {
@@ -32,7 +34,9 @@ import Testing
         for (name, text) in files {
             let url = root.appending(path: name)
             try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try Data(text.utf8).write(to: url)
         }
         try body(root)
@@ -59,13 +63,16 @@ import Testing
                 [
                     "analyze", ".", "--no-cache", "--include", "test", "--exclude", "mock",
                     "--experimental-embedding-confidence",
-                ], in: root)
+                ],
+                in: root
+            )
             #expect(run.errors.contains("deadwood: note: --include is deprecated; use --include-regions"))
             #expect(run.errors.contains("deadwood: note: --exclude is deprecated; use --exclude-regions"))
             #expect(
                 run.errors.contains(
                     "deadwood: note: --experimental-embedding-confidence is deprecated; use --experimental-embeddings confidence"
-                ))
+                )
+            )
             #expect(run.output.contains("unusedA"))
         }
     }
@@ -85,7 +92,9 @@ import Testing
             "Lib.swift": "func helper() {}\n", "main.swift": "helper()\n",
         ]) { root in
             let run = try Self.run(
-                ["analyze", ".", "--no-cache", "--exclude-path", "B.swift", "--exclude-path", "main.swift"], in: root)
+                ["analyze", ".", "--no-cache", "--exclude-path", "B.swift", "--exclude-path", "main.swift"],
+                in: root
+            )
             #expect(run.output.contains("unusedA") && !run.output.contains("unusedB"), "\(run.output)")
             #expect(!run.output.contains("helper"), "\(run.output)")
         }
