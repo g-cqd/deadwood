@@ -161,6 +161,52 @@
             #expect(!messages.contains { $0.contains("LiveModel") }, "\(messages)")
         }
 
+        /// A preview that builds `Row(...)` roots `Row` and its initializers, but `.init` is no name that stands for the
+        /// initializers of every type: a type nothing creates stays dead beside it.
+        @Test func `a preview roots the initializers of the types it builds and no others`() async throws {
+            let report = try await Self.report(
+                """
+                import SwiftUI
+
+                struct Row: View {
+                    let user: Int
+
+                    init(user: Int) {
+                        self.user = user
+                    }
+
+                    var body: some View { Text("\\(user)") }
+                }
+
+                final class DeadModel {
+                    let identifier: Int
+
+                    init(identifier: Int) {
+                        self.identifier = identifier
+                    }
+                }
+
+                @main
+                struct App {
+                    static func main() {
+                        _ = Row.self
+                    }
+                }
+
+                #if DEBUG
+                    #Preview {
+                        Row.init(user: 1)
+                    }
+                #endif
+
+                """,
+                defines: ["DEBUG"]
+            )
+            let messages = report.findings.map(\.message)
+            #expect(messages.contains { $0.contains("DeadModel") }, "\(messages)")
+            #expect(!messages.contains { $0.contains("'Row'") || $0.contains("init(user:)") }, "\(messages)")
+        }
+
         /// A `#Preview` body expands to code the compiler does not attribute to any declaration of the corpus, so the
         /// index draws no edge from it. What it names is named by code that runs in the preview, which roots it.
         @Test func `a declaration used only by a preview is not reported as unused`() async throws {

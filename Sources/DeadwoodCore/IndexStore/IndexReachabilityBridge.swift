@@ -103,14 +103,16 @@ import SymbolFacts
             let reachableWithTests = Self.reachableIndices(
                 declarations: declarations,
                 declToUSR: declToUSR,
-                reachableUSRs: graph.reachableUSRs(
-                    fromRootUSRs: Self.rootUSRs(
+                reachableUSRs: Self.reachableUSRs(
+                    in: graph,
+                    from: Self.rootUSRs(
                         declarations: declarations,
                         declToUSR: declToUSR,
                         context: context,
                         configuration: rootConfiguration,
                         excludingTestScoped: nil
-                    ).union(forcedUSRs).union(uncoveredRoots.all)
+                    ),
+                    alsoRooted: forcedUSRs.union(uncoveredRoots.all)
                 ),
                 forcedReachable: forcedReachable
             )
@@ -122,14 +124,16 @@ import SymbolFacts
                 reachableInProduction = Self.reachableIndices(
                     declarations: declarations,
                     declToUSR: declToUSR,
-                    reachableUSRs: graph.reachableUSRs(
-                        fromRootUSRs: Self.rootUSRs(
+                    reachableUSRs: Self.reachableUSRs(
+                        in: graph,
+                        from: Self.rootUSRs(
                             declarations: declarations,
                             declToUSR: declToUSR,
                             context: context,
                             configuration: productionConfig,
                             excludingTestScoped: testScoped
-                        ).union(forcedUSRs).union(uncoveredRoots.production)
+                        ),
+                        alsoRooted: forcedUSRs.union(uncoveredRoots.production)
                     ),
                     forcedReachable: forcedReachable
                 )
@@ -192,13 +196,26 @@ import SymbolFacts
             }
         }
 
-        /// The USRs of the graph's definitions by base name (`helper` names `helper()` and `helper(_:)`).
-        private static func definitionsByBaseName(_ graph: IndexBasedDependencyGraph) -> [Substring: [String]] {
-            var byName: [Substring: [String]] = [:]
-            for node in graph.definitionNodes {
-                byName[node.name.prefix { $0 != "(" }, default: []].append(node.usr)
+        /// The definitions a name stands for. `helper` names `helper()` and `helper(_:)`. A type's name also stands for its
+        /// initializers, as `Type(...)` calls one; `init` itself names none, or every initializer of the corpus would be
+        /// named by any `.init(...)`.
+        private struct DefinitionNames {
+            private var byName: [Substring: [String]] = [:]
+            private let initializers: [String: [String]]
+
+            init(_ graph: IndexBasedDependencyGraph) {
+                initializers = graph.initializersByEnclosing
+                for node in graph.definitionNodes {
+                    let base = node.name.prefix { $0 != "(" }
+                    if base == "init" { continue }
+                    byName[base, default: []].append(node.usr)
+                }
             }
-            return byName
+
+            /// The USRs `identifier` stands for.
+            func usrs(named identifier: String) -> [String] {
+                (byName[Substring(identifier)] ?? []).flatMap { [$0] + (initializers[$0] ?? []) }
+            }
         }
 
         /// The definitions named by references in `files`, by base name; `production` leaves out the references of test
@@ -210,12 +227,12 @@ import SymbolFacts
             graph: IndexBasedDependencyGraph
         ) -> NameRoots {
             guard !files.isEmpty else { return NameRoots() }
-            let byName = definitionsByBaseName(graph)
+            let names = DefinitionNames(graph)
             var roots = NameRoots()
             for file in files {
                 let isTest = context.isTestFile(file)
                 for reference in result.references.find(inFile: file) {
-                    for usr in byName[Substring(reference.identifier)] ?? [] {
+                    for usr in names.usrs(named: reference.identifier) {
                         roots.all.insert(usr)
                         if !isTest { roots.production.insert(usr) }
                     }
@@ -237,7 +254,7 @@ import SymbolFacts
                 $0.kind == .topLevelCode && detector.rootReason(for: $0, context: context) != nil
             }
             guard !nodes.isEmpty else { return NameRoots() }
-            let byName = definitionsByBaseName(graph)
+            let names = DefinitionNames(graph)
             var roots = NameRoots()
             for node in nodes {
                 let file = node.location.file
@@ -245,7 +262,7 @@ import SymbolFacts
                 for reference in result.references.find(inFile: file)
                 where reference.location.line >= node.range.start.line && reference.location.line <= node.range.end.line
                 {
-                    for usr in byName[Substring(reference.identifier)] ?? [] {
+                    for usr in names.usrs(named: reference.identifier) {
                         roots.all.insert(usr)
                         if !isTest { roots.production.insert(usr) }
                     }
@@ -333,19 +350,43 @@ import SymbolFacts
 
         /// USRs of the declarations deadwood considers roots. `excludingTestScoped`
         /// (production mode) drops roots that live in test code.
+        /// The root USRs; `insideTheirType` are those rooted only so the member itself is not reported.
+        private struct RootUSRs {
+            var all: Set<String> = []
+            var insideTheirType: Set<String> = []
+        }
+
+        /// What the roots reach. A root that something else roots outright (a forced declaration, a name an uncovered file
+        /// uses) is outside use after all, so only the rest stay inside their type.
+        private static func reachableUSRs(
+            in graph: IndexBasedDependencyGraph,
+            from roots: RootUSRs,
+            alsoRooted: Set<String>
+        ) -> Set<String> {
+            graph.reachableUSRs(
+                fromRootUSRs: roots.all.union(alsoRooted),
+                rootsInsideTheirType: roots.insideTheirType.subtracting(alsoRooted)
+            )
+        }
+
         private static func rootUSRs(
             declarations: [Declaration],
             declToUSR: [Int: String],
             context: CorpusContext,
             configuration: RootDetectionConfiguration,
             excludingTestScoped testScoped: [Bool]?
-        ) -> Set<String> {
+        ) -> RootUSRs {
             let detector = RootDetector(configuration: configuration)
-            var roots = Set<String>()
+            var roots = RootUSRs()
             for (index, declaration) in declarations.enumerated() {
                 if let testScoped, testScoped[index] { continue }
-                guard detector.rootReason(for: declaration, context: context) != nil else { continue }
-                if let usr = declToUSR[index] { roots.insert(usr) }
+                guard let reason = detector.rootReason(for: declaration, context: context),
+                    let usr = declToUSR[index]
+                else { continue }
+                roots.all.insert(usr)
+                if reason == .swiftUIPropertyWrapper || reason == .propertyWrapperContract {
+                    roots.insideTheirType.insert(usr)
+                }
             }
             return roots
         }

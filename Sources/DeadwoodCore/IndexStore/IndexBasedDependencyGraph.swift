@@ -207,44 +207,102 @@
             return successors
         }
 
+        /// The USRs of each type's initializers, by the type's USR: the definitions whose name is `init`, under their enclosing
+        /// declaration.
+        var initializersByEnclosing: [String: [String]] {
+            var byType: [String: [String]] = [:]
+            for node in definitionNodes where node.name == "init" || node.name.hasPrefix("init(") {
+                for edge in edges[node.usr] ?? [] where edge.kind == .containedBy {
+                    byType[edge.toUSR, default: []].append(node.usr)
+                }
+            }
+            return byType
+        }
+
         // MARK: - Reachability
 
-        /// USRs reachable from `roots` over the index edges, computed on
-        /// deadwood's shared `DenseGraph` (integer BFS, bit-packed visited).
-        func reachableUSRs(fromRootUSRs roots: Set<String>) -> Set<String> {
+        /// USRs reachable from `roots` over the index edges.
+        ///
+        /// A member keeps its enclosing types alive (a called `init`, a used method), but only when something outside the
+        /// type reaches it: a type whose members merely refer to each other is as dead as the code that never creates it.
+        /// So a `containedBy` edge is followed from a member to a type that does not already hold the code that reached
+        /// the member. `rootsInsideTheirType` are roots that exist so the member itself is not reported (a `@Published`
+        /// property the framework reads): they do not count as outside use.
+        /// - Complexity: O((V + E) · depth), the depth being how deeply types nest.
+        func reachableUSRs(
+            fromRootUSRs roots: Set<String>,
+            rootsInsideTheirType: Set<String> = []
+        ) -> Set<String> {
             let usrList = Array(nodes.keys)
             guard !usrList.isEmpty else { return [] }
 
-            var indexByUSR: [String: Int32] = [:]
+            var indexByUSR: [String: Int] = [:]
             indexByUSR.reserveCapacity(usrList.count)
             for (index, usr) in usrList.enumerated() {
-                indexByUSR[usr] = Int32(index)
+                indexByUSR[usr] = index
             }
 
-            var flatEdges: [(from: Int32, to: Int32)] = []
-            flatEdges.reserveCapacity(edges.values.reduce(0) { $0 + $1.count })
-            for (from, outgoing) in edges {
+            var outgoing = [[Int]](repeating: [], count: usrList.count)
+            var enclosing = [Int](repeating: -1, count: usrList.count)
+            for (from, edgesFrom) in edges {
                 guard let fromIndex = indexByUSR[from] else { continue }
-                for edge in outgoing {
+                for edge in edgesFrom {
                     guard let toIndex = indexByUSR[edge.toUSR] else { continue }
-                    flatEdges.append((fromIndex, toIndex))
+                    if edge.kind == .containedBy {
+                        enclosing[fromIndex] = toIndex
+                    } else {
+                        outgoing[fromIndex].append(toIndex)
+                    }
                 }
             }
 
-            var rootIndices: Set<Int32> = []
+            var visited = [Bool](repeating: false, count: usrList.count)
+            var queue: [Int] = []
+            func reach(_ node: Int) {
+                guard !visited[node] else { return }
+                visited[node] = true
+                queue.append(node)
+            }
+            /// Whether `node` is `type` or lies within it.
+            func isInside(_ node: Int, _ type: Int) -> Bool {
+                var current = node
+                while true {
+                    if current == type { return true }
+                    guard enclosing[current] >= 0 else { return false }
+                    current = enclosing[current]
+                }
+            }
+            /// `user` (nil: the framework, outside everything) reached `member`: reach the types around it that do not hold
+            /// `user`. Above the first one that does, `user` is inside as well.
+            func keepEnclosingTypesAlive(of member: Int, reachedFrom user: Int?) {
+                var current = member
+                while enclosing[current] >= 0 {
+                    let type = enclosing[current]
+                    if let user, isInside(user, type) { return }
+                    reach(type)
+                    current = type
+                }
+            }
+
             for usr in roots {
-                if let index = indexByUSR[usr] {
-                    rootIndices.insert(index)
+                guard let node = indexByUSR[usr] else { continue }
+                reach(node)
+                if !rootsInsideTheirType.contains(usr) { keepEnclosingTypesAlive(of: node, reachedFrom: nil) }
+            }
+            var head = 0
+            while head < queue.count {
+                let user = queue[head]
+                head += 1
+                for target in outgoing[user] {
+                    reach(target)
+                    keepEnclosingTypesAlive(of: target, reachedFrom: user)
                 }
             }
-
-            let dense = DenseGraph(nodeCount: usrList.count, edges: flatEdges, roots: rootIndices)
-            let reachableIndices = dense.computeReachableSequential()
 
             var reachable = Set<String>()
-            reachable.reserveCapacity(reachableIndices.count)
-            for index in reachableIndices {
-                reachable.insert(usrList[index])
+            reachable.reserveCapacity(queue.count)
+            for node in queue {
+                reachable.insert(usrList[node])
             }
             return reachable
         }
