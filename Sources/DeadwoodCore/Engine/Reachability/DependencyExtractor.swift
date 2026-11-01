@@ -93,6 +93,12 @@ struct DependencyExtractor: Sendable {
         var declByNameMutable: [String: [Int32]] = [:]
         for (index, declaration) in allDeclarations.enumerated() {
             declByNameMutable[declaration.name, default: []].append(Int32(index))
+            // `extension Outer.Inner` is named `Outer.Inner`, but code refers to the type as `Inner`.
+            if declaration.kind == .extension, let base = Self.baseName(ofExtendedType: declaration.name),
+                base != declaration.name
+            {
+                declByNameMutable[base, default: []].append(Int32(index))
+            }
         }
         let declByName = declByNameMutable
 
@@ -274,6 +280,14 @@ struct DependencyExtractor: Sendable {
             }
         }
         return next == labels.count
+    }
+
+    /// The last component of an extended type's spelling, without generic arguments: `Inner` for `Outer.Inner` and
+    /// `Module.Outer.Inner<Int>`.
+    static func baseName(ofExtendedType spelling: String) -> String? {
+        let bare = spelling.prefix { $0 != "<" }
+        guard let last = bare.split(separator: ".").last else { return nil }
+        return String(last)
     }
 
     /// Which declaration owns each of one file's line-sorted references:
