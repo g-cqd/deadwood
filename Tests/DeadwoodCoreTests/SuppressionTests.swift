@@ -1,4 +1,5 @@
 import DeadwoodCore
+import Suppression
 import Testing
 
 @Suite struct SuppressionTests {

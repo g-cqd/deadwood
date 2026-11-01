@@ -2,6 +2,7 @@ import CorpusScan
 import DeadwoodCore
 import Foundation
 import ProjectModel
+import ReportSupport
 import Testing
 
 @Suite struct PipelineTests {
