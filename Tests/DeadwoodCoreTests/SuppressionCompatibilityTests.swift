@@ -1,9 +1,10 @@
 import Foundation
+import Suppression
 import Testing
 
 @testable import DeadwoodCore
 
-/// Compatibility characterization captured before replacing the implementation. Wire models remain tool-owned.
+/// Compatibility characterization captured before replacing the implementation. The directive is analyzerkit's since deadwood 0.15.
 @Suite struct SuppressionCompatibilityTests {
     @Test func `directives retain their cache shape reasons duplicates and unknown rule behavior`() throws {
         let first = try #require(RuleID(rawValue: "unused-function"))
@@ -19,12 +20,13 @@ import Testing
             #expect(parsed.kind == .acceptThis)
             #expect(parsed.line == 7)
             #expect(parsed.reason == "reviewed")
-            #expect(parsed.rules == [first, second])
+            // analyzerkit's directive keeps the order and repeats of the comment; the cache writes each rule once.
+            #expect(parsed.rules == [first, second, first])
+            #expect(Set(parsed.rules) == [first, second])
             let data = try JSONEncoder().encode(parsed)
             let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
             #expect(Set(json.keys) == ["rules", "kind", "line", "reason"])
-            let kind = try #require(json["kind"] as? [String: Any])
-            #expect(Set(kind.keys) == ["acceptThis"])
+            #expect(json["kind"] as? String == "acceptThis")
             #expect(json["line"] as? Int == 7)
             #expect(json["reason"] as? String == "reviewed")
             #expect(try JSONDecoder().decode(SuppressionDirective.self, from: data) == parsed)

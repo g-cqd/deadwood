@@ -43,18 +43,18 @@ let package = Package(
         // AemiJSON: the payload tests measure the protobuf payload against the JSON one it replaced (roadmap 0017).
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
-            revision: "e59abdf87fa25f8c508a375911be1c9a5006bc4a"
+            revision: "1cc3781edaff0847a57ab585d65faab0c5b33b09"
         ),
         // The project model the analyzers share: entry points project files
         // and test frameworks create, code regions, generated files.
         // The facts cache's payload codec; analyzerkit's revision, written as analyzerkit writes it (ADR-0025).
         .package(
             url: "https://github.com/g-cqd/AemiProtobuf.git",
-            revision: "40d26fe5b80bc4d2825d57bb9e7b53f66c1132c1"
+            revision: "cc5d7aca896265455ef560ba21ad7e9d0b2c888c"
         ),
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "df4783977492d86bf68f574b4f52f2fd672ae93a"
+            revision: "53d82440574f5fc121fa25dfe411f699cccb2431"
         ),
     ],
     targets: [
@@ -102,6 +102,8 @@ let package = Package(
             name: "DeadwoodCoreTests",
             dependencies: [
                 "DeadwoodCore", .product(name: "SourceCorpus", package: "analyzerkit"),
+                .product(name: "Suppression", package: "analyzerkit"),
+                .product(name: "ReportSupport", package: "analyzerkit"),
                 .product(name: "CorpusScan", package: "analyzerkit"),
                 .product(name: "SymbolFacts", package: "analyzerkit"),
                 .product(name: "AemiJSON", package: "AemiJSON"),

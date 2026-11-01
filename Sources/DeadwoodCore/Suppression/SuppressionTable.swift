@@ -1,11 +1,11 @@
-import Suppression
+public import Suppression
 
 /// Wire-compatible facade over analyzerkit's shared line/region suppression table.
 public struct SuppressionTable: Sendable {
     private let table: Suppression.SuppressionTable<RuleID>
 
     public init(directives: [SuppressionDirective]) {
-        table = Suppression.SuppressionTable(directives: directives.map(\.shared))
+        table = Suppression.SuppressionTable(directives: directives)
     }
 
     /// nil: not suppressed; .some(nil): suppressed without a reason; .some(reason): suppressed with a reason.

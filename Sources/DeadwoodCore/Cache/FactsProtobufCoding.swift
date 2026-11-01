@@ -6,7 +6,7 @@
 //  when it is the file the facts describe, which is nearly always; the JSON path wrote it in every location.
 
 public import AemiProtobuf
-public import AemiProtobufCore
+import AemiProtobufCore
 import CorpusScan
 import ProjectModel
 import SymbolFacts
@@ -67,56 +67,6 @@ extension CachedFileArtifacts: AemiProtoFastEncodable, AemiProtoFastDecodable {
             }
         }
         return Self(facts: facts, directives: directives, deadBranches: deadBranches, degraded: degraded)
-    }
-}
-
-extension SuppressionDirective: AemiProtoFastEncodable, AemiProtoFastDecodable {
-    public func __aepbEncode(into writer: inout WireWriter) throws(WireError) {
-        for rule in rules.sorted(by: { $0.rawValue < $1.rawValue }) { writer.field(1, rule) }
-        writer.field(2, Self.wireName(kind))
-        writer.field(3, line)
-        writer.field(4, reason)
-    }
-
-    public static func __aepbDecode(from reader: inout WireReader) throws(WireError) -> Self {
-        var rules: Set<RuleID> = []
-        var kind = Kind.accept
-        var line = 0
-        var reason: String?
-        try reader.forEachField { tag, reader throws(WireError) in
-            switch tag.fieldNumber {
-            case 1: rules.insert(try reader.readEnum(RuleID.self))
-            case 2:
-                let name = try reader.readString()
-                guard let known = Self.kind(wireName: name) else { throw .missingRequired(path: "Kind.\(name)") }
-                kind = known
-            case 3: line = try reader.readInt()
-            case 4: reason = try reader.readString()
-            default: try reader.skipField(tag)
-            }
-        }
-        return Self(rules: rules, kind: kind, line: line, reason: reason)
-    }
-
-    private static func wireName(_ kind: Kind) -> String {
-        switch kind {
-        case .accept: "accept"
-        case .acceptThis: "acceptThis"
-        case .acceptNext: "acceptNext"
-        case .regionDisable: "regionDisable"
-        case .regionEnable: "regionEnable"
-        }
-    }
-
-    private static func kind(wireName: String) -> Kind? {
-        switch wireName {
-        case "accept": .accept
-        case "acceptThis": .acceptThis
-        case "acceptNext": .acceptNext
-        case "regionDisable": .regionDisable
-        case "regionEnable": .regionEnable
-        default: nil
-        }
     }
 }
 

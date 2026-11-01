@@ -4,6 +4,7 @@ public import ArgumentParser
 import CorpusScan
 import DeadwoodCore
 import ProjectModel
+import ReportSupport
 import SourceCorpus
 import SystemPackage
 

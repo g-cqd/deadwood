@@ -1,5 +1,6 @@
 import DeadwoodCore
 import Foundation
+import ReportSupport
 import Testing
 
 /// `Finding.path` is hashed into `Finding.fingerprint`, which `--baseline`
