@@ -22,7 +22,13 @@
         static var available: Bool { swiftc != nil }
 
         /// Compiles `files` as module `module`, recording the index into `store`.
-        static func build(store: URL, module: String, files: [URL], in directory: URL) throws {
+        static func build(
+            store: URL,
+            module: String,
+            files: [URL],
+            in directory: URL,
+            extraArguments: [String] = []
+        ) throws {
             guard let swiftc else { throw CocoaError(.featureUnsupported) }
             let process = Process()
             process.executableURL = URL(fileURLWithPath: swiftc)
@@ -31,7 +37,7 @@
                     "-index-store-path", store.path, "-index-ignore-system-modules", "-module-name", module,
                     "-parse-as-library", "-emit-module",
                     "-emit-module-path", directory.appendingPathComponent("\(module).swiftmodule").path,
-                ] + files.map(\.path)
+                ] + extraArguments + files.map(\.path)
             process.currentDirectoryURL = directory
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
