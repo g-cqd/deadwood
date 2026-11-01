@@ -71,7 +71,8 @@ import SymbolFacts
         init(reader: IndexStoreReader, files: [String]) {
             self.reader = reader
             self.files = Set(
-                files.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().standardizedFileURL.path })
+                files.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().standardizedFileURL.path }
+            )
         }
 
         /// Analyze all symbols and return their usage information.
@@ -124,7 +125,11 @@ import SymbolFacts
                 name: symbol.name,
                 kind: symbol.kind,
                 definitionLocation: SourceLocation(
-                    file: definition.file, line: definition.line, column: definition.column, offset: 0),
+                    file: definition.file,
+                    line: definition.line,
+                    column: definition.column,
+                    offset: 0
+                ),
                 referenceCount: referenceCount,
                 onlySelfReferenced: onlySelfReferenced,
                 isTestSymbol: isTestSymbol

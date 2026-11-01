@@ -41,7 +41,9 @@ struct ParallelBFSTests {
         var results: Set<Set<Int>> = []
         for _ in 0..<5 {
             let reachable = await ParallelBFS.computeReachable(
-                graph: graph, configuration: forceParallel)
+                graph: graph,
+                configuration: forceParallel
+            )
             results.insert(reachable)
         }
         #expect(results.count == 1)

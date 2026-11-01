@@ -47,12 +47,16 @@ import Testing
     @Test("The JSON report carries the literal contract version and the 1.x field names")
     func pinsVersionAndFieldNames() throws {
         let finding = Finding(
-            rule: .unusedFunction, severity: .warning,
-            path: "Sources/A.swift", line: 5, column: 9,
+            rule: .unusedFunction,
+            severity: .warning,
+            path: "Sources/A.swift",
+            line: 5,
+            column: 9,
             message: "function 'a' is never used",
             note: "declared private",
             confidence: .high,
-            fingerprintPath: "Sources/A.swift")
+            fingerprintPath: "Sources/A.swift"
+        )
         let report = AnalysisReport(findings: [finding], analyzedFileCount: 1)
 
         let object = try Self.object(report)
@@ -69,13 +73,19 @@ import Testing
     @Test("Optional fields are omitted when nil, not encoded as null")
     func omitsNilOptionals() throws {
         let bare = Finding(
-            rule: .unusedFunction, severity: .warning,
-            path: "a.swift", line: 1, column: 1, message: "m")
+            rule: .unusedFunction,
+            severity: .warning,
+            path: "a.swift",
+            line: 1,
+            column: 1,
+            message: "m"
+        )
         let report = AnalysisReport(
             findings: [bare],
             suppressed: [.init(finding: bare, reason: nil)],
             degradedFiles: [.init(path: "b.swift", detail: "d")],
-            analyzedFileCount: 1)
+            analyzedFileCount: 1
+        )
 
         let object = try Self.object(report)
 
@@ -89,12 +99,20 @@ import Testing
     @Test("A set optional field is encoded with its value")
     func encodesSetOptionals() throws {
         let finding = Finding(
-            rule: .unusedFunction, severity: .warning,
-            path: "a.swift", line: 1, column: 1, message: "m",
-            note: "n", confidence: .certain, fingerprintPath: "a.swift")
+            rule: .unusedFunction,
+            severity: .warning,
+            path: "a.swift",
+            line: 1,
+            column: 1,
+            message: "m",
+            note: "n",
+            confidence: .certain,
+            fingerprintPath: "a.swift"
+        )
         var report = AnalysisReport(
             findings: [finding],
-            suppressed: [.init(finding: finding, reason: "because")])
+            suppressed: [.init(finding: finding, reason: "because")]
+        )
         report.cacheLoadFailure = "x"
 
         let object = try Self.object(report)

@@ -234,7 +234,8 @@ struct LiveVariableAnalysis: Sendable {
                                     assignedValue: statement.shortDescription(maxLength: 100),
                                     suggestion:
                                         "Variable '\(definedVar.name)' is assigned but never read"
-                                ))
+                                )
+                            )
                         }
                     }
                 }

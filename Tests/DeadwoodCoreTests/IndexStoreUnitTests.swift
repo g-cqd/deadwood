@@ -55,7 +55,9 @@ import SymbolFacts
             #expect(FallbackReason.dylibNotFound.description.contains("libIndexStore"))
             #expect(
                 FallbackReason.coversNoAnalyzedFile(store: "/s", analyzedCount: 3).description.contains(
-                    "none of the 3 analyzed file(s)"))
+                    "none of the 3 analyzed file(s)"
+                )
+            )
         }
 
         @Test func fallbackConfigurationDefaults() {
@@ -85,17 +87,27 @@ import SymbolFacts
             let file = "/private/tmp/dw-map/Shapes.swift"
             let nodes = [
                 IndexSymbolNode(
-                    usr: "s:Alpha:shared", name: "shared", kind: .method,
-                    definitionFile: file, definitionLine: 2),
+                    usr: "s:Alpha:shared",
+                    name: "shared",
+                    kind: .method,
+                    definitionFile: file,
+                    definitionLine: 2
+                ),
                 IndexSymbolNode(
-                    usr: "s:Beta:shared", name: "shared", kind: .method,
-                    definitionFile: file, definitionLine: 6),
+                    usr: "s:Beta:shared",
+                    name: "shared",
+                    kind: .method,
+                    definitionFile: file,
+                    definitionLine: 6
+                ),
             ]
             let alphaShared = makeDecl(name: "shared", kind: .method, line: 2, file: file)
             let betaShared = makeDecl(name: "shared", kind: .method, line: 6, file: file)
 
             let map = IndexReachabilityBridge.mapDeclarationsToUSRs(
-                declarations: [alphaShared, betaShared], definitionNodes: nodes)
+                declarations: [alphaShared, betaShared],
+                definitionNodes: nodes
+            )
 
             #expect(map[0] == "s:Alpha:shared")
             #expect(map[1] == "s:Beta:shared")
@@ -105,14 +117,20 @@ import SymbolFacts
             let file = "/private/tmp/dw-map/Attr.swift"
             let nodes = [
                 IndexSymbolNode(
-                    usr: "s:obj:thing", name: "thing", kind: .method,
-                    definitionFile: file, definitionLine: 11)
+                    usr: "s:obj:thing",
+                    name: "thing",
+                    kind: .method,
+                    definitionFile: file,
+                    definitionLine: 11
+                )
             ]
             // Declaration line 9 (an `@objc`/modifier prefix pushed the symbol
             // token to 11); within the 5-line tolerance.
             let decl = makeDecl(name: "thing", kind: .method, line: 9, file: file)
             let map = IndexReachabilityBridge.mapDeclarationsToUSRs(
-                declarations: [decl], definitionNodes: nodes)
+                declarations: [decl],
+                definitionNodes: nodes
+            )
             #expect(map[0] == "s:obj:thing")
         }
 
@@ -120,12 +138,18 @@ import SymbolFacts
             let file = "/private/tmp/dw-map/None.swift"
             let nodes = [
                 IndexSymbolNode(
-                    usr: "s:x:present", name: "present", kind: .function,
-                    definitionFile: file, definitionLine: 3)
+                    usr: "s:x:present",
+                    name: "present",
+                    kind: .function,
+                    definitionFile: file,
+                    definitionLine: 3
+                )
             ]
             let missing = makeDecl(name: "absent", kind: .function, line: 3, file: file)
             let map = IndexReachabilityBridge.mapDeclarationsToUSRs(
-                declarations: [missing], definitionNodes: nodes)
+                declarations: [missing],
+                definitionNodes: nodes
+            )
             #expect(map[0] == nil)
         }
     }

@@ -144,11 +144,16 @@ import Testing
         let bytes = try Self.payload(
             CachedFileArtifacts(
                 facts: FileAnalysisResult(file: file, declarations: [], references: references, scopes: []),
-                directives: [], deadBranches: [], degraded: []))
+                directives: [],
+                deadBranches: [],
+                degraded: []
+            )
+        )
         #expect(bytes.count < 80_000)
 
         let restored = try #require(
-            try Self.decoded(bytes).artifacts)
+            try Self.decoded(bytes).artifacts
+        )
         #expect(restored.facts.references.count == references.count)
         #expect(restored.facts.references[0].qualifier == "Module")
         #expect(restored.facts.references[1].context == .write)
@@ -160,11 +165,19 @@ import Testing
     /// The content region is cached; the project's part is not.
     @Test func contentRegionRoundTrips() throws {
         let facts = FileAnalysisResult(
-            file: "/x/G.swift", declarations: [], references: [], scopes: [], isGenerated: true, isTestCode: true)
+            file: "/x/G.swift",
+            declarations: [],
+            references: [],
+            scopes: [],
+            isGenerated: true,
+            isTestCode: true
+        )
         let bytes = try Self.payload(
-            CachedFileArtifacts(facts: facts, directives: [], deadBranches: [], degraded: []))
+            CachedFileArtifacts(facts: facts, directives: [], deadBranches: [], degraded: [])
+        )
         let restored = try #require(
-            try Self.decoded(bytes).artifacts)
+            try Self.decoded(bytes).artifacts
+        )
         #expect(restored.facts.contentRegion == facts.contentRegion)
         #expect(restored.facts.isGenerated && restored.facts.isTestCode)
     }
@@ -176,14 +189,24 @@ import Testing
         let bytes = try Self.payload(
             CachedFileArtifacts(
                 facts: FileAnalysisResult(
-                    file: file, declarations: [],
+                    file: file,
+                    declarations: [],
                     references: [
                         Reference(
-                            identifier: "name", location: SourceLocation(file: file, line: 1, column: 1),
-                            scope: .global, context: .read, qualifier: "Module")
+                            identifier: "name",
+                            location: SourceLocation(file: file, line: 1, column: 1),
+                            scope: .global,
+                            context: .read,
+                            qualifier: "Module"
+                        )
                     ],
-                    scopes: []),
-                directives: [], deadBranches: [], degraded: []))
+                    scopes: []
+                ),
+                directives: [],
+                deadBranches: [],
+                degraded: []
+            )
+        )
         #expect(try Self.decoded(bytes).artifacts?.facts.references.first?.qualifier == "Module")
         let read = Array(ReferenceContext.read.rawValue.utf8)
         let corrupt = bytes.replacing(read, with: Array("nope".utf8.prefix(read.count)))

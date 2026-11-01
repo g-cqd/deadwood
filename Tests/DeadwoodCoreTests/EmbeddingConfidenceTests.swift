@@ -32,7 +32,9 @@
                 "class WildlyDifferent { let x = 42; let y = \"totally other\" }",
             ]
             let scores = await EmbeddingConfidence(neighbors: 2).anomalyScores(
-                snippets: snippets, provider: DeterministicEmbeddingProvider())
+                snippets: snippets,
+                provider: DeterministicEmbeddingProvider()
+            )
             #expect(scores.count == 4)
             let outlier = scores[3] ?? 0
             let clusterMax = max(scores[0] ?? 0, max(scores[1] ?? 0, scores[2] ?? 0))
@@ -44,7 +46,9 @@
 
         @Test func tooFewSnippetsYieldNoScores() async {
             let scores = await EmbeddingConfidence().anomalyScores(
-                snippets: ["only one"], provider: DeterministicEmbeddingProvider())
+                snippets: ["only one"],
+                provider: DeterministicEmbeddingProvider()
+            )
             #expect(scores.isEmpty)
         }
 
@@ -65,12 +69,15 @@
 
             let plain = await Analyzer().analyze(files: [source.path])
             let annotated = await Analyzer().analyze(
-                files: [source.path], embeddingConfidence: true)
+                files: [source.path],
+                embeddingConfidence: true
+            )
 
             // The finding SET is unchanged — only notes differ.
             #expect(
                 plain.findings.map { "\($0.rule.rawValue):\($0.line)" }
-                    == annotated.findings.map { "\($0.rule.rawValue):\($0.line)" })
+                    == annotated.findings.map { "\($0.rule.rawValue):\($0.line)" }
+            )
             #expect(annotated.findings.count > 1)
             #expect(annotated.findings.allSatisfy { $0.note?.contains("embedding-confidence") == true })
             #expect(annotated.notes.contains { $0.contains("embedding-confidence") })

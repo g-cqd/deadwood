@@ -163,7 +163,8 @@ struct Analyze: AsyncParsableCommand {
         // the command line's `--exclude-path`.
         let exclusion = CombinedExclusion(
             fromFile: configuration.pathFilter,
-            commandLine: PathFilter(input.excludePaths, root: FileManager.default.currentDirectoryPath))
+            commandLine: PathFilter(input.excludePaths, root: FileManager.default.currentDirectoryPath)
+        )
         if !exclusion.isEmpty {
             report.findings.removeAll { exclusion.excludes($0.path) }
             report.outOfScope.removeAll { exclusion.excludes($0.path) }
@@ -189,8 +190,12 @@ struct Analyze: AsyncParsableCommand {
                 report = report.relativized(to: relativeTo)
             }
             let text = ReportFormatter.format(
-                report, as: OutputFormat(output.format), relativeTo: output.relativeTo, verbose: output.verbose,
-                timings: output.timings)
+                report,
+                as: OutputFormat(output.format),
+                relativeTo: output.relativeTo,
+                verbose: output.verbose,
+                timings: output.timings
+            )
             if !text.isEmpty {
                 print(text)
             }
@@ -218,9 +223,16 @@ struct Analyze: AsyncParsableCommand {
         if let newSinceBaseline {
             let known = Set(newSinceBaseline.fingerprints)
             baselineMatchesNothing = NewSince.matchesNothing(
-                report.findings + report.outOfScope, in: known, fingerprint: \.fingerprint)
+                report.findings + report.outOfScope,
+                in: known,
+                fingerprint: \.fingerprint
+            )
             let promotion = NewSince.promote(
-                inScope: report.findings, outOfScope: report.outOfScope, notIn: known, fingerprint: \.fingerprint)
+                inScope: report.findings,
+                outOfScope: report.outOfScope,
+                notIn: known,
+                fingerprint: \.fingerprint
+            )
             report.findings = promotion.reported.sorted()
             report.outOfScope = promotion.outOfScope
             promotedFingerprints = promotion.promoted
@@ -244,16 +256,22 @@ struct Analyze: AsyncParsableCommand {
         if let reportNewSince = output.reportNewSince {
             let promotedCount = report.findings.count(where: { promotedFingerprints.contains($0.fingerprint) })
             for line in NewSince.notes(
-                promoted: promotedCount, matchesNothing: baselineMatchesNothing, baseline: reportNewSince)
-            {
+                promoted: promotedCount,
+                matchesNothing: baselineMatchesNothing,
+                baseline: reportNewSince
+            ) {
                 report.notes.append(line)
                 note(line)
             }
         }
 
         let text = ReportFormatter.format(
-            report, as: OutputFormat(output.format), relativeTo: output.relativeTo, verbose: output.verbose,
-            timings: output.timings)
+            report,
+            as: OutputFormat(output.format),
+            relativeTo: output.relativeTo,
+            verbose: output.verbose,
+            timings: output.timings
+        )
         if !text.isEmpty {
             print(text)
         }
@@ -292,7 +310,10 @@ struct Analyze: AsyncParsableCommand {
         let environment = ProcessInfo.processInfo.environment
         return cache.cachePath.map { SourcePath.absolute($0) }
             ?? CacheLocation.defaultRoot(
-                tool: ToolInfo.name, environment: environment, home: environment["HOME"] ?? "/tmp")
+                tool: ToolInfo.name,
+                environment: environment,
+                home: environment["HOME"] ?? "/tmp"
+            )
     }
 
     /// `--rules`: only the rules named run; an unknown name is a usage error.
@@ -391,7 +412,8 @@ struct Analyze: AsyncParsableCommand {
                 // already ends lines at CRLF and CR.
                 let trimmable: (Character) -> Bool = { $0 == " " || $0 == "\t" || $0 == "\r" }
                 var entry = String(
-                    line.drop(while: trimmable).reversed().drop(while: trimmable).reversed())
+                    line.drop(while: trimmable).reversed().drop(while: trimmable).reversed()
+                )
                 // git C-quotes paths with special bytes unless core.quotepath=false;
                 // strip the quotes so plain quoted paths keep matching.
                 if entry.hasPrefix("\"") && entry.hasSuffix("\"") && entry.count >= 2 {
@@ -450,8 +472,10 @@ struct Analyze: AsyncParsableCommand {
     /// `--config`, or the configuration directory's shared and own files (ADR-0020).
     private func loadConfigurationUncaught() throws -> Configuration {
         let (configuration, sources) = try Configuration.resolve(
-            explicit: input.config, currentDirectory: FileManager.default.currentDirectoryPath,
-            analyzedPaths: input.paths)
+            explicit: input.config,
+            currentDirectory: FileManager.default.currentDirectoryPath,
+            analyzedPaths: input.paths
+        )
         if output.verbose {
             for line in sources.verboseLines(tool: ToolInfo.name) { standardError.write(Data((line + "\n").utf8)) }
         }
@@ -485,7 +509,8 @@ struct Analyze: AsyncParsableCommand {
                 // so a linked Sources/ would classify as a "file", degrade, and
                 // exit 0 over zero analyzed code.
                 let attributes = try? FileManager.default.attributesOfItem(
-                    atPath: URL(fileURLWithPath: path).resolvingSymlinksInPath().path),
+                    atPath: URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+                ),
                 let type = attributes[.type] as? FileAttributeType
             else {
                 throw ValidationError("no such file or directory: \(path)")
@@ -534,7 +559,8 @@ struct Rules: ParsableCommand {
               // @dw:accept:this <rule|all> [-- reason]
               // @dw:accept:next <rule|all> [-- reason]
               // @dw:disable <rule|all> … // @dw:enable <rule|all>
-            """)
+            """
+        )
     }
 }
 

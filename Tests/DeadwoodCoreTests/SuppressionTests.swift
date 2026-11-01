@@ -4,7 +4,9 @@ import Testing
 @Suite struct SuppressionTests {
     @Test func parsesAccept() {
         let directive = SuppressionDirective.parse(
-            comment: "// @dw:accept -- reviewed", line: 3)
+            comment: "// @dw:accept -- reviewed",
+            line: 3
+        )
         #expect(directive?.kind == .accept)
         #expect(directive?.reason == "reviewed")
         #expect(directive?.rules.isEmpty == true)
@@ -12,7 +14,9 @@ import Testing
 
     @Test func longNamespaceIsSynonym() {
         let directive = SuppressionDirective.parse(
-            comment: "// @deadwood:accept:next unused-function", line: 1)
+            comment: "// @deadwood:accept:next unused-function",
+            line: 1
+        )
         #expect(directive?.kind == .acceptNext)
         #expect(directive?.rules == [RuleID(rawValue: "unused-function")!])
     }

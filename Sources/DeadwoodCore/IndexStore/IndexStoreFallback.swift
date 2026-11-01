@@ -108,7 +108,8 @@
         private let derivedDataRoots: [String]
 
         init(
-            configuration: FallbackConfiguration = .default, libIndexStorePath: String? = nil,
+            configuration: FallbackConfiguration = .default,
+            libIndexStorePath: String? = nil,
             derivedDataRoots: [String]? = nil
         ) {
             self.configuration = configuration
@@ -169,7 +170,8 @@
                 return .fallback(reason: .notAnIndexStore(path: store))
             case .failed(let reason):
                 return .fallback(
-                    reason: reason.contains("not trusted") ? .dylibNotFound : .indexStoreFailed(error: reason))
+                    reason: reason.contains("not trusted") ? .dylibNotFound : .indexStoreFailed(error: reason)
+                )
             }
         }
 
@@ -194,16 +196,21 @@
             guard FileManager.default.fileExists(atPath: projectRoot + "/Package.swift") else {
                 return BuildResult(
                     success: false,
-                    output: "no Package.swift found at \(projectRoot); auto-build supports SwiftPM projects")
+                    output: "no Package.swift found at \(projectRoot); auto-build supports SwiftPM projects"
+                )
             }
             do {
                 let result = try await BoundedProcess.run(
-                    "/usr/bin/swift", ["build", "-Xswiftc", "-index-store-path", "-Xswiftc", ".build/index/store"],
+                    "/usr/bin/swift",
+                    ["build", "-Xswiftc", "-index-store-path", "-Xswiftc", ".build/index/store"],
                     directory: projectRoot,
                     environment: BoundedProcess.scrubbedEnvironment(source: ProcessInfo.processInfo.environment),
-                    timeout: .seconds(600))
+                    timeout: .seconds(600)
+                )
                 return BuildResult(
-                    success: result.succeeded, output: result.standardOutputText + result.standardErrorText)
+                    success: result.succeeded,
+                    output: result.standardOutputText + result.standardErrorText
+                )
             } catch {
                 return BuildResult(success: false, output: "failed to run swift build: \(error)")
             }

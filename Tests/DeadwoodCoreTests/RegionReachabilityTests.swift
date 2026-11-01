@@ -78,7 +78,8 @@ import Testing
 
         let notes = report.findings.filter { $0.rule == .debugOnly }
         #expect(
-            notes.map(\.message) == ["enum 'DebugPanel' is used only by #if DEBUG code but ships in release builds"])
+            notes.map(\.message) == ["enum 'DebugPanel' is used only by #if DEBUG code but ships in release builds"]
+        )
         #expect(notes.first?.severity == .note)
     }
 

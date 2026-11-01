@@ -29,13 +29,17 @@ import Testing
     private func write(_ path: String, in directory: URL, contents: String = "let value = 1\n") throws {
         let file = directory.appending(path: path)
         try FileManager.default.createDirectory(
-            at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            at: file.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try contents.write(to: file, atomically: true, encoding: .utf8)
     }
 
     private func link(_ path: String, to destination: String, in directory: URL) throws {
         try FileManager.default.createSymbolicLink(
-            atPath: directory.appending(path: path).path, withDestinationPath: destination)
+            atPath: directory.appending(path: path).path,
+            withDestinationPath: destination
+        )
     }
 
     /// The files a walk of `root` must list when no link adds anything.
@@ -68,7 +72,8 @@ import Testing
             ("Shared", "../outside"),
             ("Linked.swift", "../outside/Shared.swift"),
             ("FileSystem", "/"),
-        ])
+        ]
+    )
     func outsideLinkIsNotFollowed(name: String, destination: String) throws {
         let (scratch, root) = try makeScratch()
         defer { try? FileManager.default.removeItem(at: scratch) }
@@ -109,7 +114,8 @@ import Testing
 
         #expect(
             SourceDiscovery.swiftFiles(under: walked.path)
-                == realFiles(under: walked) + [walked.path + "/Sources/Broken.swift"])
+                == realFiles(under: walked) + [walked.path + "/Sources/Broken.swift"]
+        )
     }
 
     @Test("Hidden entries and build products are skipped")

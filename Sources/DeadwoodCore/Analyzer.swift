@@ -83,13 +83,18 @@ public struct Analyzer: Sendable {
         let scan: CorpusScan<ExtractedArtifacts>
         do {
             scan = try await CorpusScanner.scan(
-                paths: files, cache: cache,
-                identity: CacheIdentity.current(tool: ToolInfo.name, version: ToolInfo.version), salt: salt,
+                paths: files,
+                cache: cache,
+                identity: CacheIdentity.current(tool: ToolInfo.name, version: ToolInfo.version),
+                salt: salt,
                 width: ParallelMode.safe.concurrencyConfiguration.maxConcurrentFiles
             ) { path, bytes in
                 Self.extract(
-                    bytes: bytes, path: path, deadBranchesEnabled: deadBranchesEnabled,
-                    deadStoresEnabled: deadStoresEnabled)
+                    bytes: bytes,
+                    path: path,
+                    deadBranchesEnabled: deadBranchesEnabled,
+                    deadStoresEnabled: deadStoresEnabled
+                )
             }
         } catch {
             // Abort, never truncate: deadwood decides "unused" by finding no reference anywhere, so a partial corpus
@@ -105,7 +110,8 @@ public struct Analyzer: Sendable {
         for file in scan.files {
             if let failure = file.failure {
                 report.degradedFiles.append(
-                    .init(path: file.path, detail: "read failed or exceeds size cap: \(failure)"))
+                    .init(path: file.path, detail: "read failed or exceeds size cap: \(failure)")
+                )
                 continue
             }
             guard let extracted = file.facts else { continue }
@@ -115,7 +121,8 @@ public struct Analyzer: Sendable {
             }
             var artifacts = FileArtifacts(path: file.path, cached: cached)
             let region = classification.classify(
-                file.path, content: CodeRegion(rawValue: artifacts.facts.contentRegion)
+                file.path,
+                content: CodeRegion(rawValue: artifacts.facts.contentRegion)
             )
             .region
             artifacts.facts.isGenerated = region.contains(.generated)
@@ -170,7 +177,11 @@ public struct Analyzer: Sendable {
         unused.append(contentsOf: perFile.flatMap(\.deadBranches))
         report.notes.append(
             contentsOf: Self.dropGenerated(
-                from: &unused, result: result, regionSelection: engineConfig.regionSelection))
+                from: &unused,
+                result: result,
+                regionSelection: engineConfig.regionSelection
+            )
+        )
 
         // Surface per-file degraded-analysis notes (e.g. over-bound
         // functions the dead-branch pass skipped): the rest of the file was
@@ -206,9 +217,11 @@ public struct Analyzer: Sendable {
 
         if embeddingConfidence {
             report = await annotateEmbeddingConfidence(
-                report, unused: unused,
+                report,
+                unused: unused,
                 sourcesByPath: Self.sources(of: report.findings),
-                bundlePath: embeddingBundle)
+                bundlePath: embeddingBundle
+            )
         }
 
         // Same guard after detection: reachability drains frontiers that
@@ -246,7 +259,9 @@ public struct Analyzer: Sendable {
     /// - Complexity: O(*g* · *r*) for *g* generated declarations and *r*
     ///   references per name.
     static func dropGenerated(
-        from unused: inout [UnusedCode], result: AnalysisResult, regionSelection: RegionSelection
+        from unused: inout [UnusedCode],
+        result: AnalysisResult,
+        regionSelection: RegionSelection
     ) -> [String] {
         guard !result.generatedFiles.isEmpty else { return [] }
         // --include generated keeps them, tagged, as ordinary findings
@@ -365,12 +380,16 @@ public struct Analyzer: Sendable {
             let cwd = FileManager.default.currentDirectoryPath
             let projectRoot = IndexProjectLocator.projectRoot(for: files, fallback: cwd)
             let manager = IndexStoreFallbackManager(
-                configuration: FallbackConfiguration(autoBuild: indexStore.autoBuild))
+                configuration: FallbackConfiguration(autoBuild: indexStore.autoBuild)
+            )
             let environment = ProcessInfo.processInfo.environment
             let cacheRoot =
                 indexStore.cacheRoot
                 ?? CacheLocation.defaultRoot(
-                    tool: ToolInfo.name, environment: environment, home: environment["HOME"] ?? "/tmp")
+                    tool: ToolInfo.name,
+                    environment: environment,
+                    home: environment["HOME"] ?? "/tmp"
+                )
             let outcome = await manager.resolveIndexStore(
                 projectRoot: projectRoot,
                 sourceFiles: files,
@@ -426,9 +445,13 @@ public struct Analyzer: Sendable {
                 }
 
                 let extractionConfig = DependencyExtractionConfiguration(
-                    rootDetection: engineConfig.rootDetection, treatProtocolRequirementsAsRoot: true)
+                    rootDetection: engineConfig.rootDetection,
+                    treatProtocolRequirementsAsRoot: true
+                )
                 let tail = ReachabilityBasedDetector(
-                    configuration: engineConfig, extractionConfiguration: extractionConfig)
+                    configuration: engineConfig,
+                    extractionConfiguration: extractionConfig
+                )
                 var unused = reach.deadGroupResults
                 if productionMode, let reachableInProduction = reach.reachableInProduction {
                     unused.append(
@@ -438,7 +461,8 @@ public struct Analyzer: Sendable {
                             reachableInProduction: reachableInProduction,
                             testScoped: testScoped,
                             context: context
-                        ))
+                        )
+                    )
                 }
 
                 // Region notes are an independent pass over the syntax
@@ -454,7 +478,11 @@ public struct Analyzer: Sendable {
                     if let leveledEdges {
                         unused.append(
                             contentsOf: tail.regionOnlyResults(
-                                edges: leveledEdges, declarations: declarations, context: context))
+                                edges: leveledEdges,
+                                declarations: declarations,
+                                context: context
+                            )
+                        )
                     }
                 }
 
@@ -480,12 +508,14 @@ public struct Analyzer: Sendable {
                     notes.append(
                         "\(ToolInfo.name): the index has no unit for \(unbuilt) file(s), not built by this scheme or not "
                             + "built yet; skipping their declarations, whose uses still count by name — build the "
-                            + "scheme that compiles them")
+                            + "scheme that compiles them"
+                    )
                 }
                 if !stale.isEmpty, changed > 0 {
                     notes.append(
                         "\(ToolInfo.name): index is stale for \(changed) file(s) changed since the build; skipping their "
-                            + "declarations, whose uses still count by name — re-run the build")
+                            + "declarations, whose uses still count by name — re-run the build"
+                    )
                 }
                 return (unused, notes)
             }
@@ -511,7 +541,8 @@ public struct Analyzer: Sendable {
             var report = report
             guard report.findings.count > 1 else {
                 report.notes.append(
-                    "\(ToolInfo.name): --experimental-embedding-confidence needs >1 finding to score; skipped")
+                    "\(ToolInfo.name): --experimental-embedding-confidence needs >1 finding to score; skipped"
+                )
                 return report
             }
 
@@ -528,16 +559,20 @@ public struct Analyzer: Sendable {
             }
 
             let (provider, selectionNotes) = await EmbeddingProviderSelection.resolve(
-                bundlePath: bundlePath)
+                bundlePath: bundlePath
+            )
             report.notes.append(contentsOf: selectionNotes)
             let providerName = provider.providerName
             let scores = await EmbeddingConfidence().anomalyScores(
-                snippets: snippets, provider: provider)
+                snippets: snippets,
+                provider: provider
+            )
 
             guard !scores.isEmpty else {
                 report.notes.append(
                     "\(ToolInfo.name): --experimental-embedding-confidence produced no score "
-                        + "(\(providerName) unavailable); notes unchanged")
+                        + "(\(providerName) unavailable); notes unchanged"
+                )
                 return report
             }
 
@@ -548,19 +583,27 @@ public struct Analyzer: Sendable {
                     (finding.note.map { "\($0); " } ?? "")
                     + "embedding-confidence: \(percent)% anomaly [experimental, \(providerName)]"
                 return Finding(
-                    rule: finding.rule, severity: finding.severity, path: finding.path,
-                    line: finding.line, column: finding.column, message: finding.message,
-                    note: annotated, confidence: finding.confidence)
+                    rule: finding.rule,
+                    severity: finding.severity,
+                    path: finding.path,
+                    line: finding.line,
+                    column: finding.column,
+                    message: finding.message,
+                    note: annotated,
+                    confidence: finding.confidence
+                )
             }
             report.notes.append(
                 "\(ToolInfo.name): --experimental-embedding-confidence annotated "
-                    + "\(scores.count) finding(s) via \(providerName)")
+                    + "\(scores.count) finding(s) via \(providerName)"
+            )
             return report
         #else
             var report = report
             report.notes.append(
                 "\(ToolInfo.name): --experimental-embedding-confidence is unavailable on this "
-                    + "platform (requires NaturalLanguage)")
+                    + "platform (requires NaturalLanguage)"
+            )
             return report
         #endif
     }
@@ -648,7 +691,10 @@ public struct Analyzer: Sendable {
     /// One file's extraction as the cache stores it: what one parse produces, or why the file was not analysed (over
     /// the size cap, not UTF-8, nested too deeply), so a cached file is never parsed again only to fail again.
     static func extract(
-        bytes: [UInt8], path: String, deadBranchesEnabled: Bool, deadStoresEnabled: Bool
+        bytes: [UInt8],
+        path: String,
+        deadBranchesEnabled: Bool,
+        deadStoresEnabled: Bool
     ) -> ExtractedArtifacts {
         guard bytes.count <= sourceByteCap else {
             // Worded as the release worded it, through the configuration reader's error.
@@ -664,8 +710,11 @@ public struct Analyzer: Sendable {
         // walked (analyzerkit roadmap 0041).
         guard
             let artifacts = collectArtifacts(
-                path: path, source: source, deadBranchesEnabled: deadBranchesEnabled,
-                deadStoresEnabled: deadStoresEnabled)
+                path: path,
+                source: source,
+                deadBranchesEnabled: deadBranchesEnabled,
+                deadStoresEnabled: deadStoresEnabled
+            )
         else { return ExtractedArtifacts(skipped: tooDeep(path).detail) }
         return ExtractedArtifacts(artifacts: CachedFileArtifacts(artifacts))
     }

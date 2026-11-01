@@ -49,7 +49,9 @@ import Testing
         let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(
-            at: root.appending(path: "App.xcodeproj"), withIntermediateDirectories: true)
+            at: root.appending(path: "App.xcodeproj"),
+            withIntermediateDirectories: true
+        )
         let run = try BuiltTool.run(["analyze", root.path, "--format", "json", "--no-cache"], in: root)
 
         #expect(run.status == 0)
@@ -63,7 +65,9 @@ import Testing
         let root = try Workspace.make(["Sources/A.swift": Self.unusedHelper("unusedA")])
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(
-            at: root.appending(path: "App.xcodeproj"), withIntermediateDirectories: true)
+            at: root.appending(path: "App.xcodeproj"),
+            withIntermediateDirectories: true
+        )
         let run = try BuiltTool.analyze(root.path, relativeTo: root.path, in: root)
 
         #expect(run.status == 0)
@@ -82,7 +86,9 @@ import Testing
         let scope = root.appending(path: "changed.txt")
         try Data().write(to: scope)
         let run = try BuiltTool.run(
-            ["analyze", root.path, "--format", "json", "--no-cache", "--only-from", scope.path], in: root)
+            ["analyze", root.path, "--format", "json", "--no-cache", "--only-from", scope.path],
+            in: root
+        )
 
         #expect(run.status == 0)
         let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
@@ -102,7 +108,9 @@ import Testing
         let scope = root.appending(path: "changed.txt")
         try Data(("Sources/A.swift" + ending + "Sources/Other.swift" + ending).utf8).write(to: scope)
         let run = try BuiltTool.run(
-            ["analyze", root.path, "--format", "json", "--no-cache", "--only-from", scope.path], in: root)
+            ["analyze", root.path, "--format", "json", "--no-cache", "--only-from", scope.path],
+            in: root
+        )
 
         let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
         #expect(report.findings.count == 1, "A.swift's finding is in scope")
@@ -119,7 +127,8 @@ import Testing
 
         let run = try BuiltTool.run(
             ["analyze", root.path, "--format", "sarif", "--relative-to", root.path, "--cache-path", cache.path],
-            in: root)
+            in: root
+        )
 
         #expect(run.status == 0)
         _ = try JSONDecoder().decode(SarifLog.self, from: run.standardOutput)
@@ -152,7 +161,9 @@ import Testing
         #expect(recovered.status == 0)
         #expect(recovered.standardOutput == cold.standardOutput)
         #expect(
-            recovered.standardError.components(separatedBy: "deadwood: note:").count == 2, "\(recovered.standardError)")
+            recovered.standardError.components(separatedBy: "deadwood: note:").count == 2,
+            "\(recovered.standardError)"
+        )
         #expect(!warm.standardError.contains("deadwood: note:"), "\(warm.standardError)")
     }
 
@@ -218,7 +229,8 @@ import Testing
         let result = try #require(log.results.first { $0.ruleId == "unused-function" })
         #expect(
             result.locations.map(\.physicalLocation.region.startColumn)
-                == [try Workspace.utf16Column(of: "private func", in: line)])
+                == [try Workspace.utf16Column(of: "private func", in: line)]
+        )
     }
 
     // MARK: - SARIF artifact locations
@@ -316,7 +328,9 @@ import Testing
         defer { try? FileManager.default.removeItem(at: root) }
         // A dangling link is listed like any `.swift` entry, then fails the read.
         try FileManager.default.createSymbolicLink(
-            atPath: root.path + "/Sources/Broken.swift", withDestinationPath: "Missing.swift")
+            atPath: root.path + "/Sources/Broken.swift",
+            withDestinationPath: "Missing.swift"
+        )
         let log = try BuiltTool.sarif(analyzing: root.path, relativeTo: root.path, in: root)
 
         let degraded = log.results.filter { $0.ruleId == "deadwood/degraded-file" }
@@ -338,7 +352,9 @@ import Testing
         defer { try? FileManager.default.removeItem(at: root) }
 
         let run = try BuiltTool.run(
-            ["analyze", root.path, "--format", "json", "--no-cache", "--minimum-confidence", "certain"], in: root)
+            ["analyze", root.path, "--format", "json", "--no-cache", "--minimum-confidence", "certain"],
+            in: root
+        )
 
         #expect(run.status == 0)
         let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
@@ -355,7 +371,9 @@ import Testing
         defer { try? FileManager.default.removeItem(at: root) }
 
         let run = try BuiltTool.run(
-            ["analyze", root.path, "--format", "json", "--no-cache", "--minimum-confidence", "high"], in: root)
+            ["analyze", root.path, "--format", "json", "--no-cache", "--minimum-confidence", "high"],
+            in: root
+        )
 
         let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
         #expect(report.findings.count == 1)
@@ -369,7 +387,9 @@ import Testing
         defer { try? FileManager.default.removeItem(at: root) }
 
         let run = try BuiltTool.run(
-            ["analyze", root.path, "--format", "json", "--no-cache", "--minimum-confidence", "bogus"], in: root)
+            ["analyze", root.path, "--format", "json", "--no-cache", "--minimum-confidence", "bogus"],
+            in: root
+        )
 
         #expect(run.status == 64)
         #expect(run.standardOutput.isEmpty)
@@ -392,7 +412,8 @@ import Testing
     private static func writeBaseline(_ path: URL, in root: URL) throws -> BuiltTool.Run {
         try BuiltTool.run(
             ["analyze", root.path, "--relative-to", root.path, "--no-cache", "--write-baseline", path.path],
-            in: root)
+            in: root
+        )
     }
 
     /// Rewrites an existing file in place.
@@ -402,7 +423,10 @@ import Testing
 
     /// The CI form of the check: scoped to `changed`, with the base branch's baseline, as JSON, under `--strict`.
     private static func reportNewSince(
-        _ baseline: URL, only changed: [String], in root: URL, extra: [String] = []
+        _ baseline: URL,
+        only changed: [String],
+        in root: URL,
+        extra: [String] = []
     ) throws -> BuiltTool.Run {
         var arguments = [
             "analyze", root.path, "--relative-to", root.path, "--no-cache", "--format", "json", "--strict",
@@ -460,7 +484,11 @@ import Testing
         #expect(try Self.writeBaseline(accepted, in: root).status == 0)
 
         let run = try Self.reportNewSince(
-            baseline, only: ["Sources/B.swift"], in: root, extra: ["--baseline", accepted.path])
+            baseline,
+            only: ["Sources/B.swift"],
+            in: root,
+            extra: ["--baseline", accepted.path]
+        )
 
         #expect(run.status == 0)
         let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
@@ -497,7 +525,9 @@ import Testing
 
         let run = try Self.reportNewSince(baseline, only: ["Sources/B.swift"], in: root)
         let withoutNewSince = try BuiltTool.run(
-            ["analyze", root.path, "--no-cache", "--only", "Sources/B.swift"], in: root)
+            ["analyze", root.path, "--no-cache", "--only", "Sources/B.swift"],
+            in: root
+        )
 
         #expect(run.status == 1)
         #expect(!run.standardError.contains("matches no analyzed file"))
@@ -514,7 +544,8 @@ import Testing
             let privateRoot = "/private" + root.path
             let run = try BuiltTool.run(
                 ["analyze", privateRoot, "--no-cache", "--format", "json", "--only", privateRoot + "/Sources/A.swift"],
-                in: root)
+                in: root
+            )
 
             #expect(run.status == 0)
             #expect(!run.standardError.contains("matches no analyzed file"))
@@ -556,7 +587,11 @@ import Testing
         try Data(#"{"exclude": ["Sources/A.swift"]}"#.utf8).write(to: config)
 
         let run = try Self.reportNewSince(
-            baseline, only: ["Sources/B.swift"], in: root, extra: ["--config", config.path])
+            baseline,
+            only: ["Sources/B.swift"],
+            in: root,
+            extra: ["--config", config.path]
+        )
 
         #expect(run.status == 0)
         let report = try JSONDecoder().decode(AnalysisReport.self, from: run.standardOutput)
@@ -619,7 +654,9 @@ import Testing
         #expect(try Self.writeBaseline(baseline, in: root).status == 0)
 
         let run = try BuiltTool.run(
-            ["analyze", root.path, "--no-cache", "--report-new-since", baseline.path], in: root)
+            ["analyze", root.path, "--no-cache", "--report-new-since", baseline.path],
+            in: root
+        )
 
         #expect(run.status == 64)
         #expect(run.standardOutput.isEmpty)
@@ -637,7 +674,9 @@ import Testing
             [
                 "analyze", root.path, "--no-cache", "--only", "Sources/B.swift",
                 "--report-new-since", baseline.path, "--write-baseline", written.path,
-            ], in: root)
+            ],
+            in: root
+        )
 
         #expect(run.status == 64)
         #expect(!FileManager.default.fileExists(atPath: written.path))
@@ -656,7 +695,9 @@ import Testing
             [
                 "analyze", root.path, "--no-cache", "--format", "json", "--only", "Sources/B.swift",
                 "--report-new-since", baseline.path,
-            ], in: root)
+            ],
+            in: root
+        )
 
         let note =
             "every out-of-scope finding is new since \(baseline.path); "
@@ -727,7 +768,9 @@ enum BuiltTool {
     /// `base` when one is given, run from `directory` with the facts cache off.
     static func sarif(analyzing analyzed: String, relativeTo base: String?, in directory: URL) throws -> SarifLog {
         try JSONDecoder().decode(
-            SarifLog.self, from: analyze(analyzed, relativeTo: base, in: directory).standardOutput)
+            SarifLog.self,
+            from: analyze(analyzed, relativeTo: base, in: directory).standardOutput
+        )
     }
 
     /// `deadwood analyze` with SARIF output and the facts cache off.
@@ -743,7 +786,8 @@ enum BuiltTool {
     static func run(_ arguments: [String], in directory: URL, executable override: URL? = nil) throws -> Run {
         let executable = try #require(
             override ?? Self.executable,
-            "no deadwood executable near \(Bundle.module.bundleURL.path); build the package first")
+            "no deadwood executable near \(Bundle.module.bundleURL.path); build the package first"
+        )
         let scratch = FileManager.default.temporaryDirectory.appending(path: "deadwood-run-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: scratch) }
@@ -771,7 +815,8 @@ enum BuiltTool {
         return Run(
             status: process.terminationStatus,
             standardOutput: try Data(contentsOf: outputURL),
-            standardError: try String(contentsOf: errorURL, encoding: .utf8))
+            standardError: try String(contentsOf: errorURL, encoding: .utf8)
+        )
     }
 }
 
@@ -790,7 +835,9 @@ enum Workspace {
             // `#` and spaces, which must stay part of the file name.
             let url = URL(fileURLWithPath: root.path + "/" + path)
             try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try contents.write(to: url, atomically: true, encoding: .utf8)
         }
         completed = true

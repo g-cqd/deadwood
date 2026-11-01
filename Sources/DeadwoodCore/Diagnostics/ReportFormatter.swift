@@ -25,7 +25,10 @@ public enum ReportFormatter {
     ///   - verbose: every path of a classification note, not the first few.
     ///   - timings: carry the phases' times in the JSON report.
     public static func format(
-        _ report: AnalysisReport, as format: OutputFormat, relativeTo root: String? = nil, verbose: Bool = false,
+        _ report: AnalysisReport,
+        as format: OutputFormat,
+        relativeTo root: String? = nil,
+        verbose: Bool = false,
         timings: Bool = false
     ) -> String {
         switch format {
@@ -59,15 +62,26 @@ public enum ReportFormatter {
         for finding in report.findings {
             lines.append(
                 XcodeDiagnostic.line(
-                    path: finding.path, line: finding.line, column: finding.column, severity: finding.severity.rawValue,
+                    path: finding.path,
+                    line: finding.line,
+                    column: finding.column,
+                    severity: finding.severity.rawValue,
                     rule: finding.rule.rawValue,
-                    message: finding.note.map { "\(finding.message) — \($0)" } ?? finding.message))
+                    message: finding.note.map { "\(finding.message) — \($0)" } ?? finding.message
+                )
+            )
         }
         for degraded in report.degradedFiles {
             lines.append(
                 XcodeDiagnostic.line(
-                    path: degraded.path, line: 1, column: 1, severity: "warning", rule: "deadwood",
-                    message: degradedText(degraded)))
+                    path: degraded.path,
+                    line: 1,
+                    column: 1,
+                    severity: "warning",
+                    rule: "deadwood",
+                    message: degradedText(degraded)
+                )
+            )
         }
         return lines.joined(separator: "\n")
     }
@@ -80,7 +94,10 @@ public enum ReportFormatter {
 
     /// The JSON report: the analysis report's fields and the keys every analyzer's report carries (ADR-0017).
     private static func envelope(
-        _ report: AnalysisReport, root: String?, verbose: Bool, timings: Bool
+        _ report: AnalysisReport,
+        root: String?,
+        verbose: Bool,
+        timings: Bool
     ) -> ReportEnvelope<AnalysisReport> {
         var seen: Set<String> = []
         let skipped = report.degradedFiles.compactMap { file in
@@ -89,19 +106,29 @@ public enum ReportFormatter {
         func shown(_ path: String) -> String { root.map { RepositoryRoot.relativize(path, to: $0) } ?? path }
         let classification = report.classificationIssues.map { issue in
             RunNote(
-                code: issue.code, severity: "note", message: issue.message, paths: issue.paths.map(shown),
-                verbose: verbose)
+                code: issue.code,
+                severity: "note",
+                message: issue.message,
+                paths: issue.paths.map(shown),
+                verbose: verbose
+            )
         }
         return ReportEnvelope(
-            report, tool: ToolInfo.name, version: ToolInfo.version,
-            runNotes: classification + report.notes.map(runNote), skippedFiles: skipped,
-            timings: timings ? report.timings : nil)
+            report,
+            tool: ToolInfo.name,
+            version: ToolInfo.version,
+            runNotes: classification + report.notes.map(runNote),
+            skippedFiles: skipped,
+            timings: timings ? report.timings : nil
+        )
     }
 
     /// A free-text note as a run note: deadwood's `notes` stay as they are, and are listed here too (ADR-0017).
     private static func runNote(_ note: String) -> RunNote {
         RunNote(
-            code: "general", severity: note.hasPrefix("\(ToolInfo.name): warning: ") ? "warning" : "note", message: note
+            code: "general",
+            severity: note.hasPrefix("\(ToolInfo.name): warning: ") ? "warning" : "note",
+            message: note
         )
     }
 
@@ -127,8 +154,10 @@ public enum ReportFormatter {
             Sarif.Location(
                 physicalLocation: Sarif.PhysicalLocation(
                     artifactLocation: Sarif.ArtifactLocation(path: path, root: root),
-                    region: Sarif.Region(startLine: line, startColumn: columns.column(column, line: line, path: path))),
-                message: message)
+                    region: Sarif.Region(startLine: line, startColumn: columns.column(column, line: line, path: path))
+                ),
+                message: message
+            )
         }
         let results = report.findings.map { finding in
             Sarif.Result(
@@ -151,7 +180,9 @@ public enum ReportFormatter {
                     Sarif.Location(
                         physicalLocation: Sarif.PhysicalLocation(
                             artifactLocation: Sarif.ArtifactLocation(path: file.path, root: root),
-                            region: Sarif.Region(startLine: 1, startColumn: 1)))
+                            region: Sarif.Region(startLine: 1, startColumn: 1)
+                        )
+                    )
                 ],
                 partialFingerprints: [:]
             )
@@ -176,13 +207,19 @@ public enum ReportFormatter {
             informationUri: ToolInfo.informationURI,
             rules: RuleID.allCases.map {
                 Sarif.Rule(
-                    id: $0.rawValue, shortDescription: Sarif.Text($0.summary), help: Sarif.Text($0.explanation))
-            })
+                    id: $0.rawValue,
+                    shortDescription: Sarif.Text($0.summary),
+                    help: Sarif.Text($0.explanation)
+                )
+            }
+        )
         let log = Sarif.Log(runs: [
             Sarif.Run(
-                tool: Sarif.Tool(driver: driver), invocations: [Sarif.Invocation(failure: failure, warnings: warnings)],
+                tool: Sarif.Tool(driver: driver),
+                invocations: [Sarif.Invocation(failure: failure, warnings: warnings)],
                 root: root,
-                results: results + degradedResults)
+                results: results + degradedResults
+            )
         ])
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

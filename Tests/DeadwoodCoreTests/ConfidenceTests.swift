@@ -62,7 +62,9 @@ import Testing
         #expect(finding?.note?.hasPrefix("confidence low") == true)
         #expect(
             finding?.note?.contains(
-                "name appears in a string literal — possible dynamic reference") == true)
+                "name appears in a string literal — possible dynamic reference"
+            ) == true
+        )
     }
 
     @Test("Members of NSObject subclasses without @objc demote one step")

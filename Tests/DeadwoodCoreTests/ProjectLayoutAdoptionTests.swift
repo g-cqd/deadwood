@@ -12,7 +12,9 @@
             func file(_ name: String, data: Data = Data()) throws {
                 let url = root.appending(path: name)
                 try FileManager.default.createDirectory(
-                    at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
                 try data.write(to: url)
             }
             try file("worktree/.git", data: Data("gitdir: elsewhere".utf8))
@@ -29,7 +31,10 @@
                     fromPropertyList: [
                         "WorkspacePath": root.appending(path: workspace).path,
                         "LastAccessedDate": Date(timeIntervalSince1970: date),
-                    ], format: .binary, options: 0)
+                    ],
+                    format: .binary,
+                    options: 0
+                )
                 try file("DD/" + name + "/info.plist", data: plist)
             }
             let expected = root.appending(path: "DD/unrelated-new/Index.noindex/DataStore").path
@@ -37,7 +42,9 @@
                 .discover(projectRoot: root.appending(path: "worktree/API/Sources").path)
             #expect(found == expected)
             let project = IndexProjectLocator.projectRoot(
-                for: [root.appending(path: "worktree/API/Sources/Client.swift").path], fallback: "/not-the-project")
+                for: [root.appending(path: "worktree/API/Sources/Client.swift").path],
+                fallback: "/not-the-project"
+            )
             #expect(project == root.appending(path: "worktree").path)
         }
     }

@@ -21,7 +21,9 @@ struct CorpusFixture {
         for (relativePath, contents) in files {
             let url = root.appending(path: relativePath)
             try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try Data(contents.utf8).write(to: url)
             if url.pathExtension == "swift" {
                 swiftPaths.append(url.path)

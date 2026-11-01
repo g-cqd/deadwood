@@ -42,7 +42,8 @@ import Testing
         #expect(
             fallback.notes.contains {
                 $0.hasPrefix("deadwood: warning: ") && $0.contains("falling back to name-based reachability")
-            })
+            }
+        )
         #if os(macOS)
             // On macOS the warning says how to point at an index store.
             #expect(fallback.notes.contains { $0.contains("--index-store-path") })
@@ -68,7 +69,9 @@ import Testing
         try "private struct Unused {}\n".write(to: source, atomically: true, encoding: .utf8)
 
         let explicitDefault = await Analyzer().analyze(
-            files: [source.path], indexStore: .disabled)
+            files: [source.path],
+            indexStore: .disabled
+        )
         let implicitDefault = await Analyzer().analyze(files: [source.path])
 
         #expect(explicitDefault.notes.isEmpty)

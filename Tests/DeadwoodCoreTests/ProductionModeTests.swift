@@ -13,7 +13,8 @@ import Testing
 
     private func fixturePaths() throws -> [String] {
         try FileManager.default.contentsOfDirectory(
-            at: Self.productionDir, includingPropertiesForKeys: nil
+            at: Self.productionDir,
+            includingPropertiesForKeys: nil
         )
         .filter { $0.pathExtension == "swift" }
         .map(\.path)
@@ -30,7 +31,8 @@ import Testing
         #expect(
             report.findings.contains {
                 $0.rule == .unusedFunction && $0.message.contains("deadHelper")
-            })
+            }
+        )
     }
 
     @Test("Production mode: only-tested declarations get their own rule")
@@ -50,7 +52,8 @@ import Testing
         #expect(
             report.findings.contains {
                 $0.rule == .unusedFunction && $0.message.contains("deadHelper")
-            })
+            }
+        )
     }
 
     @Test("Production mode never points into test code")
@@ -61,7 +64,8 @@ import Testing
         #expect(
             !report.findings.contains {
                 $0.rule == .referencedOnlyByTests && $0.path.hasSuffix("Tests.swift")
-            })
+            }
+        )
     }
 
     @Test("Disabling the rule silences production mode")

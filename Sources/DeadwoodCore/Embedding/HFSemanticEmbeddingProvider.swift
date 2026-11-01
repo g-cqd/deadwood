@@ -72,7 +72,8 @@
                 resolvedModelURL = found
             } else {
                 throw SemanticEmbeddingError.modelLoadFailed(
-                    underlying: HFProviderError.noModel(bundleDir.path))
+                    underlying: HFProviderError.noModel(bundleDir.path)
+                )
             }
 
             let compiledURL: URL
@@ -105,16 +106,20 @@
                 guard let candidate = try? MLModel(contentsOf: compiledURL, configuration: configuration)
                 else { continue }
                 if HFSemanticEmbeddingProvider.probeSucceeds(
-                    candidate, inputIDsName: inputIDsName, attentionMaskName: attentionMaskName,
-                    tokenTypeIDsName: tokenTypeIDsName, positionIDsName: positionIDsName)
-                {
+                    candidate,
+                    inputIDsName: inputIDsName,
+                    attentionMaskName: attentionMaskName,
+                    tokenTypeIDsName: tokenTypeIDsName,
+                    positionIDsName: positionIDsName
+                ) {
                     loaded = candidate
                     break
                 }
             }
             guard let resolvedModel = loaded else {
                 throw SemanticEmbeddingError.modelLoadFailed(
-                    underlying: HFProviderError.noWorkingComputeUnit(compiledURL.lastPathComponent))
+                    underlying: HFProviderError.noWorkingComputeUnit(compiledURL.lastPathComponent)
+                )
             }
             self.model = resolvedModel
 
@@ -189,7 +194,8 @@
             let realTokenCount = ids.count
             guard realTokenCount > 0 else {
                 throw SemanticEmbeddingError.inferenceFailed(
-                    reason: "tokenizer produced an empty sequence")
+                    reason: "tokenizer produced an empty sequence"
+                )
             }
             let sequenceLength = fixedSequenceLength ?? realTokenCount
 
@@ -199,19 +205,23 @@
                 inputIDsName: MLFeatureValue(
                     multiArray: try MLInt32Input.make(length: sequenceLength) {
                         $0 < realTokenCount ? Int32(ids[$0]) : 0
-                    }),
+                    }
+                ),
                 attentionMaskName: MLFeatureValue(
                     multiArray: try MLInt32Input.make(length: sequenceLength) {
                         $0 < realTokenCount ? 1 : 0
-                    }),
+                    }
+                ),
             ]
             if acceptsTokenTypeIDs, let name = tokenTypeIDsName {
                 features[name] = MLFeatureValue(
-                    multiArray: try MLInt32Input.make(length: sequenceLength) { _ in 0 })
+                    multiArray: try MLInt32Input.make(length: sequenceLength) { _ in 0 }
+                )
             }
             if acceptsPositionIDs, let name = positionIDsName {
                 features[name] = MLFeatureValue(
-                    multiArray: try MLInt32Input.make(length: sequenceLength) { Int32($0) })
+                    multiArray: try MLInt32Input.make(length: sequenceLength) { Int32($0) }
+                )
             }
 
             let output: any MLFeatureProvider
@@ -225,10 +235,14 @@
             guard let lastHidden = output.featureValue(for: lastHiddenStateName)?.multiArrayValue
             else {
                 throw SemanticEmbeddingError.inferenceFailed(
-                    reason: "model output missing '\(lastHiddenStateName)' multi-array")
+                    reason: "model output missing '\(lastHiddenStateName)' multi-array"
+                )
             }
             return try pool(
-                lastHidden, sequenceLength: sequenceLength, realTokenCount: realTokenCount)
+                lastHidden,
+                sequenceLength: sequenceLength,
+                realTokenCount: realTokenCount
+            )
         }
 
         // MARK: - Private
@@ -253,7 +267,9 @@
         /// the package's strict memory safety is satisfied; `.floatValue`
         /// converts whichever numeric dtype the model emits.
         private func pool(
-            _ lastHidden: MLMultiArray, sequenceLength: Int, realTokenCount: Int
+            _ lastHidden: MLMultiArray,
+            sequenceLength: Int,
+            realTokenCount: Int
         ) throws -> [Float] {
             let shape = lastHidden.shape.map(\.intValue)
             if shape.count == 2, shape[0] == 1, shape[1] > 0 {
@@ -283,7 +299,9 @@
         private static func findModel(in dir: URL) -> URL? {
             guard
                 let contents = try? FileManager.default.contentsOfDirectory(
-                    at: dir, includingPropertiesForKeys: nil)
+                    at: dir,
+                    includingPropertiesForKeys: nil
+                )
             else { return nil }
             for url in contents where url.pathExtension == "mlpackage" { return url }
             for url in contents where url.pathExtension == "mlmodelc" { return url }

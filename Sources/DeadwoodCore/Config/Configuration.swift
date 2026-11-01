@@ -103,17 +103,25 @@ public struct Configuration: Sendable, Codable, Equatable {
 
     /// What the shared configuration reader checks this tool's keys against (ADR-0020); the shared keys are its own.
     public static let sharedReading = SharedConfiguration.Tool(
-        name: ToolInfo.name, fileName: ".deadwood.json", keys: ["rules", "production", "testsGlob"])
+        name: ToolInfo.name,
+        fileName: ".deadwood.json",
+        keys: ["rules", "production", "testsGlob"]
+    )
 
     /// The configuration of a run (ADR-0020): `explicit` (`--config`) or the configuration directory's
     /// `.swift-analyzers.json` and `.deadwood.json`, merged, every key checked; the built-in default when there is none.
     public static func resolve(
-        explicit: String?, currentDirectory: String, analyzedPaths: [String]
+        explicit: String?,
+        currentDirectory: String,
+        analyzedPaths: [String]
     ) throws(DeadwoodError) -> (configuration: Configuration, sources: SharedConfiguration.Resolved) {
         let resolved: SharedConfiguration.Resolved
         do {
             resolved = try SharedConfiguration.resolve(
-                for: sharedReading, explicit: explicit, currentDirectory: currentDirectory, analyzedPaths: analyzedPaths
+                for: sharedReading,
+                explicit: explicit,
+                currentDirectory: currentDirectory,
+                analyzedPaths: analyzedPaths
             )
         } catch .unreadable(let path, let reason) {
             throw .configurationUnreadable(path: path, underlying: reason)
@@ -128,7 +136,9 @@ public struct Configuration: Sendable, Codable, Equatable {
     /// The configuration in the file at `path`, read as `--config` reads it.
     public static func load(path: String) throws(DeadwoodError) -> Configuration {
         try resolve(
-            explicit: path, currentDirectory: FileManager.default.currentDirectoryPath, analyzedPaths: []
+            explicit: path,
+            currentDirectory: FileManager.default.currentDirectoryPath,
+            analyzedPaths: []
         ).configuration
     }
 

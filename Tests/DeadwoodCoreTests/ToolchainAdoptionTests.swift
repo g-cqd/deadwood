@@ -30,8 +30,11 @@ import Testing
             try FileManager.default.setAttributes([.posixPermissions: 0o666], ofItemAtPath: library)
             let cache = root.appending(path: "cache")
             let outcome = await IndexStoreFallbackManager(libIndexStorePath: library).resolveIndexStore(
-                projectRoot: root.path, sourceFiles: [], explicitPath: root.appending(path: "Store").path,
-                cacheRoot: cache.path)
+                projectRoot: root.path,
+                sourceFiles: [],
+                explicitPath: root.appending(path: "Store").path,
+                cacheRoot: cache.path
+            )
             guard case .fallback(.dylibNotFound) = outcome else {
                 Issue.record("not rejected as an untrusted library: \(outcome)")
                 return

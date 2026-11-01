@@ -181,7 +181,8 @@ struct ReachingDefinitionsAnalysis: Sendable {
                             location: statement.location,
                             value: statement.shortDescription(maxLength: 50),
                             isInitial: id == .entry && index == 0
-                        ))
+                        )
+                    )
                 }
             }
         }
@@ -334,7 +335,8 @@ struct ReachingDefinitionsAnalysis: Sendable {
                                 location: statement.location,
                                 reachingDefinitionCount: 0,
                                 definitelyUninitialized: true
-                            ))
+                            )
+                        )
                     }
                 }
 
@@ -401,6 +403,7 @@ struct ReachingDefinitionsAnalysis: Sendable {
                 block: block,
                 statementIndex: -1,
                 location: location
-            ))
+            )
+        )
     }
 }

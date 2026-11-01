@@ -24,7 +24,10 @@ public struct IndexStoreOptions: Sendable, Equatable {
     public var verbose: Bool
 
     public init(
-        enabled: Bool = false, explicitPath: String? = nil, autoBuild: Bool = false, cacheRoot: String? = nil,
+        enabled: Bool = false,
+        explicitPath: String? = nil,
+        autoBuild: Bool = false,
+        cacheRoot: String? = nil,
         verbose: Bool = false
     ) {
         self.enabled = enabled

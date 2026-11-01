@@ -29,7 +29,9 @@ import Testing
         let report = await Analyzer().analyze(files: sources.keys.map { dir.appending(path: $0).path })
 
         let log = try JSONDecoder().decode(
-            SarifLog.self, from: Data(ReportFormatter.format(report, as: .sarif).utf8))
+            SarifLog.self,
+            from: Data(ReportFormatter.format(report, as: .sarif).utf8)
+        )
         let columns = log.results.filter { $0.ruleId == "unused-function" }
             .flatMap { $0.locations.map(\.physicalLocation.region.startColumn) }
         let expected = try Workspace.utf16Column(of: "private func", in: Self.line(declaring: "unusedCr"))
@@ -43,7 +45,9 @@ import Testing
         #expect(finding.column > 1)
 
         let log = try JSONDecoder().decode(
-            SarifLog.self, from: Data(ReportFormatter.format(report, as: .sarif).utf8))
+            SarifLog.self,
+            from: Data(ReportFormatter.format(report, as: .sarif).utf8)
+        )
         let result = try #require(log.results.first { $0.ruleId == "unused-function" })
         #expect(result.locations.first?.physicalLocation.region.startColumn == finding.column)
     }

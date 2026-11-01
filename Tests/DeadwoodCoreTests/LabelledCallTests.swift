@@ -10,7 +10,8 @@ import Testing
     }
 
     private static func program(
-        _ use: String, property: String = "var location: String { \"L\\(line)\" }",
+        _ use: String,
+        property: String = "var location: String { \"L\\(line)\" }",
         function: String = "func location(for offset: Int) -> Int { offset }"
     ) -> String {
         """
@@ -52,7 +53,8 @@ import Testing
         let report = try await CorpusFixture([
             "Main.swift": Self.program(
                 "print(p.location(input: 1), Converter().location(for: p.line))",
-                property: "var location: Caller { Caller() }")
+                property: "var location: Caller { Caller() }"
+            )
                 + "\nstruct Caller { func callAsFunction(input: Int) -> Int { input } }\n"
         ]).analyze()
         #expect(finding("location", in: report) == nil)
@@ -61,7 +63,9 @@ import Testing
     @Test func `a property of function type called with the labels' arity stays used`() async throws {
         let report = try await CorpusFixture([
             "Main.swift": Self.program(
-                "print(p.location(1))", property: "var location: (Int) -> Int = { $0 }")
+                "print(p.location(1))",
+                property: "var location: (Int) -> Int = { $0 }"
+            )
         ]).analyze()
         #expect(finding("location", in: report) == nil)
     }
@@ -70,7 +74,8 @@ import Testing
         let report = try await CorpusFixture([
             "Main.swift": Self.program(
                 "print(Converter().location(for: p.line))",
-                function: "func location(for offset: Int, scale: Int = 1) -> Int { offset * scale }")
+                function: "func location(for offset: Int, scale: Int = 1) -> Int { offset * scale }"
+            )
         ]).analyze()
         #expect(finding("location", in: report)?.rule == .unusedProperty)
     }

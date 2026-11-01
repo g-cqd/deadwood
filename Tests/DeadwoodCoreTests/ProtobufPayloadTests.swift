@@ -59,7 +59,11 @@ import Testing
     static func artifacts(_ index: Int) throws -> CachedFileArtifacts {
         let path = "/corpus/Sources/Module\(index % 40)/File\(index).swift"
         let extracted = Analyzer.extract(
-            bytes: Array(source(index).utf8), path: path, deadBranchesEnabled: true, deadStoresEnabled: true)
+            bytes: Array(source(index).utf8),
+            path: path,
+            deadBranchesEnabled: true,
+            deadStoresEnabled: true
+        )
         return try #require(extracted.artifacts)
     }
 
@@ -69,8 +73,12 @@ import Testing
         encoder.outputFormatting = .sortedKeys
         return try encoder.encode(
             Comparable(
-                facts: artifacts.facts, directives: artifacts.directives, deadBranches: artifacts.deadBranches,
-                degraded: artifacts.degraded))
+                facts: artifacts.facts,
+                directives: artifacts.directives,
+                deadBranches: artifacts.deadBranches,
+                degraded: artifacts.degraded
+            )
+        )
     }
 
     private struct Comparable: Encodable {
@@ -88,7 +96,8 @@ import Testing
                 facts.references.map {
                     "\($0.identifier)|\($0.location.line)|\($0.context)|\($0.qualifier ?? "-")|\($0.callLabels ?? ["-"])"
                 },
-                forKey: .references)
+                forKey: .references
+            )
             try container.encode(facts.scopes.sorted { $0.id.id < $1.id.id }.map { "\($0)" }, forKey: .scopes)
             try container.encode(facts.stringLiteralTokens.map { "\($0.token)@\($0.line)" }.sorted(), forKey: .strings)
             try container.encode(facts.commentTokens.sorted(), forKey: .comments)
@@ -96,11 +105,14 @@ import Testing
             try container.encode(facts.regionSpans, forKey: .spans)
             try container.encode(
                 directives.map { "\($0.rules.map(\.rawValue).sorted()) \($0.kind) \($0.line) \($0.reason ?? "-")" },
-                forKey: .directives)
+                forKey: .directives
+            )
             try container.encode(
                 deadBranches.map {
                     "\($0.declaration) \($0.reason) \($0.confidence) \($0.suggestion) \($0.detail ?? "-") \($0.regionTag)"
-                }, forKey: .dead)
+                },
+                forKey: .dead
+            )
             try container.encode(degraded, forKey: .degraded)
         }
 
@@ -119,7 +131,8 @@ import Testing
 
         let skipped = try ProtobufDecoder().decode(
             ExtractedArtifacts.self,
-            fromBytes: ProtobufEncoder().encodeToBytes(ExtractedArtifacts(skipped: "not valid UTF-8")))
+            fromBytes: ProtobufEncoder().encodeToBytes(ExtractedArtifacts(skipped: "not valid UTF-8"))
+        )
         #expect(skipped.skipped == "not valid UTF-8" && skipped.artifacts == nil)
     }
 

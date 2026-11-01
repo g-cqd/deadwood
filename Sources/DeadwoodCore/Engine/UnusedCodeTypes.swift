@@ -117,7 +117,12 @@ struct UnusedCode: Sendable, Codable {
         regionTag: CodeRegion
     ) {
         self.init(
-            declaration: declaration, reason: reason, confidence: confidence, suggestion: suggestion,
-            detail: detail, regionTag: regionTag.rawValue)
+            declaration: declaration,
+            reason: reason,
+            confidence: confidence,
+            suggestion: suggestion,
+            detail: detail,
+            regionTag: regionTag.rawValue
+        )
     }
 }

@@ -9,9 +9,14 @@ import Testing
 @Suite struct FindingConfidenceTests {
     private static func finding(confidence: Confidence? = nil) -> Finding {
         Finding(
-            rule: .unusedFunction, severity: .warning,
-            path: "Sources/A.swift", line: 3, column: 7, message: "function 'a' is never used",
-            confidence: confidence)
+            rule: .unusedFunction,
+            severity: .warning,
+            path: "Sources/A.swift",
+            line: 3,
+            column: 7,
+            message: "function 'a' is never used",
+            confidence: confidence
+        )
     }
 
     @Test("Confidence levels order from low up to certain")
@@ -33,7 +38,9 @@ import Testing
     @Test("A SARIF result carries its confidence in the property bag, and has no bag when it has none")
     func sarifCarriesConfidence() throws {
         let report = AnalysisReport(
-            findings: [Self.finding(confidence: .medium), Self.finding()], analyzedFileCount: 1)
+            findings: [Self.finding(confidence: .medium), Self.finding()],
+            analyzedFileCount: 1
+        )
 
         let text = ReportFormatter.format(report, as: .sarif)
 

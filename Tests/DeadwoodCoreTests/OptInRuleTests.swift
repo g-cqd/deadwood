@@ -6,7 +6,8 @@ import Testing
 /// directions pinned so a config regression cannot flip either silently.
 @Suite struct OptInRuleTests {
     private func report(
-        _ source: String, rules: [String: Configuration.RuleSettings] = [:]
+        _ source: String,
+        rules: [String: Configuration.RuleSettings] = [:]
     ) async -> AnalysisReport {
         let dir = FileManager.default.temporaryDirectory
             .appending(path: "deadwood-optin-\(UUID().uuidString)")
@@ -33,7 +34,9 @@ import Testing
             @main struct M { static func main() {} }
             """
         let report = await report(
-            source, rules: ["unused-import": .init(enabled: true)])
+            source,
+            rules: ["unused-import": .init(enabled: true)]
+        )
         #expect(report.findings.contains { $0.rule == .unusedImport })
     }
 
@@ -52,7 +55,9 @@ import Testing
             @main struct M { static func main() {} }
             """
         let report = await report(
-            source, rules: ["unused-public-api": .init(enabled: true)])
+            source,
+            rules: ["unused-public-api": .init(enabled: true)]
+        )
         #expect(report.findings.contains { $0.rule == .unusedPublicApi })
     }
 
@@ -78,7 +83,9 @@ import Testing
             @main struct M { static func main() {} }
             """
         let report = await report(
-            source, rules: ["unused-import": .init(enabled: true)])
+            source,
+            rules: ["unused-import": .init(enabled: true)]
+        )
         #expect(!report.findings.contains { $0.rule == .unusedImport })
     }
 
@@ -99,7 +106,9 @@ import Testing
 
     @Test func assignOnlyFiresWhenEnabled() async {
         let report = await report(
-            Self.assignOnlySource, rules: ["assign-only-property": .init(enabled: true)])
+            Self.assignOnlySource,
+            rules: ["assign-only-property": .init(enabled: true)]
+        )
         let finding = report.findings.first { $0.rule == .assignOnlyProperty }
         #expect(finding != nil)
         #expect(finding?.line == 2)
@@ -118,7 +127,9 @@ import Testing
             @main struct M { static func main() { var t = Tracker(); t.bump(); _ = t.snapshot() } }
             """
         let report = await report(
-            source, rules: ["assign-only-property": .init(enabled: true)])
+            source,
+            rules: ["assign-only-property": .init(enabled: true)]
+        )
         #expect(!report.findings.contains { $0.rule == .assignOnlyProperty })
     }
 
@@ -140,7 +151,9 @@ import Testing
 
     @Test func deadStoreFiresWhenEnabled() async {
         let report = await report(
-            Self.deadStoreSource, rules: ["dead-store": .init(enabled: true)])
+            Self.deadStoreSource,
+            rules: ["dead-store": .init(enabled: true)]
+        )
         let finding = report.findings.first { $0.rule == .deadStore }
         #expect(finding != nil)
         #expect(finding?.line == 2)
@@ -159,7 +172,9 @@ import Testing
             @main struct M { static func main() { _ = compute() } }
             """
         let report = await report(
-            source, rules: ["dead-store": .init(enabled: true)])
+            source,
+            rules: ["dead-store": .init(enabled: true)]
+        )
         let deadStores = report.findings.filter { $0.rule == .deadStore }
         // Only the overwritten first store is dead; the surviving last
         // write is not reported.

@@ -13,7 +13,8 @@ import Testing
 
     private func fixtureFiles() throws -> [String] {
         try FileManager.default.contentsOfDirectory(
-            at: Self.fixtureRoot, includingPropertiesForKeys: nil
+            at: Self.fixtureRoot,
+            includingPropertiesForKeys: nil
         )
         .filter { $0.pathExtension == "swift" }
         .map(\.path)

@@ -10,7 +10,8 @@ import Testing
         let facts = StaticAnalyzer().collectFacts(
             source: "@freestanding(expression)\nmacro m(_ v: Int) -> Int = #externalMacro(module: \"M\", type: \"T\")\n"
                 + "@MainActor struct S {}\n",
-            file: "F.swift")
+            file: "F.swift"
+        )
         let declarations: [SymbolFacts.Declaration] = facts.declarations
         #expect(declarations.map(\.name) == ["v", "S"])
         let s = try #require(declarations.last)

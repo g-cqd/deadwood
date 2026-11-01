@@ -135,7 +135,9 @@ struct EngineWiringTests {
             func zero() -> Double { CoreGraphics.CGFloat.zero }
             """
         let qualifiedReport = Analyzer(configuration: config).analyze(
-            source: qualified, path: "test.swift")
+            source: qualified,
+            path: "test.swift"
+        )
         #expect(report.findings.count == 1)
         #expect(qualifiedReport.findings.isEmpty)
     }

@@ -14,7 +14,8 @@ import Testing
 
     private func files(in directory: String) throws -> [String] {
         try FileManager.default.contentsOfDirectory(
-            at: Self.fixtureRoot.appending(path: directory), includingPropertiesForKeys: nil
+            at: Self.fixtureRoot.appending(path: directory),
+            includingPropertiesForKeys: nil
         )
         .filter { $0.pathExtension == "swift" }
         .map(\.path)
@@ -108,9 +109,11 @@ import Testing
 
         #expect(
             !scoped.findings.contains { $0.message.contains("Helper") },
-            "whole-corpus analysis sees B's reference: \(scoped.findings)")
+            "whole-corpus analysis sees B's reference: \(scoped.findings)"
+        )
         #expect(
             shrunkCorpus.findings.contains { $0.message.contains("Helper") },
-            "a one-file corpus cannot see B, so it must over-report: \(shrunkCorpus.findings)")
+            "a one-file corpus cannot see B, so it must over-report: \(shrunkCorpus.findings)"
+        )
     }
 }

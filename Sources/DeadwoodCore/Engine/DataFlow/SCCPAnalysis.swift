@@ -630,7 +630,8 @@ private struct SCCPAnalysisSession {
                                 condition: condition,
                                 deadBranch: .falseBranch,
                                 conditionValue: "true"
-                            ))
+                            )
+                        )
                     }
 
                 case .constant(.bool(false)):
@@ -641,7 +642,8 @@ private struct SCCPAnalysisSession {
                                 condition: condition,
                                 deadBranch: .trueBranch,
                                 conditionValue: "false"
-                            ))
+                            )
+                        )
                     }
 
                 default:

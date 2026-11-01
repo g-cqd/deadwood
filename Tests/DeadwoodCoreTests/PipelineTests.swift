@@ -65,8 +65,13 @@ import Testing
     @Test func baselineRoundTrips() throws {
         let rule = try #require(RuleID.allCases.first)
         let finding = Finding(
-            rule: rule, severity: .warning,
-            path: "a.swift", line: 1, column: 1, message: "m")
+            rule: rule,
+            severity: .warning,
+            path: "a.swift",
+            line: 1,
+            column: 1,
+            message: "m"
+        )
         let path = FileManager.default.temporaryDirectory
             .appending(path: "deadwood-bl-\(UUID().uuidString).json").path
         defer { try? FileManager.default.removeItem(atPath: path) }

@@ -61,7 +61,9 @@ import SymbolFacts
 
             let declarations = result.declarations.declarations
             let declToUSR = Self.mapDeclarationsToUSRs(
-                declarations: declarations, definitionNodes: graph.definitionNodes)
+                declarations: declarations,
+                definitionNodes: graph.definitionNodes
+            )
 
             // Declarations the index oracle must never flag, mirroring the
             // syntax graph's conservatism: locals (ambiguous line-mapping; the
@@ -69,7 +71,9 @@ import SymbolFacts
             // witnesses (kept alive by the protocol, but invoked through
             // dispatch that leaves no by-name index reference).
             let forcedReachable = Self.forcedReachableIndices(
-                declarations: declarations, context: context)
+                declarations: declarations,
+                context: context
+            )
             // Forced declarations also SEED the BFS: their USRs join the root
             // set so the symbols they reference (an error case a witness throws,
             // a helper a default impl calls) propagate reachability and aren't
@@ -79,7 +83,11 @@ import SymbolFacts
             // D2: a file the index does not cover draws no edge, so what only it uses would look dead. Its references,
             // from deadwood's own parse, keep every definition of the name they use alive: conservative, by name.
             let uncoveredRoots = Self.namedByUncoveredFiles(
-                uncoveredFiles, result: result, context: context, graph: graph)
+                uncoveredFiles,
+                result: result,
+                context: context,
+                graph: graph
+            )
 
             // With-test roots — deadwood's own rich root detection, projected
             // onto the USRs those roots resolve to, plus the forced seeds.
@@ -135,15 +143,23 @@ import SymbolFacts
             let detector = ReachabilityBasedDetector(
                 configuration: configuration,
                 extractionConfiguration: DependencyExtractionConfiguration(
-                    rootDetection: rootConfiguration, treatProtocolRequirementsAsRoot: true)
+                    rootDetection: rootConfiguration,
+                    treatProtocolRequirementsAsRoot: true
+                )
             )
             let own = detector.deadCandidates(
-                declarations: declarations, reachable: reachableWithTests, context: context)
+                declarations: declarations,
+                reachable: reachableWithTests,
+                context: context
+            )
             let deadGroupResults = detector.deadGroupResults(
                 declarations: declarations,
                 own: own,
                 successors: Self.declarationSuccessors(
-                    of: own.keys, declToUSR: declToUSR, graph: graph),
+                    of: own.keys,
+                    declToUSR: declToUSR,
+                    graph: graph
+                ),
                 context: context
             )
 
@@ -159,7 +175,10 @@ import SymbolFacts
         /// The definitions named by references in `files`, by base name (`helper` names `helper()` and `helper(_:)`);
         /// `production` leaves out the references of test files, as production roots leave out test roots.
         private static func namedByUncoveredFiles(
-            _ files: [String], result: AnalysisResult, context: CorpusContext, graph: IndexBasedDependencyGraph
+            _ files: [String],
+            result: AnalysisResult,
+            context: CorpusContext,
+            graph: IndexBasedDependencyGraph
         ) -> (all: Set<String>, production: Set<String>) {
             guard !files.isEmpty else { return ([], []) }
             var byName: [Substring: [String]] = [:]

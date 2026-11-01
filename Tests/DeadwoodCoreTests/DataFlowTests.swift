@@ -96,7 +96,8 @@ struct CFGBuilderTests {
                 let y = 2
                 print(x + y)
             }
-            """)
+            """
+        )
 
         #expect(cfg.blocks[.entry]?.statements.count == 3)
     }
@@ -110,7 +111,8 @@ struct CFGBuilderTests {
                     print("yes")
                 }
             }
-            """)
+            """
+        )
 
         // entry + then + else + merge + exit.
         #expect(cfg.blocks.count >= 5)
@@ -128,7 +130,8 @@ struct CFGBuilderTests {
                 guard let value else { return }
                 print(value)
             }
-            """)
+            """
+        )
 
         let returnsToExit = cfg.blocks.values.contains { block in
             block.successors.contains(.exit) && block.id != .entry
@@ -146,7 +149,8 @@ struct CFGBuilderTests {
                     i += 1
                 }
             }
-            """)
+            """
+        )
 
         // Some block must point back to an earlier block (the header).
         let hasBackEdge = cfg.blocks.values.contains { block in
@@ -165,7 +169,8 @@ struct CFGBuilderTests {
             func test() -> Int {
                 return 42
             }
-            """)
+            """
+        )
 
         if case .return(let expression) = cfg.blocks[.entry]?.terminator {
             #expect(expression?.contains("42") == true)
@@ -185,7 +190,8 @@ struct CFGBuilderTests {
                 default: print("many")
                 }
             }
-            """)
+            """
+        )
 
         if case .switch(_, let cases, let defaultTarget) = cfg.blocks[.entry]?.terminator {
             #expect(cases.count == 2)
@@ -203,7 +209,8 @@ struct CFGBuilderTests {
                 let x = input + 1
                 print(x)
             }
-            """)
+            """
+        )
 
         let entry = cfg.blocks[.entry]!
         #expect(entry.def.contains { $0.name == "x" })
@@ -218,7 +225,8 @@ struct CFGBuilderTests {
                 if flag { print("a") } else { print("b") }
                 print("done")
             }
-            """)
+            """
+        )
 
         #expect(cfg.reversePostOrder.first == .entry)
         #expect(!cfg.reversePostOrder.isEmpty)
@@ -245,7 +253,9 @@ struct LiveVariableAnalysisTests {
                     let x = 1
                     print(x)
                 }
-                """))
+                """
+            )
+        )
 
         #expect(!result.unusedVariables.contains { $0.name == "x" })
     }
@@ -259,7 +269,9 @@ struct LiveVariableAnalysisTests {
                     let neverRead = 1
                     print("done")
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.unusedVariables.contains { $0.name == "neverRead" })
     }
@@ -274,7 +286,9 @@ struct LiveVariableAnalysisTests {
                     x = 2
                     return x
                 }
-                """))
+                """
+            )
+        )
 
         // The first store to x is overwritten before any read.
         #expect(result.deadStores.contains { $0.variable.name == "x" })
@@ -297,7 +311,9 @@ struct LiveVariableAnalysisTests {
                     }
                     return response
                 }
-                """))
+                """
+            )
+        )
 
         #expect(!result.deadStores.contains { $0.variable.name == "response" })
     }
@@ -314,7 +330,9 @@ struct LiveVariableAnalysisTests {
                     y = 2
                     return y
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.deadStores.contains { $0.variable.name == "y" })
     }
@@ -331,7 +349,9 @@ struct LiveVariableAnalysisTests {
                     guard let inserted, text != nil else { return nil }
                     return inserted
                 }
-                """))
+                """
+            )
+        )
 
         #expect(!result.deadStores.contains { $0.variable.name == "inserted" })
     }
@@ -345,7 +365,9 @@ struct LiveVariableAnalysisTests {
                     let _ = compute()
                 }
                 func compute() -> Int { 1 }
-                """))
+                """
+            )
+        )
 
         #expect(!result.unusedVariables.contains { $0.name == "_" })
         #expect(!result.deadStores.contains { $0.variable.name == "_" })
@@ -363,7 +385,9 @@ struct LiveVariableAnalysisTests {
                     }
                     return 0
                 }
-                """))
+                """
+            )
+        )
 
         // x must be live out of the entry block (read in the then-branch).
         let entryLiveOut = result.liveOut[.entry] ?? []
@@ -384,7 +408,9 @@ struct SCCPAnalysisTests {
                     let x = 42
                     print(x)
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.variableValues["x"] == .constant(.int(42)))
     }
@@ -398,7 +424,9 @@ struct SCCPAnalysisTests {
                     let flag = true
                     print(flag)
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.variableValues["flag"] == .constant(.bool(true)))
     }
@@ -426,7 +454,9 @@ struct SCCPAnalysisTests {
                     }
                     return 0
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.deadBranches.count == 1)
         #expect(result.deadBranches.first?.deadBranch == .trueBranch)
@@ -444,7 +474,9 @@ struct SCCPAnalysisTests {
                     }
                     return 0
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.deadBranches.count == 1)
         #expect(result.deadBranches.first?.deadBranch == .falseBranch)
@@ -463,7 +495,9 @@ struct SCCPAnalysisTests {
                     }
                     return 0
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.deadBranches.count == 1)
         #expect(result.deadBranches.first?.deadBranch == .trueBranch)
@@ -481,7 +515,9 @@ struct SCCPAnalysisTests {
                         if count > 3 { return count }
                     }
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.deadBranches.isEmpty)
     }
@@ -497,7 +533,9 @@ struct SCCPAnalysisTests {
                     }
                     return 0
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.deadBranches.count == 1)
         #expect(result.deadBranches.first?.deadBranch == .trueBranch)
@@ -514,7 +552,9 @@ struct SCCPAnalysisTests {
                     }
                     return 0
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.deadBranches.isEmpty)
     }
@@ -530,7 +570,9 @@ struct SCCPAnalysisTests {
                     }
                     return 0
                 }
-                """))
+                """
+            )
+        )
 
         #expect(!result.unreachableBlocks.isEmpty)
     }
@@ -544,7 +586,9 @@ struct SCCPAnalysisTests {
                     let x = 1
                     print(x)
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.executableEdges.contains(CFGEdge(from: .entry, to: .entry)))
     }
@@ -558,7 +602,9 @@ struct SCCPAnalysisTests {
                     let x = 2 + 3
                     print(x)
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.variableValues["x"] == .constant(.int(5)))
     }
@@ -572,7 +618,9 @@ struct SCCPAnalysisTests {
                     let x = true && false
                     print(x)
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.variableValues["x"] == .constant(.bool(false)))
     }
@@ -603,7 +651,9 @@ struct ReachingDefinitionsTests {
                     let x = 1
                     print(x)
                 }
-                """))
+                """
+            )
+        )
 
         #expect(result.definitions.contains { $0.variable == "x" })
     }
@@ -619,7 +669,9 @@ struct ReachingDefinitionsTests {
                     let y = 3
                     print(x + y)
                 }
-                """))
+                """
+            )
+        )
 
         let xDefs = result.definitions.filter { $0.variable == "x" }
         #expect(xDefs.count == 2)
@@ -635,7 +687,9 @@ struct ReachingDefinitionsTests {
                     let x = 1
                     print(x)
                 }
-                """))
+                """
+            )
+        )
 
         let entryOut = result.reachOut[.entry] ?? []
         #expect(entryOut.contains { $0.variable == "x" })
@@ -650,7 +704,9 @@ struct ReachingDefinitionsTests {
                     let x = 1
                     print(x)
                 }
-                """))
+                """
+            )
+        )
 
         let xChains = result.defUseChains.filter { $0.key.variable == "x" }
         #expect(!xChains.isEmpty)
@@ -664,7 +720,9 @@ struct ReachingDefinitionsTests {
                 func test() {
                     let _ = 1
                 }
-                """))
+                """
+            )
+        )
 
         #expect(!result.definitions.contains { $0.variable == "_" })
     }
@@ -778,7 +836,9 @@ struct DeadBranchPassTests {
     @Test("Functions above the statement bound skip dead-branch analysis")
     func adversarialBoundSkips() {
         let output = runDeadBranchPassFull(
-            tree: Parser.parse(source: overBoundSource()), file: "big.swift")
+            tree: Parser.parse(source: overBoundSource()),
+            file: "big.swift"
+        )
 
         #expect(output.findings.isEmpty)
         #expect(output.degraded.count == 1)
