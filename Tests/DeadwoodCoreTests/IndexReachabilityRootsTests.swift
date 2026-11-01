@@ -112,6 +112,55 @@
             #expect(!messages.contains { $0.contains("callee") }, "\(messages)")
         }
 
+        /// `@Published` is rooted so that the property itself is not reported, but that says nothing about the type that
+        /// holds it: a view model nothing creates is dead, and so are its members, which only refer to each other.
+        @Test func `an observable object that nothing creates is reported`() async throws {
+            let report = try await Self.report(
+                Self.entry.replacingOccurrences(of: "func run() {", with: "import SwiftUI\n\nfunc run() {")
+                    + """
+
+                    final class DeadModel: ObservableObject {
+                        @Published var isOn = false
+                        let identifier: Int
+
+                        init(identifier: Int) {
+                            self.identifier = identifier
+                        }
+                    }
+
+                    """
+            )
+            let messages = report.findings.map(\.message)
+            #expect(messages.contains { $0.contains("DeadModel") }, "\(messages)")
+        }
+
+        @Test func `an observable object that a view creates is not reported`() async throws {
+            let report = try await Self.report(
+                """
+                import SwiftUI
+
+                @main
+                struct App {
+                    static func main() {
+                        _ = Screen()
+                    }
+                }
+
+                struct Screen: View {
+                    @StateObject private var model = LiveModel()
+                    var body: some View { Text("\\(model.isOn)") }
+                }
+
+                final class LiveModel: ObservableObject {
+                    @Published var isOn = false
+                }
+
+                """
+            )
+            let messages = report.findings.map(\.message)
+            #expect(!messages.contains { $0.contains("LiveModel") }, "\(messages)")
+        }
+
         /// A `#Preview` body expands to code the compiler does not attribute to any declaration of the corpus, so the
         /// index draws no edge from it. What it names is named by code that runs in the preview, which roots it.
         @Test func `a declaration used only by a preview is not reported as unused`() async throws {
