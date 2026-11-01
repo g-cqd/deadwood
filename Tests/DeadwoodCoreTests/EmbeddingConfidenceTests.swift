@@ -4,6 +4,7 @@
 
 #if canImport(NaturalLanguage)
     import Foundation
+    import SemanticEmbedding
     import Testing
 
     @testable import DeadwoodCore

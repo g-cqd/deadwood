@@ -8,6 +8,7 @@
 
 #if canImport(NaturalLanguage)
     import Foundation
+    import SemanticEmbedding
 
     // MARK: - EmbeddingConfidence
 

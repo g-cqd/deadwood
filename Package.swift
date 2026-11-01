@@ -54,7 +54,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "53d82440574f5fc121fa25dfe411f699cccb2431"
+            revision: "a8c9d638039c13b11adaa0803669746fda64dd51"
         ),
     ],
     targets: [
@@ -69,7 +69,7 @@ let package = Package(
                 .product(name: "SourceCorpus", package: "analyzerkit"),
                 .product(name: "Suppression", package: "analyzerkit"),
                 .product(name: "ReportSupport", package: "analyzerkit"),
-                .product(name: "WordPiece", package: "analyzerkit"),
+                .product(name: "SemanticEmbedding", package: "analyzerkit"),
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftOperators", package: "swift-syntax"),
@@ -109,6 +109,7 @@ let package = Package(
                 .product(name: "AemiJSON", package: "AemiJSON"),
                 .product(name: "AemiProtobuf", package: "AemiProtobuf"),
                 .product(name: "WordPiece", package: "analyzerkit"),
+                .product(name: "SemanticEmbedding", package: "analyzerkit"),
             ],
             exclude: ["Goldens"],
             resources: [.copy("Fixtures")],

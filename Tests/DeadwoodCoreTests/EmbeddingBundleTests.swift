@@ -1,100 +1,13 @@
-//  Tests for the opt-in Core ML / HuggingFace embedding bundle: the pure
-//  auto-discovery search (fast, no model, no process globals) and one real
-//  load of a local MiniLM bundle. Ported from dolly's
-//  `BundledModelDiscoveryTests` / `SemanticCloneBundleTests`.
+//  Tests for the opt-in Core ML / HuggingFace embedding bundle: the selection's
+//  fall-through and one real load of a local MiniLM bundle. The auto-discovery
+//  search is analyzerkit's (`EmbeddingBundleLocator`, tested there).
 
 #if canImport(CoreML)
     import Foundation
+    import SemanticEmbedding
     import Testing
 
     @testable import DeadwoodCore
-
-    @Suite struct BundledModelDiscoveryTests {
-        /// A throwaway tree with an optional model directory at each
-        /// interesting location. Returns the root; the caller removes it.
-        private static func stage(
-            adjacentModel: Bool = false,
-            shareModel: Bool = false,
-            overrideModel: Bool = false
-        ) throws -> (root: URL, execDir: URL, overrideDir: URL) {
-            let manager = FileManager.default
-            let root = manager.temporaryDirectory.appending(path: "dw-discovery-\(UUID().uuidString)")
-            var completed = false
-            defer {
-                if !completed { try? manager.removeItem(at: root) }
-            }
-            let execDir = root.appending(path: "bin")
-            let overrideDir = root.appending(path: "custom")
-            try manager.createDirectory(at: execDir, withIntermediateDirectories: true)
-            func plantModel(in directory: URL) throws {
-                try manager.createDirectory(
-                    at: directory.appending(path: "Model.mlmodelc"),
-                    withIntermediateDirectories: true
-                )
-            }
-            if adjacentModel { try plantModel(in: execDir.appending(path: "Models/MiniLM")) }
-            if shareModel { try plantModel(in: root.appending(path: "share/deadwood/Models/MiniLM")) }
-            if overrideModel { try plantModel(in: overrideDir) }
-            completed = true
-            return (root, execDir, overrideDir)
-        }
-
-        @Test func findsModelAdjacentToTheExecutable() throws {
-            let (root, execDir, _) = try Self.stage(adjacentModel: true)
-            defer { try? FileManager.default.removeItem(at: root) }
-            let found = EmbeddingProviderSelection.bundledModelDirectory(
-                executableDir: execDir,
-                override: nil
-            )
-            #expect(
-                found?.resolvingSymlinksInPath().path
-                    == execDir.appending(path: "Models/MiniLM").resolvingSymlinksInPath().path
-            )
-        }
-
-        @Test func fallsBackToTheFHSShareLayout() throws {
-            let (root, execDir, _) = try Self.stage(shareModel: true)
-            defer { try? FileManager.default.removeItem(at: root) }
-            let found = EmbeddingProviderSelection.bundledModelDirectory(
-                executableDir: execDir,
-                override: nil
-            )
-            let expected =
-                root.appending(path: "share/deadwood/Models/MiniLM").resolvingSymlinksInPath().path
-            #expect(found?.resolvingSymlinksInPath().path == expected)
-        }
-
-        @Test func overrideWinsOverAnAdjacentModel() throws {
-            let (root, execDir, overrideDir) = try Self.stage(
-                adjacentModel: true,
-                overrideModel: true
-            )
-            defer { try? FileManager.default.removeItem(at: root) }
-            let found = EmbeddingProviderSelection.bundledModelDirectory(
-                executableDir: execDir,
-                override: overrideDir.path
-            )
-            #expect(found?.resolvingSymlinksInPath().path == overrideDir.resolvingSymlinksInPath().path)
-        }
-
-        @Test func noModelAnywhereReturnsNil() throws {
-            let (root, execDir, _) = try Self.stage()
-            defer { try? FileManager.default.removeItem(at: root) }
-            #expect(
-                EmbeddingProviderSelection.bundledModelDirectory(
-                    executableDir: execDir,
-                    override: nil
-                ) == nil
-            )
-            // An override pointing at a model-free directory is nil, not a crash.
-            #expect(
-                EmbeddingProviderSelection.bundledModelDirectory(
-                    executableDir: execDir,
-                    override: root.path
-                ) == nil
-            )
-        }
-    }
 
     // MARK: - Bundle load (local-only; models are gitignored)
 
