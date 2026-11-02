@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   ci:
-    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@5cf1132eee5e96c7ad195f81bac005368c7fc463 # swift-ci 5cf1132
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@70f5a41884feb292cab80099ea245de816699563 # swift-ci 70f5a41
     permissions:
       contents: write # only used to publish a tag
     secrets: inherit

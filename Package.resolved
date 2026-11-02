@@ -1,12 +1,12 @@
 {
-  "originHash" : "50e06a9c5143b4e71160be5aacd041ae490d3c3471780dacafe9391c3368b620",
+  "originHash" : "7f784962416a5dfc08669cdb5a1352c8185db9ecc4638982b9d244842c3de158",
   "pins" : [
     {
       "identity" : "aemi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Aemi-Studio/aemi.git",
       "state" : {
-        "revision" : "921fd8d037855844e188b1b9e18a41773c7b9508"
+        "revision" : "7a8fe8ba6ec8d641cffa7e7a7a3152fee7e51619"
       }
     },
     {
@@ -14,7 +14,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiJSON.git",
       "state" : {
-        "revision" : "63af9e16552d3d53fed6a991a6953c6377448c38"
+        "revision" : "3cd5a6aa8e0fd1e03573ee1df1e7fe7ffe488e08"
       }
     },
     {
@@ -22,7 +22,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiProtobuf.git",
       "state" : {
-        "revision" : "24a46dc7a4b76fbc759e4f24a6395fa7cdd93b59"
+        "revision" : "4b8a245d3807ccc85f4b8e9128893eb53da2b3a1"
       }
     },
     {
@@ -30,7 +30,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiRegex.git",
       "state" : {
-        "revision" : "732129e1bd018aace3538eb954f2351b3c9f24f3"
+        "revision" : "c4bd4663012745e3ba149f5535ea9b67ebffe7ac"
       }
     },
     {
@@ -38,7 +38,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/analyzerkit.git",
       "state" : {
-        "revision" : "fb3f5d67c89ba217a985c569f92e8ad3afe1eabd"
+        "revision" : "a05428c7437552400415e57da22c5a54fd87658b"
       }
     },
     {
@@ -59,12 +59,30 @@
       }
     },
     {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "917b472dbe53ba699cbb0495f9a95a084bc6364d",
+        "version" : "1.7.4"
+      }
+    },
+    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
       "state" : {
         "revision" : "f96b909e1a9e469620bc5037c1e24e00153f376f",
         "version" : "1.7.5"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "6ff0a3b1471d22b4a9ce133218c42d8854f182d7",
+        "version" : "5.1.0"
       }
     },
     {
