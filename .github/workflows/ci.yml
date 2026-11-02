@@ -1,12 +1,16 @@
 name: CI
 
-# The graph (lint, linux and macOS in parallel, release archives on main and tags, one required gate) lives in
-# the shared workflow; this file only says what is specific to deadwood. A `v*` tag publishes the release.
+# swift-ci plans and runs the checks from .ci/action.json (https://github.com/g-cqd/swift-ci): quality (swift-format,
+# the analyzers against .ci/baselines, the GCD ban), the tests on Linux and macOS, the self-analysis with this build,
+# the heavy checks nightly, and for a `v*` tag the archives and the release from release-notes/<tag>.md.
 on:
   push:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  merge_group:
+  schedule:
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -14,10 +18,7 @@ permissions:
 
 jobs:
   ci:
-    uses: Aemi-Studio/aemi/.github/workflows/swift-tool.yml@18b02d36ed4bafd68afab7ea3894cc822c86e2f7 # aemi 18b02d3
+    uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@5cf1132eee5e96c7ad195f81bac005368c7fc463 # swift-ci 5cf1132
     permissions:
-      contents: write
-    with:
-      tool: deadwood
-      linux-extra: Scripts/run-removal-oracle.sh
-      macos-timeout: 45
+      contents: write # only used to publish a tag
+    secrets: inherit

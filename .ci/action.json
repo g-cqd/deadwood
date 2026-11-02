@@ -1,0 +1,37 @@
+{
+  "swift": {
+    "parallel": false
+  },
+  "quality": {
+    "paths": [
+      "Sources"
+    ],
+    "include": [
+      "Package.swift",
+      "Sources/**",
+      "Tests/DeadwoodCoreTests/*.swift"
+    ]
+  },
+  "release": {
+    "executables": [
+      "deadwood"
+    ]
+  },
+  "commands": [
+    {
+      "id": "no-gcd",
+      "run": "Scripts/no-gcd.sh",
+      "after": "quality"
+    },
+    {
+      "id": "self-analysis",
+      "run": "swift run deadwood analyze Sources --strict --no-cache",
+      "after": "linux-debug"
+    },
+    {
+      "id": "removal-oracle",
+      "run": "Scripts/run-removal-oracle.sh",
+      "after": "linux-debug"
+    }
+  ]
+}
