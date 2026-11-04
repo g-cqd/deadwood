@@ -7,7 +7,7 @@
       "Sources"
     ],
     "include": [
-      "Package.swift",
+      "/Package.swift",
       "Sources/**",
       "Tests/DeadwoodCoreTests/*.swift"
     ]
@@ -22,19 +22,19 @@
       "id": "no-gcd",
       "run": "Scripts/no-gcd.sh",
       "after": "quality",
-      "title": "Quality \u00b7 GCD Ban"
+      "title": "Quality · GCD Ban"
     },
     {
       "id": "self-analysis",
       "run": "swift run deadwood analyze Sources --strict --no-cache",
       "after": "linux-debug",
-      "title": "Quality \u00b7 Self Analysis"
+      "title": "Quality · Self Analysis"
     },
     {
       "id": "removal-oracle",
       "run": "Scripts/run-removal-oracle.sh",
       "after": "linux-debug",
-      "title": "Integration \u00b7 Removal Oracle"
+      "title": "Integration · Removal Oracle"
     }
   ],
   "localChecks": [
