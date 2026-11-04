@@ -213,6 +213,9 @@ enum ExternalProtocolCatalog {
         "Decodable": ["init", "CodingKeys"],
         "CodingKey": ["stringValue", "intValue", "init"],
         "Error": [],
+        "AnyObject": [],
+        "Observable": [],
+        "BitwiseCopyable": [],
         "LocalizedError": ["errorDescription", "failureReason", "recoverySuggestion", "helpAnchor"],
         "CustomStringConvertible": ["description"],
         "CustomDebugStringConvertible": ["debugDescription"],
@@ -220,9 +223,20 @@ enum ExternalProtocolCatalog {
         "RawRepresentable": ["rawValue", "init", "RawValue"],
         "CaseIterable": ["allCases", "AllCases"],
         "Sendable": [],
-        "OptionSet": ["rawValue", "init", "RawValue"],
-        "Sequence": ["makeIterator", "Iterator", "Element"],
+        // OptionSet is SetAlgebra: a type may implement any of these itself, and the standard library calls them.
+        "OptionSet": [
+            "rawValue", "init", "RawValue", "Element", "ArrayLiteralElement",
+            "contains", "insert", "remove", "update", "union", "intersection", "symmetricDifference",
+            "formUnion", "formIntersection", "formSymmetricDifference", "subtract", "subtracting",
+            "isSubset", "isSuperset", "isDisjoint", "isStrictSubset", "isStrictSuperset", "isEmpty",
+        ],
+        // The requirements of Sequence, customization points included (`underestimatedCount` is read by `Array(sequence)`).
+        "Sequence": [
+            "makeIterator", "Iterator", "Element", "underestimatedCount", "withContiguousStorageIfAvailable",
+            "_customContainsEquatableElement", "_copyToContiguousArray", "_copyContents",
+        ],
         "IteratorProtocol": ["next", "Element"],
+        "AsyncIteratorProtocol": ["next", "Element", "Failure"],
         "AsyncSequence": ["makeAsyncIterator", "AsyncIterator", "Element"],
         "ExpressibleByStringLiteral": ["init"],
         "ExpressibleByIntegerLiteral": ["init"],
@@ -507,8 +521,9 @@ struct RootDetector: Sendable {
             return nil
         }
 
-        let conformances = context.conformances(ofTypeNamed: enclosing.name)
-        let external = conformances.filter { !context.protocolNames.contains($0) }
+        // What the type conforms to outside the corpus, through the corpus's own protocols and superclasses too: a type
+        // of `protocol Entity: Hashable` is `Hashable`, and the superclass of the corpus is no unknown protocol.
+        let external = context.externalConformances(ofTypeNamed: enclosing.name)
         guard !external.isEmpty else { return nil }
 
         // Codable synthesis reads/writes every stored property.

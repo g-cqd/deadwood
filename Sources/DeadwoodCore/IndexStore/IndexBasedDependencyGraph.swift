@@ -34,6 +34,10 @@
         let definitionFile: String?
         /// Line number of definition.
         let definitionLine: Int?
+        /// The other lines the same file defines it at, in other units of the store. A store keeps the units of every build
+        /// that wrote to it (another configuration, an earlier commit), and the ones of an earlier build describe the file as
+        /// it was: the symbol is at its current line in one of them.
+        let alternateDefinitionLines: [Int]
         /// Whether this is an external (cross-module) symbol — a sink, never a
         /// candidate for an unused finding.
         let isExternal: Bool
@@ -44,6 +48,7 @@
             kind: IndexedSymbolKind,
             definitionFile: String? = nil,
             definitionLine: Int? = nil,
+            alternateDefinitionLines: [Int] = [],
             isExternal: Bool = false
         ) {
             self.usr = usr
@@ -51,6 +56,7 @@
             self.kind = kind
             self.definitionFile = definitionFile
             self.definitionLine = definitionLine
+            self.alternateDefinitionLines = alternateDefinitionLines
             self.isExternal = isExternal
         }
 
@@ -135,6 +141,14 @@
         /// through this map folds the accessor back into its property.
         private var accessorAliases: [String: String] = [:]
 
+        /// The definitions that override or witness a symbol the analysis scope does not define, each with that symbol: a
+        /// requirement of a protocol of the SDK or of another module, a method of a framework class. Code outside the
+        /// scope calls them through the base, so nothing inside it need.
+        private var overridesOfExternalSymbols: [(usr: String, base: String)] = []
+
+        /// The definitions each definition contains, by USR (see ``usedNames(by:)``); built on first use.
+        private var containedDefinitions: [String: [String]]?
+
         init(analysisFiles: [String], configuration: IndexGraphConfiguration = .default) {
             self.analysisFiles = Set(
                 analysisFiles.map { Self.canonicalPath($0) }
@@ -157,6 +171,8 @@
             nodes.removeAll()
             edges.removeAll()
             accessorAliases.removeAll()
+            overridesOfExternalSymbols.removeAll()
+            containedDefinitions = nil
             let files = analysisFiles.sorted()
             let width = max(1, ProcessInfo.processInfo.activeProcessorCount)
             var summaries = [FileSummary?](repeating: nil, count: files.count)
@@ -181,9 +197,80 @@
             for summary in summaries.compactMap(\.self) {
                 for definition in summary.definitions { add(definition, canonicalPaths: &canonicalPaths) }
             }
+            // What a definition overrides or witnesses, as the definition or the conformance says. Every definition of the
+            // scope is a node by now, so a base that is none is outside it.
+            var overrides: [(usr: String, base: String)] = []
+            for summary in summaries.compactMap(\.self) {
+                for definition in summary.definitions {
+                    for base in definition.overridden { overrides.append((definition.usr, base)) }
+                }
+                for link in summary.witnessLinks {
+                    for base in link.bases { overrides.append((canonical(link.usr), base)) }
+                }
+            }
+            for (usr, base) in overrides {
+                let base = canonical(base)
+                if nodes[base] == nil {
+                    overridesOfExternalSymbols.append((usr, base))
+                } else if nodes[usr] != nil {
+                    addEdge(from: base, to: usr, kind: .override)
+                }
+            }
             for summary in summaries.compactMap(\.self) {
                 for use in summary.uses { add(use) }
             }
+        }
+
+        /// The base names of the symbols the definition `usr` refers to, as the compiler recorded it: from the definition
+        /// itself, its accessors (folded into it), and the local functions and closures-as-symbols inside it. `fetch(id:)`
+        /// is `fetch`, `getter:count` is `count`, and a call of `Model`'s initializer is also `init:Model`.
+        /// - Complexity: O(E) the first time (it indexes the containers), then O(depth · degree).
+        func usedNames(by usr: String) -> Set<String> {
+            if containedDefinitions == nil {
+                var children: [String: [String]] = [:]
+                for (from, edgesFrom) in edges {
+                    for edge in edgesFrom where edge.kind == .containedBy {
+                        children[edge.toUSR, default: []].append(from)
+                    }
+                }
+                containedDefinitions = children
+            }
+            var names = Set<String>()
+            var visited: Set<String> = [usr]
+            var pending = [usr]
+            while let current = pending.popLast() {
+                for edge in edges[current] ?? [] where edge.kind != .containedBy {
+                    guard let node = nodes[edge.toUSR] else { continue }
+                    let name = Self.useName(node.name)
+                    names.insert(name)
+                    // An initializer is also recorded with its type: `init:Model` is a call of one of `Model`'s.
+                    if name == "init" {
+                        for container in edges[edge.toUSR] ?? [] where container.kind == .containedBy {
+                            if let type = nodes[container.toUSR] { names.insert("init:" + Self.useName(type.name)) }
+                        }
+                    }
+                }
+                for child in containedDefinitions?[current] ?? [] where visited.insert(child).inserted {
+                    // Members of a nested type are not uses by the declaration; local functions are.
+                    if let kind = nodes[child]?.kind, kind == .function || kind == .method { pending.append(child) }
+                }
+            }
+            return names
+        }
+
+        private static func useName(_ name: String) -> String {
+            var name = Substring(name)
+            for prefix in ["getter:", "setter:", "didSet:", "willSet:", "modify:", "_modify:", "read:"]
+            where name.hasPrefix(prefix) {
+                name = name.dropFirst(prefix.count)
+                break
+            }
+            return String(name.prefix { $0 != "(" })
+        }
+
+        /// The USRs of the definitions that override or witness a symbol defined outside the analysis scope.
+        var externalWitnessUSRs: Set<String> {
+            Set(overridesOfExternalSymbols.map(\.usr))
         }
 
         /// Definition nodes located inside the analysis scope.
@@ -335,6 +422,9 @@
             var aliases: [(accessor: String, owner: String)] = []
             var definitions: [Definition] = []
             var uses: [Use] = []
+            /// A conformance written apart from the type (an extension, often in another file) records what a member
+            /// witnesses at the conformance, as an implicit occurrence of the member, not on the member's definition.
+            var witnessLinks: [(usr: String, bases: [String])] = []
 
             /// Each occurrence's file is in the corpus's spelling (analyzerkit `IndexQueries`); the rest is IndexStoreDB's
             /// record, relations included.
@@ -363,6 +453,10 @@
                                 )
                             )
                         }
+                    }
+                    if !isDefinitionLike(roles) {
+                        let bases = occurrence.relations.filter { $0.roles.contains(.overrideOf) }.map(\.symbol.usr)
+                        if !bases.isEmpty { witnessLinks.append((occurrence.symbol.usr, bases)) }
                     }
                     guard indicatesUsage(roles) else { continue }
                     let kind: IndexDependencyKind =
@@ -395,13 +489,30 @@
                 for parent in definition.parents { addEdge(from: usr, to: canonical(parent), kind: .containedBy) }
             }
             for base in definition.overridden { addEdge(from: canonical(base), to: usr, kind: .override) }
-            guard nodes[usr] == nil else { return }
             let path: String
             if let known = canonicalPaths[definition.path] {
                 path = known
             } else {
                 path = Self.canonicalPath(definition.path)
                 canonicalPaths[definition.path] = path
+            }
+            if let known = nodes[usr] {
+                // Another unit of the store defines it again. Keeping only the first line would map the declaration to the
+                // line an earlier build had, and a declaration that maps to nothing cannot be reached.
+                if known.definitionFile == path, let line = known.definitionLine, line != definition.line,
+                    !known.alternateDefinitionLines.contains(definition.line)
+                {
+                    nodes[usr] = IndexSymbolNode(
+                        usr: usr,
+                        name: known.name,
+                        kind: known.kind,
+                        definitionFile: path,
+                        definitionLine: line,
+                        alternateDefinitionLines: known.alternateDefinitionLines + [definition.line],
+                        isExternal: false
+                    )
+                }
+                return
             }
             nodes[usr] = IndexSymbolNode(
                 usr: usr,

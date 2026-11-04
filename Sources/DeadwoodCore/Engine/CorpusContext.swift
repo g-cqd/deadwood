@@ -32,6 +32,9 @@ struct CorpusContext: Sendable {
     /// Names of protocols declared inside the corpus.
     let protocolNames: Set<String>
 
+    /// Conformances of each type through the corpus's own protocols and superclasses (see ``allConformances(ofTypeNamed:)``).
+    private let transitiveConformancesByTypeName: [String: Set<String>]
+
     /// Where each identifier-shaped token appears inside a string literal,
     /// outside generated files (dynamic-reference demotion set).
     private let stringLiteralOccurrences: [String: [SourceLocation]]
@@ -104,6 +107,27 @@ struct CorpusContext: Sendable {
         nominalTypesByName = nominals
         mergedConformancesByTypeName = conformances
         protocolNames = protocols
+
+        // Each type's conformances through the corpus: the protocols (and superclasses) it names, the ones those name, and
+        // so on. `struct S: Entity` with `protocol Entity: Hashable` conforms to `Hashable` as well.
+        var closure: [String: Set<String>] = [:]
+        closure.reserveCapacity(conformances.count)
+        for name in conformances.keys {
+            var reached: Set<String> = []
+            var pending = [name]
+            while let current = pending.popLast() {
+                // Past the type itself, only a protocol or a class of the corpus passes its own conformances on.
+                guard
+                    current == name
+                        || (nominals[current]?.contains { $0.kind == .protocol || $0.kind == .class } ?? false)
+                else { continue }
+                for next in conformances[current] ?? [] where reached.insert(next).inserted {
+                    pending.append(next)
+                }
+            }
+            closure[name] = reached
+        }
+        transitiveConformancesByTypeName = closure
     }
 
     private static func key(_ location: SourceLocation) -> String {
@@ -245,6 +269,24 @@ struct CorpusContext: Sendable {
     /// and every extension of it in the corpus.
     func conformances(ofTypeNamed name: String) -> Set<String> {
         mergedConformancesByTypeName[name] ?? []
+    }
+
+    /// Everything the type named `name` conforms to or inherits from, following the corpus's own protocols and
+    /// superclasses: `struct S: Entity` with `protocol Entity: Hashable` names both.
+    func allConformances(ofTypeNamed name: String) -> Set<String> {
+        transitiveConformancesByTypeName[name] ?? []
+    }
+
+    /// The part of ``allConformances(ofTypeNamed:)`` the corpus does not declare: protocols and classes of other modules and
+    /// of the SDK, whose requirements are not visible. A protocol or superclass of the corpus itself is not one of them.
+    func externalConformances(ofTypeNamed name: String) -> Set<String> {
+        allConformances(ofTypeNamed: name).filter { !isInheritableInCorpus($0) }
+    }
+
+    /// Whether the corpus declares a protocol or a class of that name: the only things a type can conform to or inherit from.
+    /// A struct or an enum of the same name (a private `Layout` namespace, say) is not what `: Layout` names.
+    private func isInheritableInCorpus(_ name: String) -> Bool {
+        nominalTypesByName[name]?.contains { $0.kind == .protocol || $0.kind == .class } ?? false
     }
 
     /// Whether the declaration sits inside a type carrying the given

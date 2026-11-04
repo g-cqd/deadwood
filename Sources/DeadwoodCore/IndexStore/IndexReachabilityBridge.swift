@@ -64,6 +64,21 @@ import SymbolFacts
                 declarations: declarations,
                 definitionNodes: graph.definitionNodes
             )
+            // What a name stands for from inside a declaration, as Swift looks it up: used for what the index does not say.
+            let resolver = NameResolver(
+                declarations: declarations,
+                context: context,
+                declToUSR: declToUSR,
+                graph: graph
+            )
+            // The uses in a body that the source has and the index does not: a build that skips function bodies leaves
+            // them out, as it does for anything an observer or a macro generates. They count only once the body is reached.
+            let incomplete = Self.usesMissingFromIndex(
+                mapping: declToUSR,
+                result: result,
+                context: context,
+                graph: graph
+            )
 
             // Declarations the index oracle must never flag, mirroring the
             // syntax graph's conservatism: locals (ambiguous line-mapping; the
@@ -96,6 +111,13 @@ import SymbolFacts
                     configuration: rootConfiguration,
                     graph: graph
                 )
+            ).merged(
+                with: Self.namedByUnmappedDeclarations(
+                    declToUSR: declToUSR,
+                    result: result,
+                    context: context,
+                    resolver: resolver
+                )
             )
 
             // With-test roots — deadwood's own rich root detection, projected
@@ -110,9 +132,12 @@ import SymbolFacts
                         declToUSR: declToUSR,
                         context: context,
                         configuration: rootConfiguration,
-                        excludingTestScoped: nil
+                        excludingTestScoped: nil,
+                        externalWitnesses: graph.externalWitnessUSRs
                     ),
-                    alsoRooted: forcedUSRs.union(uncoveredRoots.all)
+                    alsoRooted: forcedUSRs.union(uncoveredRoots.all),
+                    incomplete: incomplete,
+                    resolver: resolver
                 ),
                 forcedReachable: forcedReachable
             )
@@ -131,9 +156,12 @@ import SymbolFacts
                             declToUSR: declToUSR,
                             context: context,
                             configuration: productionConfig,
-                            excludingTestScoped: testScoped
+                            excludingTestScoped: testScoped,
+                            externalWitnesses: graph.externalWitnessUSRs
                         ),
-                        alsoRooted: forcedUSRs.union(uncoveredRoots.production)
+                        alsoRooted: forcedUSRs.union(uncoveredRoots.production),
+                        incomplete: incomplete,
+                        resolver: resolver
                     ),
                     forcedReachable: forcedReachable
                 )
@@ -147,6 +175,11 @@ import SymbolFacts
                 summary += ", \(zeroReference) with zero index references"
             }
             summary += "; \(declToUSR.count)/\(declarations.count) declarations resolved to USRs"
+            if !incomplete.isEmpty {
+                summary +=
+                    "; \(incomplete.count) with uses the index lacks, found by name where reached (a store written by a build that "
+                    + "skipped function bodies is partial)"
+            }
 
             // Dead-code grouping shares its confidence and kind-gating logic
             // with the syntax graph; only the successor lookup differs,
@@ -241,6 +274,243 @@ import SymbolFacts
             return roots
         }
 
+        /// A use the source has in a body and the index does not record for the declaration.
+        struct MissingUse: Sendable {
+            let identifier: String
+            /// A bare identifier (`spacing`), which Swift looks up from the declaration outward, as opposed to a member of
+            /// something (`view.spacing`, `.spacing`), which only its base type can say.
+            let isBare: Bool
+        }
+
+        /// For each mapped declaration with a body, the names of the corpus that its source uses and the index does not
+        /// record against it.
+        ///
+        /// The index is the authority on what it records. What it cannot have is the uses of a build that skipped function
+        /// bodies (Xcode's "prepare for indexing" does), and uses that it attributes elsewhere than to the declaration's lines
+        /// (a wrapped property's observer is recorded in its setter). So it asks the index what the declaration refers to, by
+        /// name, wherever the occurrences are, with its accessors and local functions. Not counted: a name bound inside the
+        /// declaration (a parameter, a local: the index records no use of those), the label of a memberwise call, which the
+        /// syntax collects as a write, and anything of a declaration without a body of its own.
+        private static func usesMissingFromIndex(
+            mapping: [Int: String],
+            result: AnalysisResult,
+            context: CorpusContext,
+            graph: IndexBasedDependencyGraph
+        ) -> [Int: [MissingUse]] {
+            let declarations = result.declarations.declarations
+            var declaredNames = Set<String>()
+            var typeNames = Set<String>()
+            var candidatesByFile: [String: [Int32]] = [:]
+            for (index, declaration) in declarations.enumerated() {
+                if declaration.kind != .parameter, !context.isLocalDeclaration(declaration) {
+                    declaredNames.insert(declaration.name)
+                    if [.class, .struct, .enum, .actor].contains(declaration.kind) {
+                        typeNames.insert(declaration.name)
+                    }
+                }
+                candidatesByFile[declaration.location.file, default: []].append(Int32(index))
+            }
+            let bodyKinds: Set<DeclarationKind> = [
+                .function, .method, .initializer, .deinitializer, .subscript, .variable, .constant,
+            ]
+            var missing: [Int: [MissingUse]] = [:]
+            for (file, candidates) in candidatesByFile {
+                let references = result.references.find(inFile: file).sorted { $0.location.line < $1.location.line }
+                guard !references.isEmpty else { continue }
+                var owned = DependencyExtractor.referenceOwners(
+                    refs: references,
+                    candidates: candidates,
+                    declarations: declarations,
+                    context: context
+                )
+                let bound = candidates.map { declarations[Int($0)] }
+                    .filter { $0.kind == .parameter || context.isLocalDeclaration($0) }
+                // Reachability gives the references of an initializer to its type, which holds everything outside a member's
+                // own body. The index records them against the initializer, so that is where they are checked.
+                let initializers = candidates.filter {
+                    let declaration = declarations[Int($0)]
+                    return (declaration.kind == .initializer || declaration.kind == .deinitializer)
+                        && !context.isLocalDeclaration(declaration)
+                }
+                if !initializers.isEmpty {
+                    for (owner, referenceIndices) in owned where !bodyKinds.contains(declarations[Int(owner)].kind) {
+                        var stays: [Int] = []
+                        for referenceIndex in referenceIndices {
+                            let line = references[referenceIndex].location.line
+                            if let initializer = initializers.first(where: {
+                                declarations[Int($0)].range.start.line <= line
+                                    && line <= declarations[Int($0)].range.end.line
+                            }) {
+                                owned[initializer, default: []].append(referenceIndex)
+                            } else {
+                                stays.append(referenceIndex)
+                            }
+                        }
+                        owned[owner] = stays
+                    }
+                }
+                for (owner, referenceIndices) in owned {
+                    guard let usr = mapping[Int(owner)] else { continue }
+                    let declaration = declarations[Int(owner)]
+                    guard bodyKinds.contains(declaration.kind) else { continue }
+                    // After the line of the declaration, whose own line holds the signature. A declaration written on one line
+                    // has its body there too.
+                    let first =
+                        declaration.range.start.line == declaration.range.end.line
+                        ? declaration.location.line : declaration.location.line + 1
+                    let boundHere = Set(
+                        bound.filter {
+                            $0.location.line >= declaration.range.start.line
+                                && $0.location.line <= declaration.range.end.line
+                        }.map(\.name)
+                    )
+                    let named = referenceIndices.map { references[$0] }.filter {
+                        // A local shadows a bare name, not a member (`self.provider` is not the parameter `provider`).
+                        $0.context != .write && $0.location.line >= first && declaredNames.contains($0.identifier)
+                            && ($0.context == .memberAccessMember || !boundHere.contains($0.identifier))
+                    }
+                    guard !named.isEmpty else { continue }
+                    let recorded = graph.usedNames(by: usr)
+                    var seen = Set<String>()
+                    // `Type(...)` calls an initializer of the type, which the index records as `init:Type`; the type's name
+                    // alone is also recorded for a mention that calls nothing, so it cannot stand for the call.
+                    let uses = named.filter {
+                        !recorded.contains(
+                            $0.context == .call && typeNames.contains($0.identifier)
+                                ? "init:" + $0.identifier : $0.identifier
+                        )
+                    }.compactMap { reference -> MissingUse? in
+                        let isBare = reference.context != .memberAccessMember && !reference.isQualified
+                        guard seen.insert("\(isBare):\(reference.identifier)").inserted else { return nil }
+                        return MissingUse(identifier: reference.identifier, isBare: isBare)
+                    }
+                    if !uses.isEmpty { missing[Int(owner)] = uses }
+                }
+            }
+            return missing
+        }
+
+        /// What a name stands for from inside a declaration.
+        ///
+        /// A bare identifier is looked up as Swift does: the members of the enclosing type (with its extensions), then those
+        /// it inherits, including the extensions of the protocols and classes it conforms to or derives from, then the same for
+        /// each type around it, then what is declared at the top level. The first of these levels with a declaration of the
+        /// name is the answer. A member of something else (`view.spacing`) can be on any type, so every definition of the
+        /// name stands for it.
+        struct NameResolver: Sendable {
+            let declToUSR: [Int: String]
+            private let declarations: [Declaration]
+            private let context: CorpusContext
+            private let names: DefinitionNames
+            private let initializers: [String: [String]]
+            private var membersByTypeAndName: [String: [String: [Int]]] = [:]
+            private var topLevelByName: [String: [Int]] = [:]
+
+            init(
+                declarations: [Declaration],
+                context: CorpusContext,
+                declToUSR: [Int: String],
+                graph: IndexBasedDependencyGraph
+            ) {
+                self.declarations = declarations
+                self.context = context
+                self.declToUSR = declToUSR
+                names = DefinitionNames(graph)
+                initializers = graph.initializersByEnclosing
+                for (index, declaration) in declarations.enumerated() {
+                    switch declaration.kind {
+                    case .extension, .import, .parameter, .topLevelCode: continue
+                    default: break
+                    }
+                    if context.isLocalDeclaration(declaration) { continue }
+                    if let enclosing = context.nearestEnclosingType(of: declaration) {
+                        membersByTypeAndName[Self.typeKey(enclosing.name), default: [:]][declaration.name, default: []]
+                            .append(index)
+                    } else {
+                        topLevelByName[declaration.name, default: []].append(index)
+                    }
+                }
+            }
+
+            /// `Inner` for `Outer.Inner`: how code names the type.
+            private static func typeKey(_ name: String) -> String {
+                String(name.split(separator: ".").last ?? Substring(name))
+            }
+
+            /// The USRs the use stands for when written inside the declaration at `owner`.
+            func usrs(of use: MissingUse, from owner: Int) -> [String] {
+                guard use.isBare else { return names.usrs(named: use.identifier) }
+                var result: [String] = []
+                for index in candidates(for: use.identifier, from: declarations[owner]) {
+                    guard let usr = declToUSR[index] else { continue }
+                    result.append(usr)
+                    result.append(contentsOf: initializers[usr] ?? [])
+                }
+                return result
+            }
+
+            private func candidates(for identifier: String, from owner: Declaration) -> [Int] {
+                for level in context.enclosingTypeDeclarations(of: owner) {
+                    let type = Self.typeKey(level.name)
+                    if let own = membersByTypeAndName[type]?[identifier], !own.isEmpty { return own }
+                    var inherited: [Int] = []
+                    for base in context.allConformances(ofTypeNamed: level.name) {
+                        inherited.append(contentsOf: membersByTypeAndName[Self.typeKey(base)]?[identifier] ?? [])
+                    }
+                    if !inherited.isEmpty { return inherited }
+                }
+                return topLevelByName[identifier] ?? []
+            }
+        }
+
+        /// The definitions named by the code of declarations that map to no index symbol: the references each owns. Such a
+        /// declaration counts as used, but the walk starts from symbols, so without this what it uses (and a `body` that
+        /// maps to nothing roots nothing) would look dead. A bare identifier stands for what Swift's lookup finds from that
+        /// declaration; the member of something else, for every definition of the name. Declarations that do map are not
+        /// touched, so the precision stays where the index has it.
+        private static func namedByUnmappedDeclarations(
+            declToUSR: [Int: String],
+            result: AnalysisResult,
+            context: CorpusContext,
+            resolver: NameResolver
+        ) -> NameRoots {
+            let declarations = result.declarations.declarations
+            var unmappedByFile: [String: Set<Int32>] = [:]
+            var candidatesByFile: [String: [Int32]] = [:]
+            for (index, declaration) in declarations.enumerated() {
+                candidatesByFile[declaration.location.file, default: []].append(Int32(index))
+                if declToUSR[index] == nil, !context.isLocalDeclaration(declaration) {
+                    unmappedByFile[declaration.location.file, default: []].insert(Int32(index))
+                }
+            }
+            guard !unmappedByFile.isEmpty else { return NameRoots() }
+            var roots = NameRoots()
+            for (file, unmapped) in unmappedByFile {
+                let references = result.references.find(inFile: file).sorted { $0.location.line < $1.location.line }
+                let owned = DependencyExtractor.referenceOwners(
+                    refs: references,
+                    candidates: candidatesByFile[file] ?? [],
+                    declarations: declarations,
+                    context: context
+                )
+                let isTest = context.isTestFile(file)
+                for owner in unmapped {
+                    for referenceIndex in owned[owner] ?? [] {
+                        let reference = references[referenceIndex]
+                        let use = MissingUse(
+                            identifier: reference.identifier,
+                            isBare: reference.context != .memberAccessMember && !reference.isQualified
+                        )
+                        for usr in resolver.usrs(of: use, from: Int(owner)) {
+                            roots.all.insert(usr)
+                            if !isTest { roots.production.insert(usr) }
+                        }
+                    }
+                }
+            }
+            return roots
+        }
+
         /// The definitions named by the code of the root nodes deadwood synthesizes for code that belongs to no declaration
         /// (`#Preview` bodies, top-level statements): the references inside each node's line range.
         private static func namedByRootCode(
@@ -314,8 +584,18 @@ import SymbolFacts
             var byNameFile: [String: [(line: Int, usr: String, kind: IndexedSymbolKind)]] = [:]
             for node in definitionNodes {
                 guard let file = node.definitionFile, let line = node.definitionLine else { continue }
-                byNameFile[nameKey(file: file, name: baseName(node.name)), default: []]
-                    .append((line, node.usr, node.kind))
+                let key = nameKey(file: file, name: baseName(node.name))
+                for definedAt in [line] + node.alternateDefinitionLines {
+                    byNameFile[key, default: []].append((definedAt, node.usr, node.kind))
+                }
+            }
+
+            // How many declarations of the corpus share a name in a file. One declaration of its name there, matched by
+            // one symbol of that name, is that symbol wherever the index puts it (see below).
+            var declarationsByNameFile: [String: Int] = [:]
+            for declaration in declarations {
+                let file = IndexBasedDependencyGraph.canonicalPath(declaration.location.file)
+                declarationsByNameFile[nameKey(file: file, name: unquoted(declaration.name)), default: 0] += 1
             }
 
             // A type conforming via a macro (`@Observable`, `@Model`, ...) gets
@@ -343,6 +623,11 @@ import SymbolFacts
                 else { continue }
                 if abs(best.line - declLine) <= lineMatchTolerance {
                     declToUSR[index] = best.usr
+                } else if declarationsByNameFile[key] == 1, Set(candidates.map(\.usr)).count == 1 {
+                    // The line is off by more than the tolerance: the index describes the file as an earlier build saw it.
+                    // Nothing else in the file has the name, though, so this is the declaration, and leaving it unmapped
+                    // would leave it, and what it uses, out of the walk.
+                    declToUSR[index] = best.usr
                 }
             }
             return declToUSR
@@ -358,15 +643,37 @@ import SymbolFacts
 
         /// What the roots reach. A root that something else roots outright (a forced declaration, a name an uncovered file
         /// uses) is outside use after all, so only the rest stay inside their type.
+        ///
+        /// A reached declaration whose body the index describes only in part (`incomplete`) also reaches what its source
+        /// names and the index lacks, found the way Swift looks the name up from there. Those are added as roots and the walk
+        /// is repeated, since what they reach can have such a body too. A declaration nothing reaches adds nothing, so dead
+        /// code stays dead.
         private static func reachableUSRs(
             in graph: IndexBasedDependencyGraph,
             from roots: RootUSRs,
-            alsoRooted: Set<String>
+            alsoRooted: Set<String>,
+            incomplete: [Int: [MissingUse]],
+            resolver: NameResolver
         ) -> Set<String> {
-            graph.reachableUSRs(
-                fromRootUSRs: roots.all.union(alsoRooted),
-                rootsInsideTheirType: roots.insideTheirType.subtracting(alsoRooted)
-            )
+            var extra = Set<String>()
+            var applied = Set<Int>()
+            while true {
+                let reached = graph.reachableUSRs(
+                    fromRootUSRs: roots.all.union(alsoRooted).union(extra),
+                    rootsInsideTheirType: roots.insideTheirType.subtracting(alsoRooted).subtracting(extra)
+                )
+                var grew = false
+                for (index, uses) in incomplete where !applied.contains(index) {
+                    guard let usr = resolver.declToUSR[index], reached.contains(usr) else { continue }
+                    applied.insert(index)
+                    for use in uses {
+                        for target in resolver.usrs(of: use, from: index) where extra.insert(target).inserted {
+                            grew = true
+                        }
+                    }
+                }
+                if !grew { return reached }
+            }
         }
 
         private static func rootUSRs(
@@ -374,10 +681,23 @@ import SymbolFacts
             declToUSR: [Int: String],
             context: CorpusContext,
             configuration: RootDetectionConfiguration,
-            excludingTestScoped testScoped: [Bool]?
+            excludingTestScoped testScoped: [Bool]?,
+            externalWitnesses: Set<String>
         ) -> RootUSRs {
             let detector = RootDetector(configuration: configuration)
             var roots = RootUSRs()
+            // What the compiler says overrides or witnesses a symbol outside the scope is called from there, whatever the
+            // name or the protocol: an unknown protocol, one the type inherits through another, a default implementation.
+            // Like a property wrapper's property, it is rooted so that it is not reported, not to keep its type alive.
+            // In production mode the ones that are test code are left out, as the other roots are.
+            var testScopedUSRs: Set<String> = []
+            if let testScoped {
+                for (index, usr) in declToUSR where testScoped[index] { testScopedUSRs.insert(usr) }
+            }
+            for usr in externalWitnesses where !testScopedUSRs.contains(usr) {
+                roots.all.insert(usr)
+                roots.insideTheirType.insert(usr)
+            }
             for (index, declaration) in declarations.enumerated() {
                 if let testScoped, testScoped[index] { continue }
                 guard let reason = detector.rootReason(for: declaration, context: context),
@@ -477,7 +797,7 @@ import SymbolFacts
 
                 // Witness: a member whose enclosing type conforms to an
                 // in-corpus protocol that declares a requirement of this name.
-                let inCorpusConformances = context.conformances(ofTypeNamed: enclosing.name)
+                let inCorpusConformances = context.allConformances(ofTypeNamed: enclosing.name)
                     .intersection(context.protocolNames)
                 for proto in inCorpusConformances
                 where requirementNames[proto]?.contains(declaration.name) == true {

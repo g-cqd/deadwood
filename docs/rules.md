@@ -49,6 +49,18 @@ everything it uses stays used.
   `NSManagedObject` or `UIWindowSceneDelegate`, keeps all its non-private
   members. `@NSManaged` members are kept at any access level, `private`
   included, because Core Data reaches them by name at runtime.
+- What a type conforms to is read through your own protocols and superclasses:
+  `struct User: Entity` with `protocol Entity: Hashable` conforms to `Hashable`,
+  so its `hash(into:)` is a witness, and a type of `protocol Shape:
+  CustomStringConvertible` keeps its `description`. A superclass declared in the
+  analyzed files is not an unknown external type: it exempts none of its
+  subclass's members, only what it itself inherits does. Only a protocol or a
+  class counts as a base, so a nested `enum Layout` does not hide SwiftUI's
+  `Layout`.
+- With an index store, the compiler's own record is added: a member it says
+  overrides or witnesses a requirement defined outside the analyzed files is kept,
+  whatever its name and wherever the conformance is written
+  ([index store](index-store.md#how-the-index-is-read)).
 - SwiftUI `App` and `View` types, `body`, `PreviewProvider`, and SwiftUI
   property wrappers; App Intents, App Shortcuts and Widget conformers.
 - Test code: functions named `test…` or annotated `@Test`; `@Suite` types,

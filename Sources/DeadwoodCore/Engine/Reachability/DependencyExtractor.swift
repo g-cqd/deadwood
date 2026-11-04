@@ -461,7 +461,7 @@ struct DependencyExtractor: Sendable {
         if enclosing.name == protocolName {
             return true  // extension P { default implementation }
         }
-        return context.conformances(ofTypeNamed: enclosing.name).contains(protocolName)
+        return context.allConformances(ofTypeNamed: enclosing.name).contains(protocolName)
     }
 }
 
