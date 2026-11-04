@@ -36,5 +36,10 @@
       "after": "linux-debug",
       "title": "Integration \u00b7 Removal Oracle"
     }
+  ],
+  "localChecks": [
+    "quality",
+    "debug",
+    "self-analysis"
   ]
 }
