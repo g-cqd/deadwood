@@ -44,7 +44,10 @@ everything it uses stays used.
 - Protocol witnesses of a protocol or superclass declared outside the
   analyzed files. A member whose name a cataloged protocol requires is kept
   (`Equatable`, `Hashable`, `Codable`, `CustomStringConvertible`,
-  `Identifiable`, `Sequence`, SwiftUI `View`, ArgumentParser, and others). A
+  `Identifiable`, `Sequence`, `OptionSet`, SwiftUI `View`, ArgumentParser, and
+  others). The lists include the customization points a type may implement
+  itself (`Sequence.underestimatedCount`, the `SetAlgebra` operations of an
+  `OptionSet`). A
   type conforming to an uncataloged external type, such as `UIResponder`,
   `NSManagedObject` or `UIWindowSceneDelegate`, keeps all its non-private
   members. `@NSManaged` members are kept at any access level, `private`

@@ -116,6 +116,7 @@ import SymbolFacts
                     declToUSR: declToUSR,
                     result: result,
                     context: context,
+                    configuration: rootConfiguration,
                     resolver: resolver
                 )
             )
@@ -239,9 +240,9 @@ import SymbolFacts
             init(_ graph: IndexBasedDependencyGraph) {
                 initializers = graph.initializersByEnclosing
                 for node in graph.definitionNodes {
-                    let base = node.name.prefix { $0 != "(" }
+                    let base = indexBaseName(node.name)
                     if base == "init" { continue }
-                    byName[base, default: []].append(node.usr)
+                    byName[Substring(base), default: []].append(node.usr)
                 }
             }
 
@@ -282,15 +283,16 @@ import SymbolFacts
             let isBare: Bool
         }
 
-        /// For each mapped declaration with a body, the names of the corpus that its source uses and the index does not
-        /// record against it.
+        /// For each mapped declaration with a body, the names of the corpus that its source uses and the index did not record;
+        /// and for each construction `Type(...)` whose initializer it did not record, the type.
         ///
         /// The index is the authority on what it records. What it cannot have is the uses of a build that skipped function
         /// bodies (Xcode's "prepare for indexing" does), and uses that it attributes elsewhere than to the declaration's lines
         /// (a wrapped property's observer is recorded in its setter). So it asks the index what the declaration refers to, by
-        /// name, wherever the occurrences are, with its accessors and local functions. Not counted: a name bound inside the
-        /// declaration (a parameter, a local: the index records no use of those), the label of a memberwise call, which the
-        /// syntax collects as a write, and anything of a declaration without a body of its own.
+        /// name, wherever the occurrences are, with its accessors and local functions. Not counted: a name that the declaration
+        /// binds itself, whether the syntax declares it (a parameter) or only its text shows it (`if let x`, a closure's
+        /// parameters, a `case let`), since the index records no use of a local; the label of a memberwise call, which the
+        /// syntax collects as a write; and anything of a declaration without a body of its own.
         private static func usesMissingFromIndex(
             mapping: [Int: String],
             result: AnalysisResult,
@@ -315,6 +317,10 @@ import SymbolFacts
             ]
             var missing: [Int: [MissingUse]] = [:]
             for (file, candidates) in candidatesByFile {
+                // The source of the file, read once, to see which names a declaration binds itself.
+                let lines =
+                    (try? String(contentsOfFile: file, encoding: .utf8))
+                    .map { $0.split(separator: "\n", omittingEmptySubsequences: false) } ?? []
                 let references = result.references.find(inFile: file).sorted { $0.location.line < $1.location.line }
                 guard !references.isEmpty else { continue }
                 var owned = DependencyExtractor.referenceOwners(
@@ -371,15 +377,33 @@ import SymbolFacts
                     }
                     guard !named.isEmpty else { continue }
                     let recorded = graph.usedNames(by: usr)
+                    func isConstruction(_ reference: Reference) -> Bool {
+                        reference.context == .call && typeNames.contains(reference.identifier)
+                    }
+                    // A name the index lacks is a use it lost, unless the body binds that name itself: a local such as
+                    // `guard let device = …` beside a member `device` is never recorded by the index, and the syntax does not
+                    // always declare it. The text of the declaration says what it binds.
+                    let bodyText: String =
+                        lines.isEmpty
+                        ? ""
+                        : lines[max(0, declaration.location.line - 1)..<min(lines.count, declaration.range.end.line)]
+                            .joined(separator: "\n")
+                    let boundInText = LocalBindings.names(in: bodyText)
+                    let members = named.filter {
+                        !isConstruction($0)
+                            && ($0.context == .memberAccessMember || $0.isQualified
+                                || !boundInText.contains($0.identifier))
+                    }
+                    let lost = members.filter { !recorded.contains($0.identifier) }
+                    // `Type(...)` calls an initializer of the type, which the index records as `init:Type`. The type's name
+                    // alone is also recorded for a mention that calls nothing, so it cannot stand for the call. What it
+                    // asks for is the type and its initializers, which a construction keeps alive anyway.
+                    let constructions = named.filter {
+                        isConstruction($0) && !recorded.contains("init:" + $0.identifier)
+                    }
                     var seen = Set<String>()
-                    // `Type(...)` calls an initializer of the type, which the index records as `init:Type`; the type's name
-                    // alone is also recorded for a mention that calls nothing, so it cannot stand for the call.
-                    let uses = named.filter {
-                        !recorded.contains(
-                            $0.context == .call && typeNames.contains($0.identifier)
-                                ? "init:" + $0.identifier : $0.identifier
-                        )
-                    }.compactMap { reference -> MissingUse? in
+                    let uses = (lost + constructions).compactMap {
+                        reference -> MissingUse? in
                         let isBare = reference.context != .memberAccessMember && !reference.isQualified
                         guard seen.insert("\(isBare):\(reference.identifier)").inserted else { return nil }
                         return MissingUse(identifier: reference.identifier, isBare: isBare)
@@ -405,6 +429,8 @@ import SymbolFacts
             private let initializers: [String: [String]]
             private var membersByTypeAndName: [String: [String: [Int]]] = [:]
             private var topLevelByName: [String: [Int]] = [:]
+            /// The modules each file imports.
+            private var importsByFile: [String: Set<String>] = [:]
 
             init(
                 declarations: [Declaration],
@@ -418,6 +444,9 @@ import SymbolFacts
                 names = DefinitionNames(graph)
                 initializers = graph.initializersByEnclosing
                 for (index, declaration) in declarations.enumerated() {
+                    if declaration.kind == .import {
+                        importsByFile[declaration.location.file, default: []].insert(declaration.name)
+                    }
                     switch declaration.kind {
                     case .extension, .import, .parameter, .topLevelCode: continue
                     default: break
@@ -441,7 +470,7 @@ import SymbolFacts
             func usrs(of use: MissingUse, from owner: Int) -> [String] {
                 guard use.isBare else { return names.usrs(named: use.identifier) }
                 var result: [String] = []
-                for index in candidates(for: use.identifier, from: declarations[owner]) {
+                for index in candidates(for: use.identifier, from: declarations[owner], at: owner) {
                     guard let usr = declToUSR[index] else { continue }
                     result.append(usr)
                     result.append(contentsOf: initializers[usr] ?? [])
@@ -449,41 +478,74 @@ import SymbolFacts
                 return result
             }
 
-            private func candidates(for identifier: String, from owner: Declaration) -> [Int] {
+            private func candidates(for identifier: String, from owner: Declaration, at ownerIndex: Int) -> [Int] {
+                // What the owner's module can see: its own declarations and those of the modules its file imports. The USR
+                // starts with the module (`s:18Oculavis_Share_IOS…`), so a declaration of another module that the file does
+                // not import is not what the name means, even if it has the same name.
+                let ownModule = declToUSR[ownerIndex].flatMap(Self.module(ofUSR:))
+                let imported = importsByFile[owner.location.file] ?? []
+                func visible(_ indices: [Int]) -> [Int] {
+                    guard let ownModule else { return indices }
+                    return indices.filter { index in
+                        guard let module = declToUSR[index].flatMap(Self.module(ofUSR:)) else { return true }
+                        return module == ownModule || imported.contains(module)
+                    }
+                }
                 for level in context.enclosingTypeDeclarations(of: owner) {
                     let type = Self.typeKey(level.name)
-                    if let own = membersByTypeAndName[type]?[identifier], !own.isEmpty { return own }
+                    let own = visible(membersByTypeAndName[type]?[identifier] ?? [])
+                    if !own.isEmpty { return own }
                     var inherited: [Int] = []
                     for base in context.allConformances(ofTypeNamed: level.name) {
                         inherited.append(contentsOf: membersByTypeAndName[Self.typeKey(base)]?[identifier] ?? [])
                     }
+                    inherited = visible(inherited)
                     if !inherited.isEmpty { return inherited }
                 }
-                return topLevelByName[identifier] ?? []
+                return visible(topLevelByName[identifier] ?? [])
+            }
+
+            /// `Oculavis_Share_IOS` for `s:18Oculavis_Share_IOS6loggerSo…`; nil for a USR of another shape (an extension's).
+            static func module(ofUSR usr: String) -> String? {
+                guard usr.hasPrefix("s:") else { return nil }
+                var rest = usr.dropFirst(2)
+                let digits = rest.prefix { $0.isNumber }
+                guard let length = Int(digits), length > 0 else { return nil }
+                rest = rest.dropFirst(digits.count)
+                guard rest.count >= length else { return nil }
+                return String(rest.prefix(length))
             }
         }
 
-        /// The definitions named by the code of declarations that map to no index symbol: the references each owns. Such a
-        /// declaration counts as used, but the walk starts from symbols, so without this what it uses (and a `body` that
-        /// maps to nothing roots nothing) would look dead. A bare identifier stands for what Swift's lookup finds from that
+        /// The definitions named by the code of root declarations that map to no index symbol: the references each owns. A root
+        /// counts as used, but the walk starts from symbols, so without this what it uses (a `body` that maps to nothing roots
+        /// nothing) would look dead. A bare identifier stands for what Swift's lookup finds from that
         /// declaration; the member of something else, for every definition of the name. Declarations that do map are not
         /// touched, so the precision stays where the index has it.
         private static func namedByUnmappedDeclarations(
             declToUSR: [Int: String],
             result: AnalysisResult,
             context: CorpusContext,
+            configuration: RootDetectionConfiguration,
             resolver: NameResolver
         ) -> NameRoots {
             let declarations = result.declarations.declarations
+            let detector = RootDetector(configuration: configuration)
             var unmappedByFile: [String: Set<Int32>] = [:]
             var candidatesByFile: [String: [Int32]] = [:]
             for (index, declaration) in declarations.enumerated() {
                 candidatesByFile[declaration.location.file, default: []].append(Int32(index))
-                if declToUSR[index] == nil, !context.isLocalDeclaration(declaration) {
+                // Only a root: an unmapped declaration is not seeded, so nothing it uses would be reached. Any other has its
+                // real symbol in the graph, which is reached, with what it uses, if something uses it.
+                if declToUSR[index] == nil, !context.isLocalDeclaration(declaration),
+                    detector.rootReason(for: declaration, context: context) != nil
+                {
                     unmappedByFile[declaration.location.file, default: []].insert(Int32(index))
                 }
             }
-            guard !unmappedByFile.isEmpty else { return NameRoots() }
+            guard !unmappedByFile.isEmpty else {
+                return NameRoots()
+            }
             var roots = NameRoots()
             for (file, unmapped) in unmappedByFile {
                 let references = result.references.find(inFile: file).sorted { $0.location.line < $1.location.line }
@@ -494,13 +556,24 @@ import SymbolFacts
                     context: context
                 )
                 let isTest = context.isTestFile(file)
+                // A name bound inside the declaration (a parameter, a local) is not the member of the same name, and the label
+                // of a memberwise call, which the syntax collects as a write, names no symbol: neither is a use.
+                let bound = (candidatesByFile[file] ?? []).map { declarations[Int($0)] }
+                    .filter { $0.kind == .parameter || context.isLocalDeclaration($0) }
                 for owner in unmapped {
+                    let declaration = declarations[Int(owner)]
+                    let boundHere = Set(
+                        bound.filter {
+                            $0.location.line >= declaration.range.start.line
+                                && $0.location.line <= declaration.range.end.line
+                        }.map(\.name)
+                    )
                     for referenceIndex in owned[owner] ?? [] {
                         let reference = references[referenceIndex]
-                        let use = MissingUse(
-                            identifier: reference.identifier,
-                            isBare: reference.context != .memberAccessMember && !reference.isQualified
-                        )
+                        guard reference.context != .write else { continue }
+                        let isBare = reference.context != .memberAccessMember && !reference.isQualified
+                        if isBare, boundHere.contains(reference.identifier) { continue }
+                        let use = MissingUse(identifier: reference.identifier, isBare: isBare)
                         for usr in resolver.usrs(of: use, from: Int(owner)) {
                             roots.all.insert(usr)
                             if !isTest { roots.production.insert(usr) }
@@ -815,7 +888,7 @@ import SymbolFacts
         /// base names (`shared`, `fetch`). Strip from the first `(` so the two
         /// match. Line disambiguation still separates same-base overloads.
         private static func baseName(_ name: String) -> String {
-            String(name.prefix { $0 != "(" })
+            indexBaseName(name)
         }
 
         /// A raw identifier keeps its surrounding backticks in

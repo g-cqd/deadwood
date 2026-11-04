@@ -146,6 +146,17 @@
         /// scope calls them through the base, so nothing inside it need.
         private var overridesOfExternalSymbols: [(usr: String, base: String)] = []
 
+        /// Definitions whose USR carries an error type (`Xe`: a type the unit that defined them could not resolve), by the USR
+        /// of the type that contains them followed by their name. A call from another unit records the resolved USR of the
+        /// same member, which shares that prefix and matches no definition of its own.
+        private var unresolvedDefinitionsByPrefix: [String: [String]] = [:]
+        private var unresolvedPrefixLengths: Set<Int> = []
+
+        /// The same for initializers, which carry no name in their USR: by the USR of their type, and matched to a call whose
+        /// USR starts with it and ends in `fc`, the mark of an initializer.
+        private var unresolvedInitializersByType: [String: [String]] = [:]
+        private var unresolvedInitializerTypeLengths: Set<Int> = []
+
         /// The definitions each definition contains, by USR (see ``usedNames(by:)``); built on first use.
         private var containedDefinitions: [String: [String]]?
 
@@ -173,6 +184,10 @@
             accessorAliases.removeAll()
             overridesOfExternalSymbols.removeAll()
             containedDefinitions = nil
+            unresolvedDefinitionsByPrefix.removeAll()
+            unresolvedPrefixLengths.removeAll()
+            unresolvedInitializersByType.removeAll()
+            unresolvedInitializerTypeLengths.removeAll()
             let files = analysisFiles.sorted()
             let width = max(1, ProcessInfo.processInfo.activeProcessorCount)
             var summaries = [FileSummary?](repeating: nil, count: files.count)
@@ -197,6 +212,7 @@
             for summary in summaries.compactMap(\.self) {
                 for definition in summary.definitions { add(definition, canonicalPaths: &canonicalPaths) }
             }
+            indexUnresolvedDefinitions()
             // What a definition overrides or witnesses, as the definition or the conformance says. Every definition of the
             // scope is a node by now, so a base that is none is outside it.
             var overrides: [(usr: String, base: String)] = []
@@ -265,7 +281,7 @@
                 name = name.dropFirst(prefix.count)
                 break
             }
-            return String(name.prefix { $0 != "(" })
+            return indexBaseName(String(name))
         }
 
         /// The USRs of the definitions that override or witness a symbol defined outside the analysis scope.
@@ -445,17 +461,14 @@
                                     kind: IndexedSymbolKind(from: occurrence.symbol.kind),
                                     path: found.file,
                                     line: occurrence.location.line,
-                                    parents: occurrence.relations.filter { $0.roles.contains(.childOf) }.map(
-                                        \.symbol.usr
-                                    ),
-                                    overridden: occurrence.relations.filter { $0.roles.contains(.overrideOf) }
-                                        .map(\.symbol.usr)
+                                    parents: occurrence.relatedUSRs(with: .childOf),
+                                    overridden: occurrence.relatedUSRs(with: .overrideOf)
                                 )
                             )
                         }
                     }
                     if !isDefinitionLike(roles) {
-                        let bases = occurrence.relations.filter { $0.roles.contains(.overrideOf) }.map(\.symbol.usr)
+                        let bases = occurrence.relatedUSRs(with: .overrideOf)
                         if !bases.isEmpty { witnessLinks.append((occurrence.symbol.usr, bases)) }
                     }
                     guard indicatesUsage(roles) else { continue }
@@ -470,8 +483,8 @@
                             kind: IndexedSymbolKind(from: occurrence.symbol.kind),
                             containers: occurrence.relations.filter { $0.roles.contains(.containedBy) }
                                 .map { ($0.symbol.usr, kind) },
-                            bases: occurrence.relations.filter { $0.roles.contains(.baseOf) }.map(\.symbol.usr),
-                            overrides: occurrence.relations.filter { $0.roles.contains(.overrideOf) }.map(\.symbol.usr)
+                            bases: occurrence.relatedUSRs(with: .baseOf),
+                            overrides: occurrence.relatedUSRs(with: .overrideOf)
                         )
                     )
                 }
@@ -529,12 +542,82 @@
             let target = canonical(use.target)
             for container in use.containers {
                 addEdge(from: canonical(container.usr), to: target, kind: container.kind)
+                for definition in unresolvedDefinitions(matching: target) {
+                    addEdge(from: canonical(container.usr), to: definition, kind: container.kind)
+                }
             }
             for base in use.bases { addEdge(from: target, to: canonical(base), kind: .inheritance) }
             for overridden in use.overrides { addEdge(from: target, to: canonical(overridden), kind: .override) }
             if nodes[target] == nil {
                 nodes[target] = IndexSymbolNode(usr: target, name: use.name, kind: use.kind, isExternal: true)
             }
+        }
+
+        /// Records the definitions with an unresolved type under the prefix a resolved USR of the same member would share:
+        /// everything up to and including the length-prefixed name (`…SSOLoginC16startAppAuthFlow`), which holds the module,
+        /// the containing types and the name, wherever the member is declared.
+        private func indexUnresolvedDefinitions() {
+            for node in nodes.values where !node.isExternal && node.usr.contains("Xe") {
+                guard node.kind != .parameter, node.kind != .variable else { continue }
+                let name = Self.useName(node.name)
+                if name == "init" {
+                    if let parent = (edges[node.usr] ?? []).first(where: { $0.kind == .containedBy })?.toUSR {
+                        unresolvedInitializersByType[parent, default: []].append(node.usr)
+                        unresolvedInitializerTypeLengths.insert(parent.utf8.count)
+                    }
+                    continue
+                }
+                guard !name.isEmpty, let prefix = Self.memberPrefix(of: node.usr, named: name) else { continue }
+                unresolvedDefinitionsByPrefix[prefix, default: []].append(node.usr)
+                unresolvedPrefixLengths.insert(prefix.utf8.count)
+            }
+        }
+
+        /// The USR up to and including the length-prefixed name of a member, which a resolved USR of the same member shares
+        /// (`s:3App5LoginC5start` for `s:3App5LoginC5startyXeXeF` and `s:3App5LoginC5start8provider5emailySS_tF`); nil when
+        /// the name is not in it.
+        static func memberPrefix(of usr: String, named name: String) -> String? {
+            guard let marker = usr.range(of: String(name.utf8.count) + name, options: .backwards) else { return nil }
+            return String(usr[..<marker.upperBound])
+        }
+
+        /// The unresolved definitions a use of `target` stands for, when `target` is no definition of the scope.
+        private func unresolvedDefinitions(matching target: String) -> [String] {
+            guard !(unresolvedPrefixLengths.isEmpty && unresolvedInitializerTypeLengths.isEmpty),
+                nodes[target].map(\.isExternal) ?? true
+            else { return [] }
+            var matches: [String] = []
+            if target.hasSuffix("fc") {
+                matches.append(
+                    contentsOf: Self.definitions(
+                        sharing: target,
+                        prefixOfLengths: unresolvedInitializerTypeLengths,
+                        in: unresolvedInitializersByType
+                    )
+                )
+            }
+            matches.append(
+                contentsOf: Self.definitions(
+                    sharing: target,
+                    prefixOfLengths: unresolvedPrefixLengths,
+                    in: unresolvedDefinitionsByPrefix
+                )
+            )
+            return matches
+        }
+
+        /// The definitions in `table` whose key is a prefix of `target` of one of `lengths` bytes.
+        private static func definitions(
+            sharing target: String,
+            prefixOfLengths lengths: Set<Int>,
+            in table: [String: [String]]
+        ) -> [String] {
+            var found: [String] = []
+            for length in lengths where target.utf8.count > length {
+                let key = String(decoding: target.utf8.prefix(length), as: UTF8.self)
+                if let definitions = table[key] { found.append(contentsOf: definitions) }
+            }
+            return found
         }
 
         /// The USR a declaration keeps in the graph: a property or subscript's own USR, or the property/subscript an
@@ -548,7 +631,25 @@
         }
     }
 
+    // MARK: - Names
+
+    /// `fetch` for `fetch(id:)`, `init` for `init()`. Only the trailing group of argument labels goes: a raw identifier may hold
+    /// parentheses itself (`` `handle(a) works` ``, which the index names `handle(a) works()`).
+    func indexBaseName(_ name: String) -> String {
+        guard name.hasSuffix(")"), let open = name.lastIndex(of: "(") else { return name }
+        let labels = name[name.index(after: open)..<name.index(before: name.endIndex)]
+        guard labels.allSatisfy({ $0 == ":" || $0 == "_" || $0.isLetter || $0.isNumber }) else { return name }
+        return String(name[..<open])
+    }
+
     // MARK: - Role helpers
+
+    extension SymbolOccurrence {
+        /// The USRs of the symbols related to this occurrence by `role`.
+        fileprivate func relatedUSRs(with role: SymbolRole) -> [String] {
+            relations.filter { $0.roles.contains(role) }.map(\.symbol.usr)
+        }
+    }
 
     private func isDefinitionLike(_ roles: SymbolRole) -> Bool {
         roles.contains(.definition) || roles.contains(.declaration)
