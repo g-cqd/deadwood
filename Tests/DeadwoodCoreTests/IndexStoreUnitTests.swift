@@ -170,6 +170,47 @@ import SymbolFacts
             )
         }
 
+        /// The index names a function with its argument labels, `fetch(id:)`. A raw identifier (Swift Testing's way of naming a
+        /// test) can hold parentheses itself, and only the trailing group is the labels.
+        @Test func onlyTheTrailingArgumentLabelsAreStrippedFromAnIndexName() {
+            #expect(indexBaseName("fetch(id:)") == "fetch")
+            #expect(indexBaseName("init()") == "init")
+            #expect(indexBaseName("run(_:with:)") == "run")
+            #expect(indexBaseName("shared") == "shared")
+            #expect(
+                indexBaseName("default handleStateChange(from:to:) forwards the new state(oldState:newState:)")
+                    == "default handleStateChange(from:to:) forwards the new state"
+            )
+            #expect(indexBaseName("reads (a) and (b)()") == "reads (a) and (b)")
+            #expect(indexBaseName("getter:count") == "getter:count")
+        }
+
+        /// A bare name means a declaration of the module or of one it imports; the USR starts with the module.
+        @Test func theModuleOfAUSRIsItsFirstLengthPrefixedName() {
+            typealias Resolver = IndexReachabilityBridge.NameResolver
+            #expect(Resolver.module(ofUSR: "s:18Oculavis_Share_IOS6loggerSo5LoggerVvp") == "Oculavis_Share_IOS")
+            #expect(Resolver.module(ofUSR: "s:3App5LoginC5start8provider5emailySS_tF") == "App")
+            #expect(Resolver.module(ofUSR: "s:e:s:3App5LoginC5startyyF") == nil)
+            #expect(Resolver.module(ofUSR: "c:@F@main") == nil)
+            #expect(Resolver.module(ofUSR: "s:99Short") == nil)
+        }
+
+        @Test func aRawIdentifierWithParenthesesMapsToItsSymbol() {
+            let file = "/private/tmp/dw-map/Raw.swift"
+            let nodes = [
+                IndexSymbolNode(
+                    usr: "s:T:raw",
+                    name: "handle (from:to:) works(oldState:newState:)",
+                    kind: .method,
+                    definitionFile: file,
+                    definitionLine: 7
+                )
+            ]
+            let declaration = makeDecl(name: "`handle (from:to:) works`", kind: .method, line: 7, file: file)
+            let map = IndexReachabilityBridge.mapDeclarationsToUSRs(declarations: [declaration], definitionNodes: nodes)
+            #expect(map[0] == "s:T:raw")
+        }
+
         @Test func attributeLineOffsetStillMatchesWithinTolerance() {
             let file = "/private/tmp/dw-map/Attr.swift"
             let nodes = [

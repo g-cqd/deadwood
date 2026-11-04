@@ -27,7 +27,8 @@
             module: String,
             files: [URL],
             in directory: URL,
-            extraArguments: [String] = []
+            extraArguments: [String] = [],
+            allowingCompilerErrors: Bool = false
         ) throws {
             guard let swiftc else { throw CocoaError(.featureUnsupported) }
             let process = Process()
@@ -43,7 +44,7 @@
             process.standardError = FileHandle.nullDevice
             try process.run()
             process.waitUntilExit()
-            guard process.terminationStatus == 0 else { throw CocoaError(.executableLoad) }
+            guard process.terminationStatus == 0 || allowingCompilerErrors else { throw CocoaError(.executableLoad) }
         }
     }
 
