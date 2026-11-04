@@ -113,6 +113,63 @@ import SymbolFacts
             #expect(map[1] == "s:Beta:shared")
         }
 
+        /// A store keeps the units of earlier builds beside the last one, so a symbol is defined at several lines. The
+        /// declaration maps to the one nearest it, not to the line that happened to be recorded first.
+        @Test func aSymbolDefinedAtSeveralLinesMapsToTheNearest() {
+            let file = "/private/tmp/dw-map/Moved.swift"
+            let nodes = [
+                IndexSymbolNode(
+                    usr: "s:Alpha:run",
+                    name: "run",
+                    kind: .method,
+                    definitionFile: file,
+                    definitionLine: 4,
+                    alternateDefinitionLines: [30]
+                ),
+                IndexSymbolNode(
+                    usr: "s:Beta:run",
+                    name: "run",
+                    kind: .method,
+                    definitionFile: file,
+                    definitionLine: 12
+                ),
+            ]
+            let moved = makeDecl(name: "run", kind: .method, line: 30, file: file)
+            let other = makeDecl(name: "run", kind: .method, line: 12, file: file)
+            let map = IndexReachabilityBridge.mapDeclarationsToUSRs(
+                declarations: [moved, other],
+                definitionNodes: nodes
+            )
+            #expect(map[0] == "s:Alpha:run")
+            #expect(map[1] == "s:Beta:run")
+        }
+
+        /// The only declaration of its name in a file is that symbol wherever the index puts it; with two of the name, a
+        /// line beyond the tolerance says nothing about which is which.
+        @Test func aLineBeyondTheToleranceMapsOnlyAnUnambiguousName() {
+            let file = "/private/tmp/dw-map/Drift.swift"
+            let single = [
+                IndexSymbolNode(
+                    usr: "s:A:body",
+                    name: "body",
+                    kind: .property,
+                    definitionFile: file,
+                    definitionLine: 10
+                )
+            ]
+            let body = makeDecl(name: "body", kind: .variable, line: 40, file: file)
+            #expect(
+                IndexReachabilityBridge.mapDeclarationsToUSRs(declarations: [body], definitionNodes: single)[0]
+                    == "s:A:body"
+            )
+
+            let twin = makeDecl(name: "body", kind: .variable, line: 80, file: file)
+            #expect(
+                IndexReachabilityBridge.mapDeclarationsToUSRs(declarations: [body, twin], definitionNodes: single)[0]
+                    == nil
+            )
+        }
+
         @Test func attributeLineOffsetStillMatchesWithinTolerance() {
             let file = "/private/tmp/dw-map/Attr.swift"
             let nodes = [
