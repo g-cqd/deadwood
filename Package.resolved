@@ -6,7 +6,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Aemi-Studio/aemi.git",
       "state" : {
-        "revision" : "7a8fe8ba6ec8d641cffa7e7a7a3152fee7e51619"
+        "revision" : "b31f49916261927be86db82edee8541fcfc19a64"
       }
     },
     {
@@ -14,7 +14,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiJSON.git",
       "state" : {
-        "revision" : "3cd5a6aa8e0fd1e03573ee1df1e7fe7ffe488e08"
+        "revision" : "f54849a614db4e5670eaf7ea09a88cf4cd97feb2"
       }
     },
     {
@@ -22,7 +22,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiProtobuf.git",
       "state" : {
-        "revision" : "4b8a245d3807ccc85f4b8e9128893eb53da2b3a1"
+        "revision" : "2c0a66b9a65781f22d88a70c51e769ed667cd2e0"
       }
     },
     {
@@ -30,7 +30,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiRegex.git",
       "state" : {
-        "revision" : "c4bd4663012745e3ba149f5535ea9b67ebffe7ac"
+        "revision" : "687fa0b735af5f982a69270e8b98c65d42d50455"
       }
     },
     {
@@ -38,7 +38,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/analyzerkit.git",
       "state" : {
-        "revision" : "b3087f3212f14d0fed3a881a1af32e262e6bbf5a"
+        "revision" : "bb9f59dc068d03f93f034d120515b86cc2ee6ee5"
       }
     },
     {
