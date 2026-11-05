@@ -18,6 +18,14 @@
       }
     },
     {
+      "identity" : "aemiprotobuf",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiProtobuf.git",
+      "state" : {
+        "revision" : "2c0a66b9a65781f22d88a70c51e769ed667cd2e0"
+      }
+    },
+    {
       "identity" : "aemiregex",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiRegex.git",
@@ -39,7 +47,7 @@
       "location" : "https://github.com/g-cqd/deadwood.git",
       "state" : {
         "branch" : "main",
-        "revision" : "8161c576c2b72b4916263dbdddbedc53fe7155e0"
+        "revision" : "dd633268af2e90e2992c251c07d18f82ff4f5186"
       }
     },
     {
@@ -56,7 +64,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/indexstore-db.git",
       "state" : {
-        "revision" : "64aa0b26913249c4e7c21d351a215fba02702003"
+        "revision" : "0390867818c28241af4650eb4ef29af5669335a3"
       }
     },
     {
@@ -87,6 +95,15 @@
       }
     },
     {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "917b472dbe53ba699cbb0495f9a95a084bc6364d",
+        "version" : "1.7.4"
+      }
+    },
+    {
       "identity" : "swift-atomics",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-atomics.git",
@@ -105,12 +122,21 @@
       }
     },
     {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "f8fad2f95ad67b45f6340c0960e2396094d67e07",
+        "version" : "5.1.1"
+      }
+    },
+    {
       "identity" : "swift-lmdb",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-lmdb.git",
       "state" : {
-        "branch" : "release/6.4.x",
-        "revision" : "a4bc87807721c1fd114bf35464457e2db0d0e6c0"
+        "branch" : "main",
+        "revision" : "7f4ee94510991a1dd30afe62a632bdd169e1ea70"
       }
     },
     {
@@ -120,6 +146,15 @@
       "state" : {
         "revision" : "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-subprocess",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-subprocess.git",
+      "state" : {
+        "revision" : "dbe21bd7dfd4ffef8c32588918542a8abfa1b54c",
+        "version" : "1.0.2"
       }
     },
     {
