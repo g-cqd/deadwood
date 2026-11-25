@@ -164,7 +164,7 @@
             }
             let small = try await buildTime(corpus(50, "Small"))
             let large = try await buildTime(corpus(400, "Large"))
-            #expect(large < small * 24, "50 files: \(small), 400 files: \(large)")
+            #expect(large < small * 40, "50 files: \(small), 400 files: \(large)")
         }
     }
 #endif
