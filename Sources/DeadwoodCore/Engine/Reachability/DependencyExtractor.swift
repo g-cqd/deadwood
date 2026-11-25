@@ -291,9 +291,10 @@ struct DependencyExtractor: Sendable {
     }
 
     /// Which declaration owns each of one file's line-sorted references:
-    /// the innermost one holding its line. Parameters, locals, initializers
-    /// and deinitializers own nothing: their code runs as part of the
-    /// function or type around them. At line granularity, siblings sharing
+    /// the innermost one holding its line. Parameters, locals, initializers,
+    /// deinitializers, and subscripts own nothing: their code runs as part
+    /// of the function or type around them (and subscripts have no identifier
+    /// name at call sites). At line granularity, siblings sharing
     /// a line give its references to the later one.
     ///
     /// Invariant: before a reference is assigned, the stack holds, bottom to
@@ -308,7 +309,7 @@ struct DependencyExtractor: Sendable {
         declarations: [Declaration],
         context: CorpusContext
     ) -> [Int32: [Int]] {
-        let transparentKinds: Set<DeclarationKind> = [.parameter, .import, .initializer, .deinitializer]
+        let transparentKinds: Set<DeclarationKind> = [.parameter, .import, .initializer, .deinitializer, .subscript]
         let owners = candidates.filter { index in
             let declaration = declarations[Int(index)]
             return !transparentKinds.contains(declaration.kind) && !context.isLocalDeclaration(declaration)
