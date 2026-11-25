@@ -43,18 +43,18 @@ let package = Package(
         // AemiJSON: the payload tests measure the protobuf payload against the JSON one it replaced (roadmap 0017).
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
-            revision: "989dff98ef8c2bd0964d291d69436b37e6b92ca3"
+            revision: "1c098f0456a2f86dee32dfd9b85455980216589f"
         ),
         // The project model the analyzers share: entry points project files
         // and test frameworks create, code regions, generated files.
         // The facts cache's payload codec; analyzerkit's revision, written as analyzerkit writes it (ADR-0025).
         .package(
             url: "https://github.com/g-cqd/AemiProtobuf.git",
-            revision: "baf91b6bce51c7937823bf2f71d0bf3c4c134a28"
+            revision: "b31d62bbf28286aed1b394c0762257d745bbb530"
         ),
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "1a9f37a0159daeaf85d0ae31262477e80c16c1b1"
+            revision: "3b5d779d61e51a346fcb86c69ac3ab8ebcbdd6c0"
         ),
     ],
     targets: [
