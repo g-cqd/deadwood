@@ -1,10 +1,6 @@
 // swift-tools-version: 6.4
 import PackageDescription
 
-// Strict-by-default: warnings are errors; upcoming features are on so the code
-// is already valid under the next language mode's semantics, and strict memory
-// safety keeps the unsafe surface at zero. Swift 6 language mode (below)
-// already includes complete strict concurrency.
 let strictSwiftSettings: [SwiftSetting] = [
     .treatAllWarnings(as: .error),
     .enableUpcomingFeature("ExistentialAny"),
@@ -17,8 +13,6 @@ let strictSwiftSettings: [SwiftSetting] = [
 
 let package = Package(
     name: "deadwood",
-    // macOS 15+: the parallel BFS visited-set and the regex cache sit on the
-    // stdlib Synchronization module (Atomic/Mutex), which landed in 15.
     platforms: [.macOS(.v15)],
     products: [
         .library(name: "DeadwoodCore", targets: ["DeadwoodCore"]),
@@ -27,27 +21,15 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
-        // swift-system: a safe, Sendable stderr handle. Foundation's FileHandle
-        // is corelibs-only and would re-link ~51 MiB of ICU into every Linux binary.
         .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1"),
-        // IndexStoreDB backs the opt-in `--index-store` reachability mode. It
-        // is linked only on macOS (its `libIndexStore.dylib` discovery is
-        // macOS-only), and every consumer sits behind `#if canImport`, so the
-        // Linux build never sees a symbol from it.
-        // analyzerkit's revision, written exactly as analyzerkit writes it: SwiftPM refuses one package required in
-        // two spellings, even a revision and a branch naming the same commit (analyzerkit ADR-0025).
         .package(
             url: "https://github.com/swiftlang/indexstore-db.git",
             revision: "0390867818c28241af4650eb4ef29af5669335a3"
         ),
-        // AemiJSON: the payload tests measure the protobuf payload against the JSON one it replaced (roadmap 0017).
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
             revision: "1c098f0456a2f86dee32dfd9b85455980216589f"
         ),
-        // The project model the analyzers share: entry points project files
-        // and test frameworks create, code regions, generated files.
-        // The facts cache's payload codec; analyzerkit's revision, written as analyzerkit writes it (ADR-0025).
         .package(
             url: "https://github.com/g-cqd/AemiProtobuf.git",
             revision: "b31d62bbf28286aed1b394c0762257d745bbb530"
@@ -78,10 +60,8 @@ let package = Package(
                     package: "indexstore-db",
                     condition: .when(platforms: [.macOS])
                 ),
-                // The facts cache's payload coder (Cache/FactsProtobufCoding.swift).
                 .product(name: "AemiProtobuf", package: "AemiProtobuf"),
                 .product(name: "AemiProtobufCore", package: "AemiProtobuf"),
-                // HF tokenizer for HFSemanticEmbeddingProvider.swift (macOS only).
             ],
             swiftSettings: strictSwiftSettings
         ),
