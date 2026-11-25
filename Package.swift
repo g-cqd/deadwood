@@ -28,15 +28,15 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/g-cqd/AemiJSON.git",
-            revision: "53e572d875cc42ade99083641efdfac7ab865f31"
+            revision: "33ee6739c071fb1e647fa2fd8c2587534cb0f00c"
         ),
         .package(
             url: "https://github.com/g-cqd/AemiProtobuf.git",
-            revision: "6bfa87dce789dce29692ac894ed7bb9ef146965a"
+            revision: "13ed22e06bc9febdf2a8135a3145ae7305bc07e2"
         ),
         .package(
             url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "4b090013d19f9e86e48096081670cec744a4d9dc"
+            revision: "cb3bce90930110980509460a59b902362caceacf"
         ),
     ],
     targets: [
